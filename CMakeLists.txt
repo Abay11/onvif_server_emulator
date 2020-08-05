@@ -2,15 +2,29 @@ cmake_minimum_required(VERSION 3.9)
 
 project(OnvifServer)
 
-set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_CXX_STANDARD 11)
 
-add_executable(main main.cpp third/http_parser/http_parser.c)
-set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT main)
+find_package(Boost REQUIRED
+	system
+	date_time
+	regex
+)
 
-IF(WIN32)
-	add_definitions(-D_WIN32_WINDOWS)
+IF(NOT Boost_FOUND)
+	message(FATAL_ERROR "Not found Boost")
+ELSE()
+	message("+++ Boost INCLUDE_DIR is ${Boost_INCLUDE_DIRS}")
+	include_directories(${Boost_INCLUDE_DIRS})
+	LINK_DIRECTORIES(${Boost_LIBRARY_DIRS})
 ENDIF()
 
+add_executable(main main.cpp third/http_parser/http_parser.c)
+target_link_libraries(main ${Boost_LIBRARIES})
+
+IF(WIN32)
+	### JUST HELPS TO AVOID WARNINGS WITH Boost
+	add_definitions(-D_WIN32_WINDOWS)
+ENDIF()
 
 set(THIRD_LIBS_DIR
 	"${CMAKE_CURRENT_SOURCE_DIR}/third"
@@ -25,3 +39,5 @@ source_group("http_parser" FILES ${HTTP_PARSER_SRC})
 include_directories(
 	"${THIRD_LIBS_DIR}"
 )
+
+set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT main)
