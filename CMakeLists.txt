@@ -15,7 +15,6 @@ IF(NOT Boost_FOUND)
 ELSE()
 	message("+++ Boost INCLUDE_DIR is ${Boost_INCLUDE_DIRS}")
 	include_directories(${Boost_INCLUDE_DIRS})
-	LINK_DIRECTORIES(${Boost_LIBRARY_DIRS})
 ENDIF()
 
 add_executable(main
@@ -24,7 +23,6 @@ add_executable(main
 	Server.h
 	Logger.hpp
 	third/http_parser/http_parser.c)
-target_link_libraries(main ${Boost_LIBRARIES})
 
 IF(WIN32)
 	### JUST HELPS TO AVOID WARNINGS WITH Boost
