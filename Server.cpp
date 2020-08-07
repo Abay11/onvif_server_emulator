@@ -1,4 +1,5 @@
 #include "Server.h"
+#include "Slave.h"
 
 namespace osrv
 {
@@ -16,7 +17,6 @@ void Server::run()
 	acceptor_.listen();
 	
 	log_.Info("Server is successfully started");
-
 
 	do_accept();
 		
@@ -47,7 +47,7 @@ void Server::accept_handler(boost::system::error_code ec,
 
 			do_accept();
 
-			auto it = slaves_.insert(std::unique_ptr<Slave>(new Slave(std::move(socket), log_)));
+			auto it = slaves_.insert(std::make_shared<Slave>(std::move(socket), *this));
 			auto& slave = *(it.first);
 			slave->Start();
 }

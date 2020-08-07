@@ -20,19 +20,24 @@ public:
 	{
 	}
 
-	void Info(const std::string& msg)
+	void Error(const std::string& msg)
 	{
-		write(msg, LVL_INFO);
+		write(msg, LVL_ERR);
 	}
 
 	void Warn(const std::string& msg)
 	{
 		write(msg, LVL_WARN);
 	}
-
-	void Error(const std::string& msg)
+	
+	void Info(const std::string& msg)
 	{
-		write(msg, LVL_ERR);
+		write(msg, LVL_INFO);
+	}
+
+	void Debug(const std::string& msg)
+	{
+		write(msg, LVL_DEBUG);
 	}
 
 private:

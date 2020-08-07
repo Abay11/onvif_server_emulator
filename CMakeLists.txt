@@ -19,9 +19,12 @@ ENDIF()
 
 add_executable(main
 	main.cpp
+	Logger.hpp
+	Types.inl
 	Server.cpp
 	Server.h
-	Logger.hpp
+	Slave.h
+	Slave.cpp
 	third/http_parser/http_parser.c)
 
 IF(WIN32)
