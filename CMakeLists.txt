@@ -18,7 +18,12 @@ ELSE()
 	LINK_DIRECTORIES(${Boost_LIBRARY_DIRS})
 ENDIF()
 
-add_executable(main main.cpp third/http_parser/http_parser.c)
+add_executable(main
+	main.cpp
+	Server.cpp
+	Server.h
+	Logger.hpp
+	third/http_parser/http_parser.c)
 target_link_libraries(main ${Boost_LIBRARIES})
 
 IF(WIN32)
