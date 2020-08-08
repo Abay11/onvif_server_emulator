@@ -25,8 +25,6 @@ add_executable(main
 	Types.inl
 	Server.cpp
 	Server.h
-	Slave.h
-	Slave.cpp
 	)
 
 IF(WIN32)

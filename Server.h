@@ -17,51 +17,21 @@ namespace {
 //namespace onvif server
 namespace osrv
 {
-
-	class ServerBase
+	class Server
 	{
 	public:
-		ServerBase(Logger& l)
-			: log_(l)
-		{}
-
-		Logger& getLogger()
-		{
-			return log_;
-		}
-
-		void FinalizeSlave(slaveSP s)
-		{
-			slaves_.erase(s);
-		}
-
-	protected:
-		slaves_t slaves_;
-
-		Logger& log_;
-	};
-
-		class Server : public ServerBase
-	{
-	public:
-		Server(io_context& ctx, Logger& log)
-			: ServerBase(log),
-			ctx_(ctx),
-			acceptor_(ctx)
-		{
-		}
+		Server(Logger& log);
+		Server(const Logger&) = delete;
+		Server(Logger&&) = delete;
 
 		//throws exceptions in error
 		void run();
 
 	private:
-		void do_accept();
-		void accept_handler(boost::system::error_code ec,
-			boost::asio::ip::tcp::socket socket);
 
 	private:
-		io_context& ctx_;
-		ip::tcp::acceptor acceptor_;
-		buffer_t buffer_;
+		Logger& log_;
+
+		std::shared_ptr<HttpServer> http_server_instance_ = nullptr;
 	};
 }

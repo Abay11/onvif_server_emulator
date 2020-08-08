@@ -15,10 +15,7 @@ int main()
 	Logger log(Logger::LVL_DEBUG);
 
 	//// STARTING SERVER
-	const int CONCURRENCY_HINT = 1;
-	boost::asio::io_context ctx_(CONCURRENCY_HINT);
-
-	osrv::Server server(ctx_, log);
+	osrv::Server server(log);
 	try
 	{
 		server.run();

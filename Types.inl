@@ -12,10 +12,17 @@
 	using bufferSP = std::shared_ptr<buffer_t>;
 
 	using socket_t = boost::asio::ip::tcp::socket;
+	
+	//SimpleWeb has an alias HTTP
+	namespace SimpleWeb
+	{
+		using HTTP = socket_t;
+
+		template <typename T>
+		class Server;
+	}
 
 	namespace osrv
 	{
-		class Slave;
-		using slaveSP = std::shared_ptr<Slave>;
-		using slaves_t = std::set<slaveSP>;
+		using HttpServer = SimpleWeb::Server<SimpleWeb::HTTP>;
 	}
