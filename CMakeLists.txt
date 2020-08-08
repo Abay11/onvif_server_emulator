@@ -17,6 +17,8 @@ ELSE()
 	include_directories(${Boost_INCLUDE_DIRS})
 ENDIF()
 
+add_subdirectory(Simple-Web-Server)
+
 add_executable(main
 	main.cpp
 	Logger.hpp
@@ -25,7 +27,7 @@ add_executable(main
 	Server.h
 	Slave.h
 	Slave.cpp
-	third/http_parser/http_parser.c)
+	)
 
 IF(WIN32)
 	### JUST HELPS TO AVOID WARNINGS WITH Boost
@@ -35,12 +37,6 @@ ENDIF()
 set(THIRD_LIBS_DIR
 	"${CMAKE_CURRENT_SOURCE_DIR}/third"
 )
-
-FILE(GLOB HTTP_PARSER_SRC	
-	"${THIRD_LIBS_DIR}/http_parser/http_parser.c"
-)
-
-source_group("http_parser" FILES ${HTTP_PARSER_SRC})
 
 include_directories(
 	"${THIRD_LIBS_DIR}"

@@ -25,7 +25,7 @@ int main()
 	}
 	catch (const boost::system::system_error& e)
 	{
-		std::string msg = "Can't run Server ";
+		std::string msg = "Issues with the Server's work: ";
 		msg += e.what();
 		log.Error(msg);
 
