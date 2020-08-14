@@ -19,12 +19,18 @@ ENDIF()
 
 add_subdirectory(Simple-Web-Server)
 
+FILE(GLOB SERVICES_SRC
+	"onvif_services/device_service.h"
+	"onvif_services/device_service.cpp"
+)
+
 add_executable(main
 	main.cpp
 	Logger.hpp
 	Types.inl
 	Server.cpp
 	Server.h
+	"${SERVICES_SRC}"
 	)
 
 IF(WIN32)
