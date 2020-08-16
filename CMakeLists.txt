@@ -24,6 +24,11 @@ FILE(GLOB SERVICES_SRC
 	"onvif_services/device_service.cpp"
 )
 
+FILE (GLOB UTILITY_SRC
+	"utility/XmlParser.h"
+	"utility/XmlParser.cpp"
+)
+
 add_executable(main
 	main.cpp
 	Logger.hpp
@@ -31,6 +36,7 @@ add_executable(main
 	Server.cpp
 	Server.h
 	"${SERVICES_SRC}"
+	"${UTILITY_SRC}"
 	)
 
 IF(WIN32)
