@@ -8,6 +8,6 @@ namespace osrv
 {
 	namespace device
 	{
-		void init_service(HttpServer& srv, Logger& logger);
+		void init_service(HttpServer& srv, const std::string& configs_path, Logger& logger);
 	}
 }

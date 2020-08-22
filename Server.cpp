@@ -3,6 +3,9 @@
 
 #include "Simple-Web-Server\server_http.hpp"
 
+//TODO: make more general the way of getting configs path
+const std::string DEVICE_CONFIGS = "../server_configs/device.config";
+
 namespace osrv
 {
 
@@ -18,7 +21,7 @@ namespace osrv
 			response->write(SimpleWeb::StatusCode::client_error_bad_request, "Could not open path " + request->path);
 		};
 
-		device::init_service(*http_server_instance_, log);
+		device::init_service(*http_server_instance_, DEVICE_CONFIGS, log);
 	}
 
 void Server::run()

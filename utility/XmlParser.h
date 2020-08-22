@@ -6,9 +6,9 @@
 
 static const char UNEXPECTED_FORMAT[] = "Parsing error: XML content has unexpected format";
 
-static const char ENVELOPE[] = "Envelope";
+static const std::string ENVELOPE = "Envelope";
 static const std::string BODY = "Body";
-static const char ATTR[] = "<xmlattr>";
+static const std::string ATTR = "<xmlattr>";
 
 //extended xml parser namespace
 namespace exns

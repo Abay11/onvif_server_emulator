@@ -6,6 +6,7 @@
 #include "../Simple-Web-Server/server_http.hpp"
 
 #include <boost/property_tree/xml_parser.hpp>
+#include <boost/property_tree/json_parser.hpp>
 
 #include <map>
 
@@ -15,6 +16,10 @@ static Logger* log_ = nullptr;
 const std::string GetCapabilities = "GetCapabilities";
 const std::string GetScopes = "GetScopes";
 const std::string GetSystemDateAndTime = "GetSystemDateAndTime";
+
+namespace pt = boost::property_tree;
+static pt::ptree CONFIGS_TREE;
+static std::vector<std::pair<std::string, std::string> > XML_NAMESPACES;
 
 namespace osrv
 {
@@ -45,29 +50,36 @@ namespace osrv
 		{
 			log_->Debug("Handle GetSystemDateAndTime");
 
-			*response << "HTTP/1.1 200 OK\r\nContent-Length: " << 0 << "\r\n\r\n";
+			pt::ptree envelope_tree;
+			for (auto it : XML_NAMESPACES)
+			{
+				envelope_tree.put("<xmlattr>.xmlns:" + it.first,
+					it.second);
+			}
+			
+			envelope_tree.put("s:Body.tds:GetSystemDateAndTimeResponse.tds:SystemDateAndTime.tt:DateTimeType", "NTP");
+			envelope_tree.put("s:Body.tds:GetSystemDateAndTimeResponse.tds:SystemDateAndTime.tt:DaylightSavings", "false");
+
+			pt::ptree root_tree;
+			root_tree.put_child("s:Envelope", envelope_tree);
+
+			std::ostringstream os;
+			pt::write_xml(os, root_tree);
+
+			std::string response_content = os.str();
+			*response << "HTTP/1.1 200 OK\r\n"
+				<< "Content-Length: " << response_content.length() << "\r\n\r\n"
+				<< response_content;
 		}
 		
 		//DEFAULT HANDLER
 		void DeviceServiceHandler(std::shared_ptr<HttpServer::Response> response,
 			std::shared_ptr<HttpServer::Request> request)
 		{
-			/*
-				//DeviceService's request example
-
-				<s:Envelope xmlns:s="http://www.w3.org/2003/05/soap-envelope">
-					<s:Body xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-						xmlns:xsd="http://www.w3.org/2001/XMLSchema">
-						<GetSystemDateAndTime xmlns="http://www.onvif.org/ver10/device/wsdl"/>
-					</s:Body>
-				</s:Envelope>
-			*/
-			
 			//extract requested method
 			std::string method;
 			auto content = request->content.string();
 			std::istringstream is(content);
-			namespace pt = boost::property_tree;
 			pt::ptree* tree = new exns::Parser();
 			try
 			{
@@ -82,23 +94,40 @@ namespace osrv
 
 			auto it = handlers.find(method);
 
-			//handle methods
+			//handle requests
 			if (it != handlers.end())
 			{
-				it->second(response, request);
+				try
+				{
+					it->second(response, request);
+				}
+				catch (const std::exception& e)
+				{
+					log_->Error("A server's error occured while processing: " + method
+						+ ". Info: " + e.what());
+				
+					*response << "HTTP/1.1 500 Server error\r\nContent-Length: " << 0 << "\r\n\r\n";
+				}
 			}
 			else
 			{
-				log_->Debug("Not found appropriate handler for " + method);
-				*response << "HTTP/1.1 500 Server error\r\nContent-Length: " << 0 << "\r\n\r\n";
+				log_->Debug("Not found an appropriate handler for: " + method);
+				*response << "HTTP/1.1 400 Bad request\r\nContent-Length: " << 0 << "\r\n\r\n";
 			}
 		}
 
-		void init_service(HttpServer& srv, Logger& logger)
+		void init_service(HttpServer& srv, const std::string& configs_path, Logger& logger)
 		{
 			log_ = &logger;
 
 			log_->Debug("Init Device service");
+
+			//
+			pt::read_json(configs_path, CONFIGS_TREE);
+			
+			auto namespaces_tree = CONFIGS_TREE.get_child("Namespaces");
+			for (const auto& n : namespaces_tree)
+				XML_NAMESPACES.push_back({ n.first, n.second.get_value<std::string>() });
 
 			handlers.insert({ GetCapabilities, &GetCapabilitiesHandler });
 			handlers.insert({ GetScopes, &GetScopesHandler });
