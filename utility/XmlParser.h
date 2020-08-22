@@ -21,7 +21,7 @@ namespace exns
 	{
 	public:
 
-		//onvif request example
+		//onvif request examples
 		/*
 		std::string xmlContent =
 			"<s:Envelope xmlns:s=\"http://www.w3.org/2003/05/soap-envelope\">"
@@ -30,6 +30,26 @@ namespace exns
 			"<GetSystemDateAndTime xmlns=\"http://www.onvif.org/ver10/device/wsdl\"/>"
 			"</s:Body>"
 			"</s:Envelope>";
+		*/
+
+		/*
+		<s:Envelope xmlns : s = "http://www.w3.org/2003/05/soap-envelope">
+			<s:Header>
+			<Security s : mustUnderstand = "1"
+			xmlns = "http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-secext-1.0.xsd">
+			<UsernameToken>
+			<Username>admin< / Username>
+			<Password Type = "http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-username-token-profile-1.0#PasswordDigest">BSzehQXlkG0oGjFMOMCWfEYH2EQ = < / Password>
+			<Nonce EncodingType = "http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-soap-message-security-1.0#Base64Binary">SEoWHX1ObUmS7 + oMVYUGWQIAAAAAAA == < / Nonce>
+			< Created xmlns = "http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-utility-1.0.xsd">2020 - 08 - 22T12:26 : 23.693Z< / Created>
+			< / UsernameToken>
+			< / Security>
+			< / s : Header>
+			<s : Body xmlns : xsi = "http://www.w3.org/2001/XMLSchema-instance"
+			xmlns : xsd = "http://www.w3.org/2001/XMLSchema">
+			<GetScopes xmlns = "http://www.onvif.org/ver10/device/wsdl" / >
+			< / s:Body>
+		< / s:Envelope>
 		*/
 
 		//try to find ONVIF required method in Soap
@@ -41,48 +61,42 @@ namespace exns
 
 			using namespace std;
 
-			auto envelopeIt = begin();
-			if (envelopeIt->first.find(ENVELOPE) == std::string::npos)
+			auto envelope_tree = begin();
+			if (envelope_tree->first.find(ENVELOPE) == std::string::npos) //it's strictly condition
 				throw pt::ptree_error(UNEXPECTED_FORMAT);
 
 			//search for Body element
-			auto bodyIt = envelopeIt->second.begin();
-			auto bodyEndIt = envelopeIt->second.end();
+			auto body_tree = envelope_tree->second.begin();
+			auto body_end = envelope_tree->second.end();
 			while (true)
 			{
-				if (bodyIt == bodyEndIt)
+				if (body_tree == body_end)
 					throw pt::ptree_error(UNEXPECTED_FORMAT);
 
-				if (bodyIt->first == ATTR)
-				{
-					++bodyIt;
-					continue;
-				}
-
-				if (bodyIt->first.find(BODY) != std::string::npos);
+				if (body_tree->first.find(BODY) != std::string::npos)
 				{
 					break;
 				}
 
-				++bodyIt;
+				++body_tree;
 			}
 			
 			//now iterate throw Body elements to find method
 			std::string method;
-			auto elIt = bodyIt->second.begin();
-			auto elEndIt = bodyIt->second.end();
+			auto method_tree = body_tree->second.begin();
+			auto method_end = body_tree->second.end();
 			while (true)
 			{
-				if (elIt == elEndIt)
+				if (method_tree == method_end)
 					throw pt::ptree_error(UNEXPECTED_FORMAT);
 
-				if (elIt->first == ATTR)
+				if (method_tree->first == ATTR)
 				{
-					++elIt;
+					++method_tree;
 					continue;
 				}
 
-				method = elIt->first;
+				method = method_tree->first;
 				break;
 			}
 
