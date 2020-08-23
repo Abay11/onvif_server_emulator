@@ -4,17 +4,16 @@
 #include "Server.h"
 
 //#include <http_parser/http_parser.h>
-#include <boost/asio.hpp>
+static const std::string SERVER_VERSION = "0.1";
 
 int main()
 {
 	using namespace std;
 
-	using namespace boost::asio;
-
 	Logger log(Logger::LVL_DEBUG);
+	
+	log.Info("Simple ONVIF Server ver. " + SERVER_VERSION);
 
-	//// STARTING SERVER
 	osrv::Server server(log);
 	try
 	{

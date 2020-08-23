@@ -42,7 +42,39 @@ namespace osrv
 		{
 			log_->Debug("Handle GetScopes");
 
-			*response << "HTTP/1.1 200 OK\r\nContent-Length: " << 0 << "\r\n\r\n";
+			pt::ptree envelope_tree;
+			envelope_tree.put("s:Header", "");
+			
+			for (auto it : XML_NAMESPACES)
+			{
+				envelope_tree.put("<xmlattr>.xmlns:" + it.first,
+					it.second);
+			}
+
+			static const auto SCOPES_TREE = CONFIGS_TREE.get_child("GetScopes");
+			for (const auto& it : SCOPES_TREE)
+			{
+				pt::ptree scopes_tree;
+				scopes_tree.put("tt:ScopeDef", "Fixed");
+				scopes_tree.put("tt:ScopeItem",
+					"onvif://www.onvif.org/" + it.first + "/" + it.second.get_value<std::string>());
+
+				envelope_tree.add_child("s:Body.tds:GetScopesResponse", scopes_tree);
+			}
+
+			pt::ptree root_tree;
+			root_tree.put_child("s:Envelope", envelope_tree);
+
+			std::ostringstream os;
+			pt::write_xml(os, root_tree);
+
+			std::string response_content = os.str();
+			*response << "HTTP/1.1 200 OK\r\n"
+				<< "Content-Type: application/soap+xml; charset=utf-8\r\n"
+				<< "Content-Length: " << response_content.length() << "\r\n"
+				<< "Connection: close" 
+				<< "\r\n\r\n"
+				<< response_content;
 		}
 
 		void GetSystemDateAndTimeHandler(std::shared_ptr<HttpServer::Response> response,
@@ -51,6 +83,8 @@ namespace osrv
 			log_->Debug("Handle GetSystemDateAndTime");
 
 			pt::ptree envelope_tree;
+			envelope_tree.put("s:Header", "");
+
 			for (auto it : XML_NAMESPACES)
 			{
 				envelope_tree.put("<xmlattr>.xmlns:" + it.first,
@@ -68,7 +102,10 @@ namespace osrv
 
 			std::string response_content = os.str();
 			*response << "HTTP/1.1 200 OK\r\n"
-				<< "Content-Length: " << response_content.length() << "\r\n\r\n"
+				<< "Content-Type: application/soap+xml; charset=utf-8\r\n"
+				<< "Content-Length: " << response_content.length() << "\r\n"
+				<< "Connection: close"
+				<< "\r\n\r\n"
 				<< response_content;
 		}
 		
@@ -118,11 +155,14 @@ namespace osrv
 
 		void init_service(HttpServer& srv, const std::string& configs_path, Logger& logger)
 		{
+			if (log_ != nullptr)
+				return log_->Error("Device service is already inited!");
+
 			log_ = &logger;
 
-			log_->Debug("Init Device service");
+			log_->Debug("Initiating Device service");
 
-			//
+			//getting service's configs
 			pt::read_json(configs_path, CONFIGS_TREE);
 			
 			auto namespaces_tree = CONFIGS_TREE.get_child("Namespaces");

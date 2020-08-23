@@ -3,6 +3,8 @@
 
 #include "Simple-Web-Server\server_http.hpp"
 
+#include <string>
+
 //TODO: make more general the way of getting configs path
 const std::string DEVICE_CONFIGS = "../server_configs/device.config";
 
