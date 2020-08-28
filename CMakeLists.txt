@@ -27,6 +27,7 @@ FILE(GLOB SERVICES_SRC
 FILE (GLOB UTILITY_SRC
 	"utility/XmlParser.h"
 	"utility/XmlParser.cpp"
+	"utility/HttpResponseHelper.h"
 )
 
 add_executable(main

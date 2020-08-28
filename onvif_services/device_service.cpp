@@ -2,6 +2,7 @@
 
 #include "../Logger.hpp"
 #include "../utility/XmlParser.h"
+#include "../utility/HttpResponseHelper.h"
 
 #include "../Simple-Web-Server/server_http.hpp"
 
@@ -68,13 +69,7 @@ namespace osrv
 			std::ostringstream os;
 			pt::write_xml(os, root_tree);
 
-			std::string response_content = os.str();
-			*response << "HTTP/1.1 200 OK\r\n"
-				<< "Content-Type: application/soap+xml; charset=utf-8\r\n"
-				<< "Content-Length: " << response_content.length() << "\r\n"
-				<< "Connection: close" 
-				<< "\r\n\r\n"
-				<< response_content;
+			utility::http::addHeaders(*response, os.str());
 		}
 
 		void GetSystemDateAndTimeHandler(std::shared_ptr<HttpServer::Response> response,
@@ -100,13 +95,7 @@ namespace osrv
 			std::ostringstream os;
 			pt::write_xml(os, root_tree);
 
-			std::string response_content = os.str();
-			*response << "HTTP/1.1 200 OK\r\n"
-				<< "Content-Type: application/soap+xml; charset=utf-8\r\n"
-				<< "Content-Length: " << response_content.length() << "\r\n"
-				<< "Connection: close"
-				<< "\r\n\r\n"
-				<< response_content;
+			utility::http::addHeaders(*response, os.str());
 		}
 		
 		//DEFAULT HANDLER
