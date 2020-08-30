@@ -28,6 +28,8 @@ FILE (GLOB UTILITY_SRC
 	"utility/XmlParser.h"
 	"utility/XmlParser.cpp"
 	"utility/HttpHelper.h"
+	"utility/SoapHelper.h"
+	"utility/SoapHelper.cpp"
 )
 
 add_executable(main

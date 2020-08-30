@@ -3,11 +3,13 @@
 #include "../Logger.hpp"
 #include "../utility/XmlParser.h"
 #include "../utility/HttpHelper.h"
+#include "../utility/SoapHelper.h"
 
 #include "../Simple-Web-Server/server_http.hpp"
 
 #include <boost/property_tree/xml_parser.hpp>
 #include <boost/property_tree/json_parser.hpp>
+#include <boost/property_tree/ptree.hpp>
 
 #include <map>
 
@@ -35,7 +37,35 @@ namespace osrv
 		{
 			log_->Debug("Handle GetCapabilities");
 
-			*response << "HTTP/1.1 200 OK\r\nContent-Length: " << 0 << "\r\n\r\n";
+			auto envelope_tree = utility::soap::getEnvelopeTree(XML_NAMESPACES);
+
+			//this processor will add a full network address to service's paths from configs
+			struct XAddrProcessor
+			{
+				std::string operator()(const std::string& element, const std::string& elData)
+				{
+					if (element == "XAddr")
+					{
+						return "http://127.0.0.1:8080/" + elData;
+					}
+
+					return elData;
+				}
+			};
+
+			auto capabilities_config = CONFIGS_TREE.get_child("GetCapabilities");
+			pt::ptree capabilities_node;
+			utility::soap::jsonNodeToXml(capabilities_config, capabilities_node, "tt", XAddrProcessor());
+
+			envelope_tree.add_child("s:Body.tds:GetCapabilitiesResponse.tds:Capabilities", capabilities_node);
+
+			pt::ptree root_tree;
+			root_tree.put_child("s:Envelope", envelope_tree);
+
+			std::ostringstream os;
+			pt::write_xml(os, root_tree);
+
+			utility::http::addHeaders(*response, os.str());
 		}
 		
 		void GetScopesHandler(std::shared_ptr<HttpServer::Response> response,
