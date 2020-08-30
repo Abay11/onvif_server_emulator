@@ -2,7 +2,7 @@
 
 #include "../Logger.hpp"
 #include "../utility/XmlParser.h"
-#include "../utility/HttpResponseHelper.h"
+#include "../utility/HttpHelper.h"
 
 #include "../Simple-Web-Server/server_http.hpp"
 
@@ -20,7 +20,7 @@ const std::string GetSystemDateAndTime = "GetSystemDateAndTime";
 
 namespace pt = boost::property_tree;
 static pt::ptree CONFIGS_TREE;
-static std::vector<std::pair<std::string, std::string> > XML_NAMESPACES;
+static osrv::StringsMap XML_NAMESPACES;
 
 namespace osrv
 {
@@ -43,14 +43,7 @@ namespace osrv
 		{
 			log_->Debug("Handle GetScopes");
 
-			pt::ptree envelope_tree;
-			envelope_tree.put("s:Header", "");
-			
-			for (auto it : XML_NAMESPACES)
-			{
-				envelope_tree.put("<xmlattr>.xmlns:" + it.first,
-					it.second);
-			}
+			auto envelope_tree = utility::soap::getEnvelopeTree(XML_NAMESPACES);
 
 			static const auto SCOPES_TREE = CONFIGS_TREE.get_child("GetScopes");
 			for (const auto& it : SCOPES_TREE)
@@ -77,14 +70,7 @@ namespace osrv
 		{
 			log_->Debug("Handle GetSystemDateAndTime");
 
-			pt::ptree envelope_tree;
-			envelope_tree.put("s:Header", "");
-
-			for (auto it : XML_NAMESPACES)
-			{
-				envelope_tree.put("<xmlattr>.xmlns:" + it.first,
-					it.second);
-			}
+			auto envelope_tree = utility::soap::getEnvelopeTree(XML_NAMESPACES);
 			
 			envelope_tree.put("s:Body.tds:GetSystemDateAndTimeResponse.tds:SystemDateAndTime.tt:DateTimeType", "NTP");
 			envelope_tree.put("s:Body.tds:GetSystemDateAndTimeResponse.tds:SystemDateAndTime.tt:DaylightSavings", "false");
@@ -137,7 +123,7 @@ namespace osrv
 			}
 			else
 			{
-				log_->Debug("Not found an appropriate handler for: " + method);
+				log_->Error("Not found an appropriate handler for: " + method);
 				*response << "HTTP/1.1 400 Bad request\r\nContent-Length: " << 0 << "\r\n\r\n";
 			}
 		}
@@ -156,7 +142,7 @@ namespace osrv
 			
 			auto namespaces_tree = CONFIGS_TREE.get_child("Namespaces");
 			for (const auto& n : namespaces_tree)
-				XML_NAMESPACES.push_back({ n.first, n.second.get_value<std::string>() });
+				XML_NAMESPACES.insert({ n.first, n.second.get_value<std::string>() });
 
 			handlers.insert({ GetCapabilities, &GetCapabilitiesHandler });
 			handlers.insert({ GetScopes, &GetScopesHandler });

@@ -6,6 +6,8 @@
 
 #include <boost/asio/ip/tcp.hpp>
 
+#include <map>
+#include <string>
 
 	/// Buffer for incoming data.
 	using buffer_t = std::array<char, 8192>;
@@ -25,4 +27,6 @@
 	namespace osrv
 	{
 		using HttpServer = SimpleWeb::Server<SimpleWeb::HTTP>;
+
+		using StringsMap = std::map<std::string, std::string>;
 	}
