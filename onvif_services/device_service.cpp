@@ -18,6 +18,7 @@ static Logger* log_ = nullptr;
 //List of implemented methods
 const std::string GetCapabilities = "GetCapabilities";
 const std::string GetDeviceInformation = "GetDeviceInformation";
+const std::string GetNetworkInterfaces = "GetNetworkInterfaces";
 const std::string GetScopes = "GetScopes";
 const std::string GetSystemDateAndTime = "GetSystemDateAndTime";
 
@@ -90,6 +91,45 @@ namespace osrv
 
 			utility::http::fillResponseWithHeaders(*response, os.str());
 		}
+
+		void GetNetworkInterfacesHandler(std::shared_ptr<HttpServer::Response> response,
+			std::shared_ptr<HttpServer::Request> request)
+		{
+			log_->Debug("GetNetworkInterfaces");
+
+			auto envelope_tree = utility::soap::getEnvelopeTree(XML_NAMESPACES);
+
+			auto network_interfaces_config = CONFIGS_TREE.get_child("GetNetworkInterfaces");
+			pt::ptree network_interfaces_node;
+
+			//this processor will add a xml ns depending on element
+			struct NsProcessor
+			{
+				void operator()(std::string& element, std::string& elData)
+				{
+					if (element == "NetworkInterfaces")
+					{
+						//currently implemented only Loopback address
+						element = "tds" + element;
+					}
+					else
+					{
+						element = "tt" + element;
+					}
+				}
+			};
+
+			utility::soap::jsonNodeToXml(network_interfaces_config, network_interfaces_node, "", NsProcessor());
+
+			envelope_tree.add_child("s:Body.tds:GetNetworkInterfacesResponse", network_interfaces_node);
+
+			pt::ptree root_tree;
+			root_tree.put_child("s:Envelope", envelope_tree);
+
+			std::ostringstream os;
+			pt::write_xml(os, root_tree);
+
+			utility::http::fillResponseWithHeaders(*response, os.str());
 		}
 		
 		void GetScopesHandler(std::shared_ptr<HttpServer::Response> response,
@@ -200,6 +240,7 @@ namespace osrv
 
 			handlers.insert({ GetCapabilities, &GetCapabilitiesHandler });
 			handlers.insert({ GetDeviceInformation, &GetDeviceInformationHandler });
+			handlers.insert({ GetNetworkInterfaces, &GetNetworkInterfacesHandler });
 			handlers.insert({ GetScopes, &GetScopesHandler });
 			handlers.insert({ GetSystemDateAndTime, &GetSystemDateAndTimeHandler });
 
