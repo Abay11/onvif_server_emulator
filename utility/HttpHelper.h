@@ -29,7 +29,7 @@ namespace utility
 				<< content;
 		}
 
-		void addHeaders(std::ostream& os, const std::string& content, HeadersWriter* writer = NoErrorDefaultWriter)
+		void fillResponseWithHeaders(std::ostream& os, const std::string& content, HeadersWriter* writer = NoErrorDefaultWriter)
 		{
 			writer(os, content);
 		}

@@ -17,6 +17,7 @@ static Logger* log_ = nullptr;
 
 //List of implemented methods
 const std::string GetCapabilities = "GetCapabilities";
+const std::string GetDeviceInformation = "GetDeviceInformation";
 const std::string GetScopes = "GetScopes";
 const std::string GetSystemDateAndTime = "GetSystemDateAndTime";
 
@@ -46,6 +47,7 @@ namespace osrv
 				{
 					if (element == "XAddr")
 					{
+						//currently implemented only Loopback address
 						return "http://127.0.0.1:8080/" + elData;
 					}
 
@@ -65,7 +67,31 @@ namespace osrv
 			std::ostringstream os;
 			pt::write_xml(os, root_tree);
 
-			utility::http::addHeaders(*response, os.str());
+			utility::http::fillResponseWithHeaders(*response, os.str());
+		}
+		
+		void GetDeviceInformationHandler(std::shared_ptr<HttpServer::Response> response,
+			std::shared_ptr<HttpServer::Request> request)
+		{
+			log_->Debug("Handle GetDeviceInformation");
+
+			auto envelope_tree = utility::soap::getEnvelopeTree(XML_NAMESPACES);
+
+			auto device_info_config = CONFIGS_TREE.get_child("GetDeviceInformation");
+			pt::ptree device_info_node;
+
+			utility::soap::jsonNodeToXml(device_info_config, device_info_node, "tds");
+
+			envelope_tree.add_child("s:Body.tds:GetDeviceInformationResponse", device_info_node);
+
+			pt::ptree root_tree;
+			root_tree.put_child("s:Envelope", envelope_tree);
+
+			std::ostringstream os;
+			pt::write_xml(os, root_tree);
+
+			utility::http::fillResponseWithHeaders(*response, os.str());
+		}
 		}
 		
 		void GetScopesHandler(std::shared_ptr<HttpServer::Response> response,
@@ -92,7 +118,7 @@ namespace osrv
 			std::ostringstream os;
 			pt::write_xml(os, root_tree);
 
-			utility::http::addHeaders(*response, os.str());
+			utility::http::fillResponseWithHeaders(*response, os.str());
 		}
 
 		void GetSystemDateAndTimeHandler(std::shared_ptr<HttpServer::Response> response,
@@ -111,7 +137,7 @@ namespace osrv
 			std::ostringstream os;
 			pt::write_xml(os, root_tree);
 
-			utility::http::addHeaders(*response, os.str());
+			utility::http::fillResponseWithHeaders(*response, os.str());
 		}
 		
 		//DEFAULT HANDLER
@@ -175,6 +201,7 @@ namespace osrv
 				XML_NAMESPACES.insert({ n.first, n.second.get_value<std::string>() });
 
 			handlers.insert({ GetCapabilities, &GetCapabilitiesHandler });
+			handlers.insert({ GetDeviceInformation, &GetDeviceInformationHandler });
 			handlers.insert({ GetScopes, &GetScopesHandler });
 			handlers.insert({ GetSystemDateAndTime, &GetSystemDateAndTimeHandler });
 
