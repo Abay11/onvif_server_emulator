@@ -13,12 +13,10 @@ namespace utility
 		
 		boost::property_tree::ptree getEnvelopeTree(const osrv::StringsMap& xmlns);
 
-		using ElementsProcessor = std::function<std::string(const std::string&, const std::string&)>;
-			//std::string(const std::string& element, const std::string& value);
+		using ElementsProcessor = std::function<void(std::string&, std::string&)>;
 
-		inline std::string DefaultProcessor(const std::string& element, const std::string& value)
+		inline void DefaultProcessor(const std::string& element, const std::string& value)
 		{
-			return value;
 		}
 		
 		//@xmlNode a node writing to

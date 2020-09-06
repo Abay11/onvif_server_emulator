@@ -43,15 +43,13 @@ namespace osrv
 			//this processor will add a full network address to service's paths from configs
 			struct XAddrProcessor
 			{
-				std::string operator()(const std::string& element, const std::string& elData)
+				void operator()(const std::string& element, std::string& elData)
 				{
 					if (element == "XAddr")
 					{
 						//currently implemented only Loopback address
-						return "http://127.0.0.1:8080/" + elData;
+						elData = "http://127.0.0.1:8080/" + elData;
 					}
-
-					return elData;
 				}
 			};
 

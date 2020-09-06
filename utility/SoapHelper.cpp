@@ -44,8 +44,14 @@ namespace utility
 				//it's just a value
 				else
 				{
-					std::string elementData = processor(i.first, i.second.get_value<std::string>());
-					xmlNode.add(ns + i.first, elementData);
+					std::string element = i.first;
+					std::string elementData = i.second.get_value<std::string>();
+
+					//processor could somehow change elements or elements' data,
+					//for example add some prefix, or dynamic generated xml ns
+					processor(element, elementData);
+
+					xmlNode.add(ns + element, elementData);
 				}
 			}
 		}
