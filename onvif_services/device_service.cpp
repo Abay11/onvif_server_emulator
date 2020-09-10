@@ -19,12 +19,15 @@ static Logger* log_ = nullptr;
 const std::string GetCapabilities = "GetCapabilities";
 const std::string GetDeviceInformation = "GetDeviceInformation";
 const std::string GetNetworkInterfaces = "GetNetworkInterfaces";
+const std::string GetServices = "GetServices";
 const std::string GetScopes = "GetScopes";
 const std::string GetSystemDateAndTime = "GetSystemDateAndTime";
 
 namespace pt = boost::property_tree;
 static pt::ptree CONFIGS_TREE;
 static osrv::StringsMap XML_NAMESPACES;
+
+std::string SERVER_ADDRESS = "http://127.0.0.1:8080/";
 
 namespace osrv
 {
@@ -49,7 +52,7 @@ namespace osrv
 					if (element == "XAddr")
 					{
 						//currently implemented only Loopback address
-						elData = "http://127.0.0.1:8080/" + elData;
+						elData = SERVER_ADDRESS + elData;
 					}
 				}
 			};
@@ -122,6 +125,39 @@ namespace osrv
 			utility::soap::jsonNodeToXml(network_interfaces_config, network_interfaces_node, "", NsProcessor());
 
 			envelope_tree.add_child("s:Body.tds:GetNetworkInterfacesResponse", network_interfaces_node);
+
+			pt::ptree root_tree;
+			root_tree.put_child("s:Envelope", envelope_tree);
+
+			std::ostringstream os;
+			pt::write_xml(os, root_tree);
+
+			utility::http::fillResponseWithHeaders(*response, os.str());
+		}
+
+		void GetServicesHandler(std::shared_ptr<HttpServer::Response> response,
+			std::shared_ptr<HttpServer::Request> request)
+		{
+			log_->Debug("Handle GetServices");
+			
+			auto envelope_tree = utility::soap::getEnvelopeTree(XML_NAMESPACES);
+
+			auto services_config = CONFIGS_TREE.get_child(GetServices);
+			pt::ptree services_node;
+
+			//here's Services are enumerates as array, so handle them manualy
+			for (auto elements : services_config)
+			{
+				pt::ptree xml_service_node;
+				xml_service_node.put("tds:Namespace", elements.second.get<std::string>("namespace"));
+				xml_service_node.put("tds:XAddr", SERVER_ADDRESS + elements.second.get<std::string>("XAddr"));
+				xml_service_node.put("tds:Version.tt:Major", elements.second.get<std::string>("Version.Major"));
+				xml_service_node.put("tds:Version.tt:Minor", elements.second.get<std::string>("Version.Minor"));
+
+				services_node.add_child("tds:Service", xml_service_node);
+			}
+		
+			envelope_tree.add_child("s:Body.tds:GetServicesResponse", services_node);
 
 			pt::ptree root_tree;
 			root_tree.put_child("s:Envelope", envelope_tree);
@@ -241,6 +277,7 @@ namespace osrv
 			handlers.insert({ GetCapabilities, &GetCapabilitiesHandler });
 			handlers.insert({ GetDeviceInformation, &GetDeviceInformationHandler });
 			handlers.insert({ GetNetworkInterfaces, &GetNetworkInterfacesHandler });
+			handlers.insert({ GetServices, &GetServicesHandler });
 			handlers.insert({ GetScopes, &GetScopesHandler });
 			handlers.insert({ GetSystemDateAndTime, &GetSystemDateAndTimeHandler });
 
