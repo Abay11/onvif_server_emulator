@@ -1,12 +1,14 @@
 #include "Server.h"
 #include "../onvif_services/device_service.h"
+#include "../onvif_services/media_service.h"
 
 #include "Simple-Web-Server\server_http.hpp"
 
 #include <string>
 
 //TODO: make more general the way of getting configs path
-const std::string DEVICE_CONFIGS = "../server_configs/device.config";
+static const std::string DEVICE_CONFIGS = "../server_configs/device.config";
+static const std::string MEDIA_CONFIGS = "../server_configs/media.config";
 
 namespace osrv
 {
@@ -22,8 +24,15 @@ namespace osrv
 		{
 			response->write(SimpleWeb::StatusCode::client_error_bad_request, "Could not open path " + request->path);
 		};
+		
+		http_server_instance_->default_resource["POST"] = [](std::shared_ptr<HttpServer::Response> response,
+			std::shared_ptr<HttpServer::Request> request)
+		{
+			response->write(SimpleWeb::StatusCode::client_error_bad_request, "Bad request");
+		};
 
 		device::init_service(*http_server_instance_, DEVICE_CONFIGS, log);
+		media::init_service(*http_server_instance_, MEDIA_CONFIGS, log);
 	}
 
 void Server::run()

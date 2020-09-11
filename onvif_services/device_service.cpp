@@ -27,7 +27,7 @@ namespace pt = boost::property_tree;
 static pt::ptree CONFIGS_TREE;
 static osrv::StringsMap XML_NAMESPACES;
 
-std::string SERVER_ADDRESS = "http://127.0.0.1:8080/";
+static std::string SERVER_ADDRESS = "http://127.0.0.1:8080/";
 
 namespace osrv
 {
@@ -245,7 +245,7 @@ namespace osrv
 				}
 				catch (const std::exception& e)
 				{
-					log_->Error("A server's error occured while processing: " + method
+					log_->Error("A server's error occured in DeviceService while processing: " + method
 						+ ". Info: " + e.what());
 				
 					*response << "HTTP/1.1 500 Server error\r\nContent-Length: " << 0 << "\r\n\r\n";
@@ -253,7 +253,7 @@ namespace osrv
 			}
 			else
 			{
-				log_->Error("Not found an appropriate handler for: " + method);
+				log_->Error("Not found an appropriate handler in DeviceService for: " + method);
 				*response << "HTTP/1.1 400 Bad request\r\nContent-Length: " << 0 << "\r\n\r\n";
 			}
 		}
@@ -261,11 +261,11 @@ namespace osrv
 		void init_service(HttpServer& srv, const std::string& configs_path, Logger& logger)
 		{
 			if (log_ != nullptr)
-				return log_->Error("Device service is already inited!");
+				return log_->Error("DeviceService is already inited!");
 
 			log_ = &logger;
 
-			log_->Debug("Initiating Device service");
+			log_->Debug("Initiating Device service...");
 
 			//getting service's configs
 			pt::read_json(configs_path, CONFIGS_TREE);

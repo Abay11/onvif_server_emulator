@@ -9,7 +9,7 @@ namespace utility
 	{
 		using HeadersWriter = void(std::ostream&, const std::string&);
 
-		void NoErrorDefaultWriter(std::ostream& os, const std::string& content)
+		inline void NoErrorDefaultWriter(std::ostream& os, const std::string& content)
 		{
 			os << "HTTP/1.1 200 OK\r\n"
 				<< "Content-Type: application/soap+xml; charset=utf-8\r\n"
@@ -19,7 +19,7 @@ namespace utility
 				<< content;
 		}
 
-		void ClientErrorDefaultWriter(std::ostream& os, const std::string& content)
+		inline void ClientErrorDefaultWriter(std::ostream& os, const std::string& content)
 		{
 			os << "HTTP/1.1 400 OK\r\n"
 				<< "Content-Type: application/soap+xml; charset=utf-8\r\n"
@@ -29,7 +29,7 @@ namespace utility
 				<< content;
 		}
 
-		void fillResponseWithHeaders(std::ostream& os, const std::string& content, HeadersWriter* writer = NoErrorDefaultWriter)
+		inline void fillResponseWithHeaders(std::ostream& os, const std::string& content, HeadersWriter* writer = NoErrorDefaultWriter)
 		{
 			writer(os, content);
 		}

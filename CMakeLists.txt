@@ -22,6 +22,8 @@ add_subdirectory(Simple-Web-Server)
 FILE(GLOB SERVICES_SRC
 	"onvif_services/device_service.h"
 	"onvif_services/device_service.cpp"
+	"onvif_services/media_service.h"
+	"onvif_services/media_service.cpp"
 )
 
 FILE (GLOB UTILITY_SRC
