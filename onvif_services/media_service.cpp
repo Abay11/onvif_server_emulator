@@ -13,13 +13,19 @@
 
 static Logger* log_ = nullptr;
 
+
+static const std::string PROFILES_CONFIGS_PATH = "media_profiles.config";
+static const std::string MEDIA_SERVICE_CONFIGS_PATH = "media.config";
+
 namespace pt = boost::property_tree;
 static pt::ptree CONFIGS_TREE;
+static pt::ptree PROFILES_CONFIGS_TREE;
 static osrv::StringsMap XML_NAMESPACES;
 
 static std::string SERVER_ADDRESS = "http://127.0.0.1:8080/";
 
 //the list of implemented methods
+static const std::string GetProfiles = "GetProfiles";
 static const std::string GetVideoSources = "GetVideoSources";
 
 namespace osrv
@@ -29,6 +35,46 @@ namespace osrv
         using handler_t = void(std::shared_ptr<HttpServer::Response> response,
 		    std::shared_ptr<HttpServer::Request> request);
 		static std::map<std::string, handler_t*> handlers;
+
+		void GetProfilesHandler(std::shared_ptr<HttpServer::Response> response,
+			std::shared_ptr<HttpServer::Request> request)
+		{
+			log_->Debug("Handle GetProfiles");
+			
+			auto envelope_tree = utility::soap::getEnvelopeTree(XML_NAMESPACES);
+
+			auto profiles_config = PROFILES_CONFIGS_TREE.get_child("MediaProfiles");
+			pt::ptree response_node;
+			for (auto elements : profiles_config)
+			{
+				pt::ptree profile_node;
+				profile_node.put("trt:Profiles.<xmlattr>.token", elements.second.get<std::string>("token"));
+				profile_node.put("trt:Profiles.<xmlattr>.fixed", elements.second.get<std::string>("fixed"));
+				profile_node.put("trt:Profiles.tt:Name", elements.second.get<std::string>("Name"));
+				
+				//TODO: fill all videosource configs from the config file
+				profile_node.put("trt:Profiles.tt:VideoSourceConfiguration",
+					elements.second.get<std::string>("VideoSourceConfiguration"));
+				
+				//TODO: fill all videoencoder configs from the config file
+				profile_node.put("trt:Profiles.tt:VideoEncoderConfiguration",
+					elements.second.get<std::string>("VideoEncoderConfiguration"));
+
+				response_node.insert(response_node.end(),
+					profile_node.begin(),
+					profile_node.end());
+			}
+		
+			envelope_tree.put_child("s:Body.trt:GetProfilesResponse", response_node);
+
+			pt::ptree root_tree;
+			root_tree.put_child("s:Envelope", envelope_tree);
+
+			std::ostringstream os;
+			pt::write_xml(os, root_tree);
+
+			utility::http::fillResponseWithHeaders(*response, os.str());
+		}
 
 		void GetVideoSourcesHandler(std::shared_ptr<HttpServer::Response> response,
 			std::shared_ptr<HttpServer::Request> request)
@@ -116,12 +162,14 @@ namespace osrv
             
 			log_->Debug("Initiating Media service...");
 
-            pt::read_json(configs_path, CONFIGS_TREE);
+            pt::read_json(configs_path + MEDIA_SERVICE_CONFIGS_PATH, CONFIGS_TREE);
+            pt::read_json(configs_path + PROFILES_CONFIGS_PATH, PROFILES_CONFIGS_TREE);
 
             auto namespaces_tree = CONFIGS_TREE.get_child("Namespaces");
 			for (const auto& n : namespaces_tree)
 				XML_NAMESPACES.insert({ n.first, n.second.get_value<std::string>() });
 
+			handlers.insert({ GetProfiles, &GetProfilesHandler });
 			handlers.insert({ GetVideoSources, &GetVideoSourcesHandler });
 
             srv.resource["/onvif/media_service"]["POST"] = MediaServiceHandler;

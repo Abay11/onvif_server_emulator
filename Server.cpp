@@ -8,7 +8,7 @@
 
 //TODO: make more general the way of getting configs path
 static const std::string DEVICE_CONFIGS = "../server_configs/device.config";
-static const std::string MEDIA_CONFIGS = "../server_configs/media.config";
+static const std::string MEDIA_CONFIGS = "../server_configs/";
 
 namespace osrv
 {
