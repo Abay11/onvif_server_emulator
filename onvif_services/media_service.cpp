@@ -84,21 +84,27 @@ namespace osrv
 			auto envelope_tree = utility::soap::getEnvelopeTree(XML_NAMESPACES);
 
 			auto videosources_config = CONFIGS_TREE.get_child(GetVideoSources);
-			pt::ptree videosources_nodes;
+			pt::ptree response_node;
 
 			//here's Services are enumerates as array, so handle them manualy
 			for (auto elements : videosources_config)
 			{
 				pt::ptree videosource_node;
-				videosource_node.put("trt:token", elements.second.get<std::string>("token"));
-				videosource_node.put("tt:Framerate", elements.second.get<std::string>("Framerate"));
-				videosource_node.put("tt:Resolution.Width", elements.second.get<std::string>("Resolution.Width"));
-				videosource_node.put("tt:Resolution.Height", elements.second.get<std::string>("Resolution.Height"));
+				videosource_node.put("trt:VideoSources.<xmlattr>.token",
+					elements.second.get<std::string>("token"));
+				videosource_node.put("trt:VideoSources.tt:Framerate",
+					elements.second.get<std::string>("Framerate"));
+				videosource_node.put("trt:VideoSources.tt:Resolution.Width",
+					elements.second.get<std::string>("Resolution.Width"));
+				videosource_node.put("trt:VideoSources.tt:Resolution.Height",
+					elements.second.get<std::string>("Resolution.Height"));
 
-				videosources_nodes.add_child("trt:VideoSources", videosource_node);
+				response_node.insert(response_node.begin(),
+					videosource_node.begin(), videosource_node.end());
+				//response_node.add_child("trt:VideoSources", videosource_node);
 			}
 		
-			envelope_tree.add_child("s:Body.trt:GetVideoSourcesResponse", videosources_nodes);
+			envelope_tree.add_child("s:Body.trt:GetVideoSourcesResponse", response_node);
 
 			pt::ptree root_tree;
 			root_tree.put_child("s:Envelope", envelope_tree);
