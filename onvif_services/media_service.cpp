@@ -52,9 +52,38 @@ namespace osrv
 				profile_node.put("trt:Profiles.<xmlattr>.fixed", elements.second.get<std::string>("fixed"));
 				profile_node.put("trt:Profiles.tt:Name", elements.second.get<std::string>("Name"));
 				
-				//TODO: fill all videosource configs from the config file
-				profile_node.put("trt:Profiles.tt:VideoSourceConfiguration",
-					elements.second.get<std::string>("VideoSourceConfiguration"));
+				//Videosource
+				{
+					const std::string vs_token = elements.second.get<std::string>("VideoSourceConfiguration");
+					auto vs_configs_list = PROFILES_CONFIGS_TREE.get_child("VideoSourceConfigurations");
+					auto vs_config = std::find_if(vs_configs_list.begin(), vs_configs_list.end(),
+						[vs_token](pt::ptree::value_type vs_obj)
+						{
+							return vs_obj.second.get<std::string>("token") == vs_token;
+						});
+
+					if (vs_config == vs_configs_list.end())
+						throw std::runtime_error("Can't find VideoSourceConfiguration with token '" + vs_token + "'");
+
+					profile_node.put("trt:Profiles.tt:VideoSourceConfiguration.<xmlattr>.token",
+						vs_config->second.get<std::string>("token"));
+					profile_node.put("trt:Profiles.tt:VideoSourceConfiguration.tt:Name",
+						vs_config->second.get<std::string>("Name"));
+					profile_node.put("trt:Profiles.tt:VideoSourceConfiguration.tt:UseCount",
+						vs_config->second.get<std::string>("UseCount"));
+					profile_node.put("trt:Profiles.tt:VideoSourceConfiguration.<xmlattr>.ViewMode",
+						vs_config->second.get<std::string>("ViewMode"));
+					profile_node.put("trt:Profiles.tt:VideoSourceConfiguration.tt:SourceToken",
+						vs_config->second.get<std::string>("SourceToken"));
+					profile_node.put("trt:Profiles.tt:VideoSourceConfiguration.tt:Bounds.<xmlattr>.x",
+						vs_config->second.get<std::string>("Bounds.x"));
+					profile_node.put("trt:Profiles.tt:VideoSourceConfiguration.tt:Bounds.<xmlattr>.y",
+						vs_config->second.get<std::string>("Bounds.y"));
+					profile_node.put("trt:Profiles.tt:VideoSourceConfiguration.tt:Bounds.<xmlattr>.width",
+						vs_config->second.get<std::string>("Bounds.width"));
+					profile_node.put("trt:Profiles.tt:VideoSourceConfiguration.tt:Bounds.<xmlattr>.height",
+						vs_config->second.get<std::string>("Bounds.height"));
+				}
 				
 				//TODO: fill all videoencoder configs from the config file
 				profile_node.put("trt:Profiles.tt:VideoEncoderConfiguration",
