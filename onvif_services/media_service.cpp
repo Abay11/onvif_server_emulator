@@ -85,9 +85,81 @@ namespace osrv
 						vs_config->second.get<std::string>("Bounds.height"));
 				}
 				
-				//TODO: fill all videoencoder configs from the config file
-				profile_node.put("trt:Profiles.tt:VideoEncoderConfiguration",
-					elements.second.get<std::string>("VideoEncoderConfiguration"));
+				//VideoEncoder
+				{
+					auto ve_configs_list = PROFILES_CONFIGS_TREE.get_child("VideoEncoderConfigurations");
+					std::string ve_token = elements.second.get<std::string>("VideoEncoderConfiguration");
+					auto ve_config = std::find_if(ve_configs_list.begin(), ve_configs_list.end(),
+						[ve_token](pt::ptree::value_type ve_obj)
+						{
+							return ve_obj.second.get<std::string>("token") == ve_token;
+						});
+
+					if (ve_config == ve_configs_list.end())
+						throw std::runtime_error("Can't find VideoEncoderConfiguration with token '" + ve_token + "'");
+
+					profile_node.put("trt:Profiles.tt:VideoEncoderConfiguration.<xmlattr>.token",
+						ve_config->second.get<std::string>("token"));
+					profile_node.put("trt:Profiles.tt:VideoEncoderConfiguration.tt:Name",
+						ve_config->second.get<std::string>("Name"));
+					profile_node.put("trt:Profiles.tt:VideoEncoderConfiguration.tt:UseCount",
+						ve_config->second.get<std::string>("UseCount"));
+					profile_node.put("trt:Profiles.tt:VideoEncoderConfiguration.tt:Encoding",
+						ve_config->second.get<std::string>("Encoding"));
+					profile_node.put("trt:Profiles.tt:VideoEncoderConfiguration.tt:Resolution.tt:Width",
+						ve_config->second.get<std::string>("Resolution.Width"));
+					profile_node.put("trt:Profiles.tt:VideoEncoderConfiguration.tt:Resolution.tt:Height",
+						ve_config->second.get<std::string>("Resolution.Height"));
+					profile_node.put("trt:Profiles.tt:VideoEncoderConfiguration.tt:Quality",
+						ve_config->second.get<std::string>("Quality"));
+					
+					//ratecontrol is optional
+					auto ratecontrol_config_it = ve_config->second.find("RateControl");
+					if(ratecontrol_config_it != ve_config->second.not_found())
+					{
+						profile_node.put("trt:Profiles.tt:VideoEncoderConfiguration.tt:RateControl.<xmlattr>.GuaranteedFrameRate",
+							ratecontrol_config_it->second.get<std::string>("GuaranteedFrameRate"));
+						profile_node.put("trt:Profiles.tt:VideoEncoderConfiguration.tt:RateControl.tt:FrameRateLimit",
+							ratecontrol_config_it->second.get<std::string>("FrameRateLimit"));
+						profile_node.put("trt:Profiles.tt:VideoEncoderConfiguration.tt:RateControl.tt:EncodingInterval",
+							ratecontrol_config_it->second.get<std::string>("EncodingInterval"));
+						profile_node.put("trt:Profiles.tt:VideoEncoderConfiguration.tt:RateControl.tt:BitrateLimit",
+							ratecontrol_config_it->second.get<std::string>("BitrateLimit"));
+					}
+
+					const auto& codec = ve_config->second.get<std::string>("Encoding");
+					if ("H264" == codec)
+					{
+						//codecs info is optional
+						auto h264_config_it = ve_config->second.find("H264");
+						if (h264_config_it != ve_config->second.not_found())
+						{
+							profile_node.put("trt:Profiles.tt:VideoEncoderConfiguration.tt:H264.tt:GovLength",
+								h264_config_it->second.get<std::string>("GovLength"));
+							profile_node.put("trt:Profiles.tt:VideoEncoderConfiguration.tt:H264.tt:H264Profile",
+								h264_config_it->second.get<std::string>("H264Profile"));
+						}
+					}
+					else if ("MPEG4" == codec)
+					{
+						//TODO
+					}
+
+					//Multicast
+					profile_node.put("trt:Profiles.tt:VideoEncoderConfiguration.tt:Multicast.tt:Address.tt:Type",
+						ve_config->second.get<std::string>("Multicast.Address.Type"));
+					profile_node.put("trt:Profiles.tt:VideoEncoderConfiguration.tt:Multicast.tt:Address.tt:IPv4Address",
+						ve_config->second.get<std::string>("Multicast.Address.IPv4Address"));
+					profile_node.put("trt:Profiles.tt:VideoEncoderConfiguration.tt:Multicast.tt:Port",
+						ve_config->second.get<std::string>("Multicast.Port"));
+					profile_node.put("trt:Profiles.tt:VideoEncoderConfiguration.tt:Multicast.tt:TTL",
+						ve_config->second.get<std::string>("Multicast.TTL"));
+					profile_node.put("trt:Profiles.tt:VideoEncoderConfiguration.tt:Multicast.tt:AutoStart",
+						ve_config->second.get<std::string>("Multicast.AutoStart"));
+
+					profile_node.put("trt:Profiles.tt:VideoEncoderConfiguration.tt:SessionTimeout",
+						ve_config->second.get<std::string>("SessionTimeout"));
+				}
 
 				response_node.insert(response_node.end(),
 					profile_node.begin(),
