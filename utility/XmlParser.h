@@ -106,4 +106,8 @@ namespace exns
 			return method;
 		}
 	};
+
+	//do the same thing as ptree::find member class, different in that, this method searchs ignoring
+	//XML NS preffix if it even is present
+	pt::ptree::const_assoc_iterator find(const pt::ptree::key_type& /*key*/, const pt::ptree& /*node*/);
 }
