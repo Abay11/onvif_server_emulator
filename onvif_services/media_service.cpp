@@ -28,6 +28,7 @@ static std::string SERVER_ADDRESS = "http://127.0.0.1:8080/";
 static const std::string GetProfile = "GetProfile";
 static const std::string GetProfiles = "GetProfiles";
 static const std::string GetVideoSources = "GetVideoSources";
+static const std::string GetStreamUri = "GetStreamUri";
 
 //soap helper functions
 void fill_soap_media_profile(const pt::ptree& /*in_json_config*/, pt::ptree& /*out_profile_node*/,
@@ -59,8 +60,6 @@ namespace osrv
 				requested_token = profile_token->second.get_value<std::string>();
 			}
 
-			auto envelope_tree = utility::soap::getEnvelopeTree(XML_NAMESPACES);
-
 			auto profiles_config_list = PROFILES_CONFIGS_TREE.get_child("MediaProfiles");
 
 			auto profile_config = std::find_if(profiles_config_list.begin(), profiles_config_list.end(),
@@ -80,6 +79,7 @@ namespace osrv
 				profile_node.begin(),
 				profile_node.end());
 			
+			auto envelope_tree = utility::soap::getEnvelopeTree(XML_NAMESPACES);
 			envelope_tree.put_child("s:Body.trt:GetProfileResponse", response_node);
 
 			pt::ptree root_tree;
@@ -160,6 +160,69 @@ namespace osrv
 
 			utility::http::fillResponseWithHeaders(*response, os.str());
 		}
+		
+		void GetStreamUriHandler(std::shared_ptr<HttpServer::Response> response,
+			std::shared_ptr<HttpServer::Request> request)
+		{
+			log_->Debug("Handle GetStreamUri");
+
+			pt::ptree request_xml;
+			pt::xml_parser::read_xml(std::istringstream{ request->content.string() }, request_xml);
+
+			//TODO: add way to search for child with full path like: "Envelope.Body.GetPr..."
+			std::string requested_token;
+			{
+				auto envelope_node = exns::find("Envelope", request_xml);
+				auto body_node = exns::find("Body", envelope_node->second);
+				auto profile_node = exns::find("GetStreamUri", body_node->second);
+				auto profile_token = exns::find("ProfileToken", profile_node->second);
+				requested_token = profile_token->second.get_value<std::string>();
+
+				log_->Debug("Requested token to get URI: " + requested_token);
+			}
+
+			auto profiles_config_list = PROFILES_CONFIGS_TREE.get_child("MediaProfiles");
+
+			auto profile_config = std::find_if(profiles_config_list.begin(), profiles_config_list.end(),
+				[requested_token](pt::ptree::value_type vs_obj)
+				{
+					return vs_obj.second.get<std::string>("token") == requested_token;
+				});
+
+			if (profile_config == profiles_config_list.end())
+				throw std::runtime_error("The media profile does not exist.");
+			
+			auto encoder_token = profile_config->second.get<std::string>("VideoEncoderConfiguration");
+
+			auto stream_configs_list = CONFIGS_TREE.get_child("GetStreamUri");
+			auto stream_config_it = std::find_if(stream_configs_list.begin(), stream_configs_list.end(),
+				[encoder_token](const pt::ptree::value_type& el)
+				{return el.second.get<std::string>("VideoEncoderToken") == encoder_token; });
+
+			if (stream_config_it == stream_configs_list.end())
+				throw std::runtime_error("Could not find a stream for the requested Media Profile.");
+
+			pt::ptree response_node;
+			response_node.put("trt:MediaUri.tt:Uri",
+				"rtsp://127.0.0.1:554/" + stream_config_it->second.get<std::string>("Uri"));
+			response_node.put("trt:MediaUri.tt:InvalidAfterConnect",
+				stream_config_it->second.get<std::string>("InvalidAfterConnect"));
+			response_node.put("trt:MediaUri.tt:InvalidAfterReboot",
+				stream_config_it->second.get<std::string>("InvalidAfterReboot"));
+			response_node.put("trt:MediaUri.tt:Timeout",
+				stream_config_it->second.get<std::string>("Timeout"));
+
+			auto envelope_tree = utility::soap::getEnvelopeTree(XML_NAMESPACES);
+			envelope_tree.put_child("s:Body.trt:GetStreamUriResponse", response_node);
+
+			pt::ptree root_tree;
+			root_tree.put_child("s:Envelope", envelope_tree);
+
+			std::ostringstream os;
+			pt::write_xml(os, root_tree);
+
+			utility::http::fillResponseWithHeaders(*response, os.str());
+		}
 
 		//DEFAULT HANDLER
 		void MediaServiceHandler(std::shared_ptr<HttpServer::Response> response,
@@ -224,6 +287,7 @@ namespace osrv
 			handlers.insert({ GetProfile, &GetProfileHandler });
 			handlers.insert({ GetProfiles, &GetProfilesHandler });
 			handlers.insert({ GetVideoSources, &GetVideoSourcesHandler });
+			handlers.insert({ GetStreamUri, &GetStreamUriHandler });
 
             srv.resource["/onvif/media_service"]["POST"] = MediaServiceHandler;
         }
