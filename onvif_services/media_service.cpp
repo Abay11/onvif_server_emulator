@@ -27,12 +27,15 @@ static std::string SERVER_ADDRESS = "http://127.0.0.1:8080/";
 //the list of implemented methods
 static const std::string GetProfile = "GetProfile";
 static const std::string GetProfiles = "GetProfiles";
+static const std::string GetVideoSourceConfiguration = "GetVideoSourceConfiguration";
 static const std::string GetVideoSources = "GetVideoSources";
 static const std::string GetStreamUri = "GetStreamUri";
 
 //soap helper functions
 void fill_soap_media_profile(const pt::ptree& /*in_json_config*/, pt::ptree& /*out_profile_node*/,
 	const std::string& /*root_node_value*/);
+
+void fill_soap_videosource_configuration(const pt::ptree& /*in_json_config*/, pt::ptree& /*out_profile_node*/);
 
 namespace osrv
 {
@@ -121,6 +124,50 @@ namespace osrv
 
 			utility::http::fillResponseWithHeaders(*response, os.str());
 		}
+		
+		void GetVideoSourceConfigurationHandler(std::shared_ptr<HttpServer::Response> response,
+			std::shared_ptr<HttpServer::Request> request)
+		{
+			log_->Debug("Handle GetVideoSourceConfiguration");
+
+			pt::ptree request_xml;
+			pt::xml_parser::read_xml(std::istringstream{ request->content.string() }, request_xml);
+
+			//TODO: add way to search for child with full path like: "Envelope.Body.GetPr..."
+			std::string requested_token;
+			{
+				auto envelope_node = exns::find("Envelope", request_xml);
+				auto body_node = exns::find("Body", envelope_node->second);
+				auto videosource_node = exns::find("GetVideoSourceConfiguration", body_node->second);
+				auto profile_token = exns::find("ConfigurationToken", videosource_node->second);
+				requested_token = profile_token->second.get_value<std::string>();
+			}
+
+			auto vs_config_list = PROFILES_CONFIGS_TREE.get_child("VideoSourceConfigurations");
+
+			auto vs_config = std::find_if(vs_config_list.begin(), vs_config_list.end(),
+				[requested_token](pt::ptree::value_type vs_obj)
+				{
+					return vs_obj.second.get<std::string>("token") == requested_token;
+				});
+
+			if (vs_config == vs_config_list.end())
+				throw std::runtime_error("The requested configuration indicated with ConfigurationToken does not exist.");
+			
+			pt::ptree videosource_configuration_node;
+			fill_soap_videosource_configuration(vs_config->second, videosource_configuration_node);
+
+			auto envelope_tree = utility::soap::getEnvelopeTree(XML_NAMESPACES);
+			envelope_tree.add_child("s:Body.trt:GetVideoSourceConfigurationResponse.trt:Configuration", videosource_configuration_node);
+
+			pt::ptree root_tree;
+			root_tree.put_child("s:Envelope", envelope_tree);
+
+			std::ostringstream os;
+			pt::write_xml(os, root_tree);
+
+			utility::http::fillResponseWithHeaders(*response, os.str());
+		}
 
 		void GetVideoSourcesHandler(std::shared_ptr<HttpServer::Response> response,
 			std::shared_ptr<HttpServer::Request> request)
@@ -147,7 +194,6 @@ namespace osrv
 
 				response_node.insert(response_node.begin(),
 					videosource_node.begin(), videosource_node.end());
-				//response_node.add_child("trt:VideoSources", videosource_node);
 			}
 		
 			envelope_tree.add_child("s:Body.trt:GetVideoSourcesResponse", response_node);
@@ -286,6 +332,7 @@ namespace osrv
 
 			handlers.insert({ GetProfile, &GetProfileHandler });
 			handlers.insert({ GetProfiles, &GetProfilesHandler });
+			handlers.insert({ GetVideoSourceConfiguration, &GetVideoSourceConfigurationHandler });
 			handlers.insert({ GetVideoSources, &GetVideoSourcesHandler });
 			handlers.insert({ GetStreamUri, &GetStreamUriHandler });
 
@@ -314,24 +361,9 @@ void fill_soap_media_profile(const pt::ptree& json_config, pt::ptree& profile_no
 		if (vs_config == vs_configs_list.end())
 			throw std::runtime_error("Can't find VideoSourceConfiguration with token '" + vs_token + "'");
 
-		profile_node.put(root_node_value + ".tt:VideoSourceConfiguration.<xmlattr>.token",
-			vs_config->second.get<std::string>("token"));
-		profile_node.put(root_node_value + ".tt:VideoSourceConfiguration.tt:Name",
-			vs_config->second.get<std::string>("Name"));
-		profile_node.put(root_node_value + ".tt:VideoSourceConfiguration.tt:UseCount",
-			vs_config->second.get<std::string>("UseCount"));
-		profile_node.put(root_node_value + ".tt:VideoSourceConfiguration.<xmlattr>.ViewMode",
-			vs_config->second.get<std::string>("ViewMode"));
-		profile_node.put(root_node_value + ".tt:VideoSourceConfiguration.tt:SourceToken",
-			vs_config->second.get<std::string>("SourceToken"));
-		profile_node.put(root_node_value + ".tt:VideoSourceConfiguration.tt:Bounds.<xmlattr>.x",
-			vs_config->second.get<std::string>("Bounds.x"));
-		profile_node.put(root_node_value + ".tt:VideoSourceConfiguration.tt:Bounds.<xmlattr>.y",
-			vs_config->second.get<std::string>("Bounds.y"));
-		profile_node.put(root_node_value + ".tt:VideoSourceConfiguration.tt:Bounds.<xmlattr>.width",
-			vs_config->second.get<std::string>("Bounds.width"));
-		profile_node.put(root_node_value + ".tt:VideoSourceConfiguration.tt:Bounds.<xmlattr>.height",
-			vs_config->second.get<std::string>("Bounds.height"));
+		pt::ptree videosource_configuration;
+		fill_soap_videosource_configuration(vs_config->second, videosource_configuration);
+		profile_node.put_child(root_node_value + ".tt:VideoSourceConfiguration", videosource_configuration);
 	}
 
 	//VideoEncoder
@@ -409,4 +441,26 @@ void fill_soap_media_profile(const pt::ptree& json_config, pt::ptree& profile_no
 		profile_node.put(root_node_value + ".tt:VideoEncoderConfiguration.tt:SessionTimeout",
 			ve_config->second.get<std::string>("SessionTimeout"));
 	}
+}
+
+void fill_soap_videosource_configuration(const pt::ptree& config_node, pt::ptree& videosource_node)
+{
+	videosource_node.put("<xmlattr>.token",
+		config_node.get<std::string>("token"));
+	videosource_node.put("tt:Name",
+		config_node.get<std::string>("Name"));
+	videosource_node.put("tt:UseCount",
+		config_node.get<std::string>("UseCount"));
+	videosource_node.put("<xmlattr>.ViewMode",
+		config_node.get<std::string>("ViewMode"));
+	videosource_node.put("tt:SourceToken",
+		config_node.get<std::string>("SourceToken"));
+	videosource_node.put("tt:Bounds.<xmlattr>.x",
+		config_node.get<std::string>("Bounds.x"));
+	videosource_node.put("tt:Bounds.<xmlattr>.y",
+		config_node.get<std::string>("Bounds.y"));
+	videosource_node.put("tt:Bounds.<xmlattr>.width",
+		config_node.get<std::string>("Bounds.width"));
+	videosource_node.put("tt:Bounds.<xmlattr>.height",
+		config_node.get<std::string>("Bounds.height"));
 }
