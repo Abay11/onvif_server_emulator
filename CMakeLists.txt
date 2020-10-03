@@ -17,6 +17,16 @@ ELSE()
 	include_directories(${Boost_INCLUDE_DIRS})
 ENDIF()
 
+#TODO: getting values from a user
+set(PKG_CONFIG_INSTALLATION_PATH "C:/dev/pkg-config-lite-0.28-1_bin-win32/pkg-config-lite-0.28-1/bin")
+set(GST_INSTALLATION_PATH "C:/dev")
+set(PKG_CONFIG_EXECUTABLE "${PKG_CONFIG_INSTALLATION_PATH}/pkg-config.exe" CACHE FILEPATH "")
+set(ENV{PKG_CONFIG_PATH} "${GST_INSTALLATION_PATH}/gstreamer/1.0/x86_64/lib/pkgconfig")
+
+find_package(PkgConfig REQUIRED)
+
+pkg_check_modules(GST REQUIRED gstreamer-1.0 gstreamer-rtsp-server-1.0)
+
 add_subdirectory(Simple-Web-Server)
 
 FILE(GLOB SERVICES_SRC
@@ -40,6 +50,8 @@ add_executable(main
 	Types.inl
 	Server.cpp
 	Server.h
+	RtspServer.cpp
+	RtspServer.h
 	"${SERVICES_SRC}"
 	"${UTILITY_SRC}"
 	)
@@ -56,5 +68,10 @@ set(THIRD_LIBS_DIR
 include_directories(
 	"${THIRD_LIBS_DIR}"
 )
+
+include_directories(main "${GST_INCLUDE_DIRS}")
+target_compile_options(main PUBLIC "${GST_CFLAGS}")
+target_link_directories(main PUBLIC "${GST_INSTALLATION_PATH}/gstreamer/1.0/x86_64/lib")
+target_link_libraries(main "${GST_LIBRARIES}")
 
 set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT main)
