@@ -250,7 +250,7 @@ namespace osrv
 
 			pt::ptree response_node;
 			response_node.put("trt:MediaUri.tt:Uri",
-				"rtsp://127.0.0.1:554/" + stream_config_it->second.get<std::string>("Uri"));
+				"rtsp://127.0.0.1:8554/" + stream_config_it->second.get<std::string>("Uri"));
 			response_node.put("trt:MediaUri.tt:InvalidAfterConnect",
 				stream_config_it->second.get<std::string>("InvalidAfterConnect"));
 			response_node.put("trt:MediaUri.tt:InvalidAfterReboot",

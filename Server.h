@@ -2,6 +2,7 @@
 
 #include "Types.inl"
 #include "Logger.hpp"
+#include "RtspServer.h"
 
 #include <memory>
 
@@ -19,6 +20,7 @@ namespace osrv
 		Server(Logger& log);
 		Server(const Logger&) = delete;
 		Server(Logger&&) = delete;
+		~Server();
 
 		//throws exceptions in error
 		void run();
@@ -29,5 +31,7 @@ namespace osrv
 		Logger& log_;
 
 		std::shared_ptr<HttpServer> http_server_instance_ = nullptr;
+
+		rtsp::Server* rtspServer_;
 	};
 }

@@ -10,12 +10,15 @@
 static const std::string DEVICE_CONFIGS = "../server_configs/device.config";
 static const std::string MEDIA_CONFIGS = "../server_configs/";
 
+static char RTSP_PORT[] = "8554";
+
 namespace osrv
 {
 
 	Server::Server(Logger& log)
 		: log_(log),
-		http_server_instance_(new HttpServer)
+		http_server_instance_(new HttpServer),
+		rtspServer_(new rtsp::Server(&log, RTSP_PORT))
 	{
 		http_server_instance_->config.port = MASTER_PORT;
 	
@@ -33,6 +36,12 @@ namespace osrv
 
 		device::init_service(*http_server_instance_, DEVICE_CONFIGS, log);
 		media::init_service(*http_server_instance_, MEDIA_CONFIGS, log);
+
+	}
+
+	Server::~Server()
+	{
+		delete rtspServer_;
 	}
 
 void Server::run()
@@ -47,6 +56,8 @@ void Server::run()
 			server_port.set_value(port);
 			});
 		});
+
+	rtspServer_->run();
 
 	std::string msg("Server is successfully started on port: ");
 	msg += std::to_string(server_port.get_future().get());
