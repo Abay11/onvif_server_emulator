@@ -27,6 +27,7 @@ static std::string SERVER_ADDRESS = "http://127.0.0.1:8080/";
 //the list of implemented methods
 static const std::string GetProfile = "GetProfile";
 static const std::string GetProfiles = "GetProfiles";
+static const std::string GetVideoAnalyticsConfigurations = "GetVideoAnalyticsConfigurations";
 static const std::string GetVideoSourceConfiguration = "GetVideoSourceConfiguration";
 static const std::string GetVideoSourceConfigurations = "GetVideoSourceConfigurations";
 static const std::string GetVideoSources = "GetVideoSources";
@@ -116,6 +117,24 @@ namespace osrv
 			}
 		
 			envelope_tree.put_child("s:Body.trt:GetProfilesResponse", response_node);
+
+			pt::ptree root_tree;
+			root_tree.put_child("s:Envelope", envelope_tree);
+
+			std::ostringstream os;
+			pt::write_xml(os, root_tree);
+
+			utility::http::fillResponseWithHeaders(*response, os.str());
+		}
+		
+		void GetVideoAnalyticsConfigurationsHandler(std::shared_ptr<HttpServer::Response> response,
+			std::shared_ptr<HttpServer::Request> request)
+		{
+			log_->Debug("Handle GetVideoAnalyticsConfigurations");
+			
+			pt::ptree analytics_configs;
+			auto envelope_tree = utility::soap::getEnvelopeTree(XML_NAMESPACES);
+			envelope_tree.add_child("s:Body.trt:GetVideoAnalyticsConfigurationsResponse.trt:Configurations", analytics_configs);
 
 			pt::ptree root_tree;
 			root_tree.put_child("s:Envelope", envelope_tree);
@@ -360,6 +379,7 @@ namespace osrv
 
 			handlers.insert({ GetProfile, &GetProfileHandler });
 			handlers.insert({ GetProfiles, &GetProfilesHandler });
+			handlers.insert({ GetVideoAnalyticsConfigurations, &GetVideoAnalyticsConfigurationsHandler});
 			handlers.insert({ GetVideoSourceConfiguration, &GetVideoSourceConfigurationHandler });
 			handlers.insert({ GetVideoSourceConfigurations, &GetVideoSourceConfigurationsHandler });
 			handlers.insert({ GetVideoSources, &GetVideoSourcesHandler });
