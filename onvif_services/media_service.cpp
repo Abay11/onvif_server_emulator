@@ -25,6 +25,7 @@ static osrv::StringsMap XML_NAMESPACES;
 static std::string SERVER_ADDRESS = "http://127.0.0.1:8080/";
 
 //the list of implemented methods
+static const std::string GetAudioSourceConfigurations = "GetAudioSourceConfigurations";
 static const std::string GetAudioSources = "GetAudioSources";
 static const std::string GetProfile = "GetProfile";
 static const std::string GetProfiles = "GetProfiles";
@@ -47,6 +48,24 @@ namespace osrv
         using handler_t = void(std::shared_ptr<HttpServer::Response> response,
 		    std::shared_ptr<HttpServer::Request> request);
 		static std::map<std::string, handler_t*> handlers;
+
+		void GetAudioSourceConfigurationsHandler(std::shared_ptr<HttpServer::Response> response,
+			std::shared_ptr<HttpServer::Request> request)
+		{
+			log_->Debug("Handle GetAudioSourceConfigurations");
+
+			pt::ptree as_configs;
+			auto envelope_tree = utility::soap::getEnvelopeTree(XML_NAMESPACES);
+			envelope_tree.add_child("s:Body.trt:GetAudioSourceConfigurationsResponse", as_configs);
+
+			pt::ptree root_tree;
+			root_tree.put_child("s:Envelope", envelope_tree);
+
+			std::ostringstream os;
+			pt::write_xml(os, root_tree);
+
+			utility::http::fillResponseWithHeaders(*response, os.str());
+		}
 
 		void GetAudioSourcesHandler(std::shared_ptr<HttpServer::Response> response,
 			std::shared_ptr<HttpServer::Request> request)
@@ -396,6 +415,7 @@ namespace osrv
 			for (const auto& n : namespaces_tree)
 				XML_NAMESPACES.insert({ n.first, n.second.get_value<std::string>() });
 
+			handlers.insert({ GetAudioSourceConfigurations, &GetAudioSourceConfigurationsHandler});
 			handlers.insert({ GetAudioSources, &GetAudioSourcesHandler});
 			handlers.insert({ GetProfile, &GetProfileHandler });
 			handlers.insert({ GetProfiles, &GetProfilesHandler });
