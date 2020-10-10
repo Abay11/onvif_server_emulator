@@ -360,6 +360,7 @@ namespace osrv
 
 			handlers.insert({ GetProfile, &GetProfileHandler });
 			handlers.insert({ GetProfiles, &GetProfilesHandler });
+			handlers.insert({ GetVideoAnalyticsConfigurations, &GetVideoAnalyticsConfigurationsHandler});
 			handlers.insert({ GetVideoSourceConfiguration, &GetVideoSourceConfigurationHandler });
 			handlers.insert({ GetVideoSourceConfigurations, &GetVideoSourceConfigurationsHandler });
 			handlers.insert({ GetVideoSources, &GetVideoSourcesHandler });
