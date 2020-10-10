@@ -15,7 +15,7 @@ IF(NOT Boost_FOUND)
 ELSE()
 	message("+++ Boost INCLUDE_DIR is ${Boost_INCLUDE_DIRS}")
 	include_directories(${Boost_INCLUDE_DIRS})
-ENDIF()
+ENDIF()	
 
 #TODO: getting values from a user
 set(PKG_CONFIG_INSTALLATION_PATH "C:/dev/pkg-config-lite-0.28-1_bin-win32/pkg-config-lite-0.28-1/bin")
@@ -42,7 +42,12 @@ FILE (GLOB UTILITY_SRC
 	"utility/HttpHelper.h"
 	"utility/SoapHelper.h"
 	"utility/SoapHelper.cpp"
+	"utility/AuthHelper.h"
+	"utility/AuthHelper.cpp"
 )
+
+source_group("OnvifServices" FILES ${SERVICES_SRC})
+source_group("Utility" FILES ${UTILITY_SRC})
 
 add_executable(main
 	main.cpp
@@ -75,3 +80,5 @@ target_link_directories(main PUBLIC "${GST_INSTALLATION_PATH}/gstreamer/1.0/x86_
 target_link_libraries(main "${GST_LIBRARIES}")
 
 set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT main)
+
+add_subdirectory(unit_tests)
