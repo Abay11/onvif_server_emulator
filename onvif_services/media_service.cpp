@@ -28,6 +28,7 @@ static std::string SERVER_ADDRESS = "http://127.0.0.1:8080/";
 static const std::string GetProfile = "GetProfile";
 static const std::string GetProfiles = "GetProfiles";
 static const std::string GetVideoSourceConfiguration = "GetVideoSourceConfiguration";
+static const std::string GetVideoSourceConfigurations = "GetVideoSourceConfigurations";
 static const std::string GetVideoSources = "GetVideoSources";
 static const std::string GetStreamUri = "GetStreamUri";
 
@@ -159,6 +160,33 @@ namespace osrv
 
 			auto envelope_tree = utility::soap::getEnvelopeTree(XML_NAMESPACES);
 			envelope_tree.add_child("s:Body.trt:GetVideoSourceConfigurationResponse.trt:Configuration", videosource_configuration_node);
+
+			pt::ptree root_tree;
+			root_tree.put_child("s:Envelope", envelope_tree);
+
+			std::ostringstream os;
+			pt::write_xml(os, root_tree);
+
+			utility::http::fillResponseWithHeaders(*response, os.str());
+		}
+		
+		void GetVideoSourceConfigurationsHandler(std::shared_ptr<HttpServer::Response> response,
+			std::shared_ptr<HttpServer::Request> request)
+		{
+			log_->Debug("Handle GetVideoSourceConfigurations");
+
+			auto vs_config_list = PROFILES_CONFIGS_TREE.get_child("VideoSourceConfigurations");
+
+			pt::ptree vs_configs_node;
+			for (const auto& vs_config : vs_config_list)
+			{
+				pt::ptree vs_config_node;
+				fill_soap_videosource_configuration(vs_config.second, vs_config_node);
+				vs_configs_node.add_child("trt:Configurations", vs_config_node);
+			}
+
+			auto envelope_tree = utility::soap::getEnvelopeTree(XML_NAMESPACES);
+			envelope_tree.add_child("s:Body.trt:GetVideoSourceConfigurationsResponse", vs_configs_node);
 
 			pt::ptree root_tree;
 			root_tree.put_child("s:Envelope", envelope_tree);
@@ -333,6 +361,7 @@ namespace osrv
 			handlers.insert({ GetProfile, &GetProfileHandler });
 			handlers.insert({ GetProfiles, &GetProfilesHandler });
 			handlers.insert({ GetVideoSourceConfiguration, &GetVideoSourceConfigurationHandler });
+			handlers.insert({ GetVideoSourceConfigurations, &GetVideoSourceConfigurationsHandler });
 			handlers.insert({ GetVideoSources, &GetVideoSourcesHandler });
 			handlers.insert({ GetStreamUri, &GetStreamUriHandler });
 
