@@ -27,6 +27,9 @@ namespace pt = boost::property_tree;
 static pt::ptree CONFIGS_TREE;
 static osrv::StringsMap XML_NAMESPACES;
 
+static std::string CONFIGS_PATH; //will be init with the service initialization
+static const std::string DEVICE_CONFIGS_FILE = "device.config";
+
 static std::string SERVER_ADDRESS = "http://127.0.0.1:8080/";
 
 namespace osrv
@@ -267,8 +270,10 @@ namespace osrv
 
 			log_->Debug("Initiating Device service...");
 
+			CONFIGS_PATH = configs_path;
+
 			//getting service's configs
-			pt::read_json(configs_path, CONFIGS_TREE);
+			pt::read_json(configs_path + DEVICE_CONFIGS_FILE, CONFIGS_TREE);
 			
 			auto namespaces_tree = CONFIGS_TREE.get_child("Namespaces");
 			for (const auto& n : namespaces_tree)
