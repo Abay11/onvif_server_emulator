@@ -1,0 +1,50 @@
+<SOAP-ENV:Envelope xmlns:SOAP-ENV="http://www.w3.org/2003/05/soap-envelope">
+<SOAP-ENV:Header>
+    <wsa5:MessageID xmlns:wsa5="http://www.w3.org/2005/08/addressing">urn:uuid:a4e44033-2803-4513-a78f-cb7bcde63677</wsa5:MessageID>
+    <wsa5:ReplyTo xmlns:wsa5="http://www.w3.org/2005/08/addressing" SOAP-ENV:mustUnderstand="true">
+        <wsa5:Address>http://www.w3.org/2005/08/addressing/anonymous</wsa5:Address>
+    </wsa5:ReplyTo>
+    <wsa5:To xmlns:wsa5="http://www.w3.org/2005/08/addressing" SOAP-ENV:mustUnderstand="true">http://127.0.0.1:8080/onvif/device_service</wsa5:To>
+    <wsa5:Action xmlns:wsa5="http://www.w3.org/2005/08/addressing" SOAP-ENV:mustUnderstand="true">http://www.onvif.org/ver10/events/wsdl/EventPortType/GetEventPropertiesResponse</wsa5:Action>
+</SOAP-ENV:Header>
+<SOAP-ENV:Body>
+    <ns12:GetEventPropertiesResponse xmlns:ns12="http://www.onvif.org/ver10/events/wsdl">
+        <ns12:TopicNamespaceLocation>http://www.onvif.org/onvif/ver10/topics/topicns.xml</ns12:TopicNamespaceLocation>
+        <ns12:TopicNamespaceLocation>http://www.placeholder.org/ver10/tmp/topics/topicns.xml</ns12:TopicNamespaceLocation>
+        <ns3:FixedTopicSet xmlns:ns3="http://docs.oasis-open.org/wsn/b-2">true</ns3:FixedTopicSet>
+        <ns6:TopicSet xmlns:ns6="http://docs.oasis-open.org/wsn/t-1">
+            <tns1:RuleEngine xmlns:tns1="http://www.onvif.org/ver10/topics">
+                <tns1:CellMotionDetector>
+                    <tns1:Motion ns6:topic="true">
+                        <tt:MessageDescription xmlns:tt="http://www.onvif.org/ver10/schema" IsProperty="true">
+                            <tt:Source>
+                                <tt:SimpleItemDescription Name="VideoSourceConfigurationToken" Type="tt:ReferenceToken"></tt:SimpleItemDescription>
+                                <tt:SimpleItemDescription Name="VideoAnalyticsConfigurationToken" Type="tt:ReferenceToken"></tt:SimpleItemDescription>
+                                <tt:SimpleItemDescription Name="Rule" Type="xsd:string"></tt:SimpleItemDescription>
+                            </tt:Source>
+                            <tt:Data>
+                                <tt:SimpleItemDescription Name="IsMotion" Type="xsd:boolean"></tt:SimpleItemDescription>
+                            </tt:Data>
+                        </tt:MessageDescription>
+                    </tns1:Motion>
+                </tns1:CellMotionDetector>
+            </tns1:RuleEngine>
+            <ns37:Device xmlns:ns37="http://www.placeholder.org/ver10/tmp/topics">
+                <ns37:Trigger>
+                    <ns37:Relay ns6:topic="true">
+                        <tt:MessageDescription xmlns:tt="http://www.onvif.org/ver10/schema" IsProperty="true">
+                            <tt:Source>
+                                <tt:SimpleItemDescription Name="RelayInputToken" Type="tt:ReferenceToken"></tt:SimpleItemDescription>
+                            </tt:Source>
+                        </tt:MessageDescription>
+                    </ns37:Relay>
+                </ns37:Trigger>
+            </ns37:Device>
+        </ns6:TopicSet>
+        <ns3:TopicExpressionDialect xmlns:ns3="http://docs.oasis-open.org/wsn/b-2">http://docs.oasis-open.org/wsn/t-1/TopicExpression/Concrete</ns3:TopicExpressionDialect>
+        <ns3:TopicExpressionDialect xmlns:ns3="http://docs.oasis-open.org/wsn/b-2">http://www.onvif.org/ver10/tev/topicExpression/ConcreteSet</ns3:TopicExpressionDialect>
+        <ns12:MessageContentFilterDialect>http://www.onvif.org/ver10/tev/messageContentFilter/ItemFilter</ns12:MessageContentFilterDialect>
+        <ns12:MessageContentSchemaLocation>http://www.onvif.org/onvif/ver10/schema/onvif.xsd</ns12:MessageContentSchemaLocation>
+    </ns12:GetEventPropertiesResponse>
+</SOAP-ENV:Body>
+</SOAP-ENV:Envelope>

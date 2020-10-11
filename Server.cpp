@@ -1,14 +1,14 @@
 #include "Server.h"
 #include "../onvif_services/device_service.h"
 #include "../onvif_services/media_service.h"
+#include "../onvif_services/event_service.h"
 
 #include "Simple-Web-Server\server_http.hpp"
 
 #include <string>
 
 //TODO: make more general the way of getting configs path
-static const std::string DEVICE_CONFIGS = "../server_configs/device.config";
-static const std::string MEDIA_CONFIGS = "../server_configs/";
+static const std::string CONFIGS_PATH = "../server_configs/";
 
 static char RTSP_PORT[] = "8554";
 
@@ -34,8 +34,9 @@ namespace osrv
 			response->write(SimpleWeb::StatusCode::client_error_bad_request, "Bad request");
 		};
 
-		device::init_service(*http_server_instance_, DEVICE_CONFIGS, log);
-		media::init_service(*http_server_instance_, MEDIA_CONFIGS, log);
+		device::init_service(*http_server_instance_, CONFIGS_PATH, log);
+		media::init_service(*http_server_instance_, CONFIGS_PATH, log);
+		event::init_service(*http_server_instance_, CONFIGS_PATH, log);
 
 	}
 
