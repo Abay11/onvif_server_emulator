@@ -32,191 +32,255 @@ static const std::string DEVICE_CONFIGS_FILE = "device.config";
 
 static std::string SERVER_ADDRESS = "http://127.0.0.1:8080/";
 
+using utility::http::SessionInfoHolder;
+
 namespace osrv
 {
 	namespace device
 	{
-		using handler_t = void(std::shared_ptr<HttpServer::Response> response,
-			std::shared_ptr<HttpServer::Request> request);
-		static std::map<std::string, handler_t*> handlers;
+		//using handler_t = void(std::shared_ptr<HttpServer::Response> response,
+		//	std::shared_ptr<HttpServer::Request> request,
+		//	const SessionInfoHolder& sessionInfo);
 
-		void GetCapabilitiesHandler(std::shared_ptr<HttpServer::Response> response,
-			std::shared_ptr<HttpServer::Request> request)
+#define OVERLOAD_HANDLER void operator()(std::shared_ptr<HttpServer::Response> response, \
+		std::shared_ptr<HttpServer::Request> request, const SessionInfoHolder& sessionInfo) override
+
+		struct RequestHandlerBase
 		{
-			log_->Debug("Handle GetCapabilities");
-
-			auto envelope_tree = utility::soap::getEnvelopeTree(XML_NAMESPACES);
-
-			//this processor will add a full network address to service's paths from configs
-			struct XAddrProcessor
+			RequestHandlerBase(const std::string& name, osrv::auth::SECURITY_LEVELS lvl) :
+				name_(name),
+				security_level_(lvl)
 			{
-				void operator()(const std::string& element, std::string& elData)
-				{
-					if (element == "XAddr")
-					{
-						//currently implemented only Loopback address
-						elData = SERVER_ADDRESS + elData;
-					}
-				}
-			};
-
-			auto capabilities_config = CONFIGS_TREE.get_child("GetCapabilities");
-			pt::ptree capabilities_node;
-			utility::soap::jsonNodeToXml(capabilities_config, capabilities_node, "tt", XAddrProcessor());
-
-			envelope_tree.add_child("s:Body.tds:GetCapabilitiesResponse.tds:Capabilities", capabilities_node);
-
-			pt::ptree root_tree;
-			root_tree.put_child("s:Envelope", envelope_tree);
-
-			std::ostringstream os;
-			pt::write_xml(os, root_tree);
-
-			utility::http::fillResponseWithHeaders(*response, os.str());
-		}
-		
-		void GetDeviceInformationHandler(std::shared_ptr<HttpServer::Response> response,
-			std::shared_ptr<HttpServer::Request> request)
-		{
-			log_->Debug("Handle GetDeviceInformation");
-
-			auto envelope_tree = utility::soap::getEnvelopeTree(XML_NAMESPACES);
-
-			auto device_info_config = CONFIGS_TREE.get_child("GetDeviceInformation");
-			pt::ptree device_info_node;
-
-			utility::soap::jsonNodeToXml(device_info_config, device_info_node, "tds");
-
-			envelope_tree.add_child("s:Body.tds:GetDeviceInformationResponse", device_info_node);
-
-			pt::ptree root_tree;
-			root_tree.put_child("s:Envelope", envelope_tree);
-
-			std::ostringstream os;
-			pt::write_xml(os, root_tree);
-
-			utility::http::fillResponseWithHeaders(*response, os.str());
-		}
-
-		void GetNetworkInterfacesHandler(std::shared_ptr<HttpServer::Response> response,
-			std::shared_ptr<HttpServer::Request> request)
-		{
-			log_->Debug("GetNetworkInterfaces");
-
-			auto envelope_tree = utility::soap::getEnvelopeTree(XML_NAMESPACES);
-
-			auto network_interfaces_config = CONFIGS_TREE.get_child("GetNetworkInterfaces");
-			pt::ptree network_interfaces_node;
-
-			//this processor will add a xml ns depending on element
-			struct NsProcessor
-			{
-				void operator()(std::string& element, std::string& elData)
-				{
-					if (element == "NetworkInterfaces")
-					{
-						//currently implemented only Loopback address
-						element = "tds" + element;
-					}
-					else
-					{
-						element = "tt" + element;
-					}
-				}
-			};
-
-			utility::soap::jsonNodeToXml(network_interfaces_config, network_interfaces_node, "", NsProcessor());
-
-			envelope_tree.add_child("s:Body.tds:GetNetworkInterfacesResponse", network_interfaces_node);
-
-			pt::ptree root_tree;
-			root_tree.put_child("s:Envelope", envelope_tree);
-
-			std::ostringstream os;
-			pt::write_xml(os, root_tree);
-
-			utility::http::fillResponseWithHeaders(*response, os.str());
-		}
-
-		void GetServicesHandler(std::shared_ptr<HttpServer::Response> response,
-			std::shared_ptr<HttpServer::Request> request)
-		{
-			log_->Debug("Handle GetServices");
-			
-			auto envelope_tree = utility::soap::getEnvelopeTree(XML_NAMESPACES);
-
-			auto services_config = CONFIGS_TREE.get_child(GetServices);
-			pt::ptree services_node;
-
-			//here's Services are enumerates as array, so handle them manualy
-			for (auto elements : services_config)
-			{
-				pt::ptree xml_service_node;
-				xml_service_node.put("tds:Namespace", elements.second.get<std::string>("namespace"));
-				xml_service_node.put("tds:XAddr", SERVER_ADDRESS + elements.second.get<std::string>("XAddr"));
-				xml_service_node.put("tds:Version.tt:Major", elements.second.get<std::string>("Version.Major"));
-				xml_service_node.put("tds:Version.tt:Minor", elements.second.get<std::string>("Version.Minor"));
-
-				services_node.add_child("tds:Service", xml_service_node);
-			}
-		
-			envelope_tree.add_child("s:Body.tds:GetServicesResponse", services_node);
-
-			pt::ptree root_tree;
-			root_tree.put_child("s:Envelope", envelope_tree);
-
-			std::ostringstream os;
-			pt::write_xml(os, root_tree);
-
-			utility::http::fillResponseWithHeaders(*response, os.str());
-		}
-		
-		void GetScopesHandler(std::shared_ptr<HttpServer::Response> response,
-			std::shared_ptr<HttpServer::Request> request)
-		{
-			log_->Debug("Handle GetScopes");
-
-			auto envelope_tree = utility::soap::getEnvelopeTree(XML_NAMESPACES);
-
-			static const auto SCOPES_TREE = CONFIGS_TREE.get_child("GetScopes");
-			for (const auto& it : SCOPES_TREE)
-			{
-				pt::ptree scopes_tree;
-				scopes_tree.put("tt:ScopeDef", "Fixed");
-				scopes_tree.put("tt:ScopeItem",
-					"onvif://www.onvif.org/" + it.first + "/" + it.second.get_value<std::string>());
-
-				envelope_tree.add_child("s:Body.tds:GetScopesResponse", scopes_tree);
 			}
 
-			pt::ptree root_tree;
-			root_tree.put_child("s:Envelope", envelope_tree);
+			virtual void operator()(std::shared_ptr<HttpServer::Response> response,
+				std::shared_ptr<HttpServer::Request> request, const SessionInfoHolder& sessionInfo)
+			{
+				throw std::exception("Method is not implemented");
+			}
 
-			std::ostringstream os;
-			pt::write_xml(os, root_tree);
+			std::string get_name() const
+			{
+				return name_;
+			}
 
-			utility::http::fillResponseWithHeaders(*response, os.str());
-		}
+			osrv::auth::SECURITY_LEVELS get_security_level()
+			{
+				return security_level_;
+			}
 
-		void GetSystemDateAndTimeHandler(std::shared_ptr<HttpServer::Response> response,
-			std::shared_ptr<HttpServer::Request> request)
+		private:
+			//Method name should be exactly match the name in the specification
+			std::string name_;
+
+			osrv::auth::SECURITY_LEVELS security_level_;
+		};
+		using HandlerSP = std::shared_ptr<RequestHandlerBase>;
+
+		static std::vector<HandlerSP> handlers;
+
+		struct GetCapabilitiesHandler : public RequestHandlerBase
 		{
-			log_->Debug("Handle GetSystemDateAndTime");
+			GetCapabilitiesHandler() : RequestHandlerBase("GetCapabilities", osrv::auth::SECURITY_LEVELS::PRE_AUTH)
+			{
+			}
 
-			auto envelope_tree = utility::soap::getEnvelopeTree(XML_NAMESPACES);
-			
-			envelope_tree.put("s:Body.tds:GetSystemDateAndTimeResponse.tds:SystemDateAndTime.tt:DateTimeType", "NTP");
-			envelope_tree.put("s:Body.tds:GetSystemDateAndTimeResponse.tds:SystemDateAndTime.tt:DaylightSavings", "false");
+			OVERLOAD_HANDLER
+			{
+				auto envelope_tree = utility::soap::getEnvelopeTree(XML_NAMESPACES);
 
-			pt::ptree root_tree;
-			root_tree.put_child("s:Envelope", envelope_tree);
+				//this processor will add a full network address to service's paths from configs
+				struct XAddrProcessor
+				{
+					void operator()(const std::string& element, std::string& elData)
+					{
+						if (element == "XAddr")
+						{
+							//currently implemented only Loopback address
+							elData = SERVER_ADDRESS + elData;
+						}
+					}
+				};
 
-			std::ostringstream os;
-			pt::write_xml(os, root_tree);
+				auto capabilities_config = CONFIGS_TREE.get_child("GetCapabilities");
+				pt::ptree capabilities_node;
+				utility::soap::jsonNodeToXml(capabilities_config, capabilities_node, "tt", XAddrProcessor());
 
-			utility::http::fillResponseWithHeaders(*response, os.str());
-		}
-		
+				envelope_tree.add_child("s:Body.tds:GetCapabilitiesResponse.tds:Capabilities", capabilities_node);
+
+				pt::ptree root_tree;
+				root_tree.put_child("s:Envelope", envelope_tree);
+
+				std::ostringstream os;
+				pt::write_xml(os, root_tree);
+
+				utility::http::fillResponseWithHeaders(*response, os.str());
+			}
+		};
+
+		struct GetDeviceInformationHandler : public RequestHandlerBase
+		{
+			GetDeviceInformationHandler() : RequestHandlerBase(GetDeviceInformation, osrv::auth::SECURITY_LEVELS::READ_SYSTEM)
+			{
+			}
+
+			OVERLOAD_HANDLER
+			{
+				auto envelope_tree = utility::soap::getEnvelopeTree(XML_NAMESPACES);
+
+				auto device_info_config = CONFIGS_TREE.get_child("GetDeviceInformation");
+				pt::ptree device_info_node;
+
+				utility::soap::jsonNodeToXml(device_info_config, device_info_node, "tds");
+
+				envelope_tree.add_child("s:Body.tds:GetDeviceInformationResponse", device_info_node);
+
+				pt::ptree root_tree;
+				root_tree.put_child("s:Envelope", envelope_tree);
+
+				std::ostringstream os;
+				pt::write_xml(os, root_tree);
+
+				utility::http::fillResponseWithHeaders(*response, os.str());
+			}
+		};
+
+		struct GetNetworkInterfacesHandler : public RequestHandlerBase
+		{
+			GetNetworkInterfacesHandler() : RequestHandlerBase(GetNetworkInterfaces, osrv::auth::SECURITY_LEVELS::READ_SYSTEM)
+			{
+			}
+
+			OVERLOAD_HANDLER
+			{
+				auto envelope_tree = utility::soap::getEnvelopeTree(XML_NAMESPACES);
+
+				auto network_interfaces_config = CONFIGS_TREE.get_child("GetNetworkInterfaces");
+				pt::ptree network_interfaces_node;
+
+				//this processor will add a xml ns depending on element
+				struct NsProcessor
+				{
+					void operator()(std::string& element, std::string& elData)
+					{
+						if (element == "NetworkInterfaces")
+						{
+							//currently implemented only Loopback address
+							element = "tds" + element;
+						}
+						else
+						{
+							element = "tt" + element;
+						}
+					}
+				};
+
+				utility::soap::jsonNodeToXml(network_interfaces_config, network_interfaces_node, "", NsProcessor());
+
+				envelope_tree.add_child("s:Body.tds:GetNetworkInterfacesResponse", network_interfaces_node);
+
+				pt::ptree root_tree;
+				root_tree.put_child("s:Envelope", envelope_tree);
+
+				std::ostringstream os;
+				pt::write_xml(os, root_tree);
+
+				utility::http::fillResponseWithHeaders(*response, os.str());
+			}
+		};
+
+		struct GetServicesHandler : public RequestHandlerBase
+		{
+			GetServicesHandler() : RequestHandlerBase(GetServices, osrv::auth::SECURITY_LEVELS::PRE_AUTH)
+			{
+			}
+
+			OVERLOAD_HANDLER
+			{
+				auto envelope_tree = utility::soap::getEnvelopeTree(XML_NAMESPACES);
+
+				auto services_config = CONFIGS_TREE.get_child(GetServices);
+				pt::ptree services_node;
+
+				//here's Services are enumerates as array, so handle them manualy
+				for (auto elements : services_config)
+				{
+					pt::ptree xml_service_node;
+					xml_service_node.put("tds:Namespace", elements.second.get<std::string>("namespace"));
+					xml_service_node.put("tds:XAddr", SERVER_ADDRESS + elements.second.get<std::string>("XAddr"));
+					xml_service_node.put("tds:Version.tt:Major", elements.second.get<std::string>("Version.Major"));
+					xml_service_node.put("tds:Version.tt:Minor", elements.second.get<std::string>("Version.Minor"));
+
+					services_node.add_child("tds:Service", xml_service_node);
+				}
+
+				envelope_tree.add_child("s:Body.tds:GetServicesResponse", services_node);
+
+				pt::ptree root_tree;
+				root_tree.put_child("s:Envelope", envelope_tree);
+
+				std::ostringstream os;
+				pt::write_xml(os, root_tree);
+
+				utility::http::fillResponseWithHeaders(*response, os.str());
+			}
+		};
+
+
+		struct GetScopesHandler : public RequestHandlerBase
+		{
+			GetScopesHandler() : RequestHandlerBase(GetScopes, osrv::auth::SECURITY_LEVELS::READ_SYSTEM)
+			{
+			}
+
+			OVERLOAD_HANDLER
+			{
+				auto envelope_tree = utility::soap::getEnvelopeTree(XML_NAMESPACES);
+
+				static const auto SCOPES_TREE = CONFIGS_TREE.get_child("GetScopes");
+				for (const auto& it : SCOPES_TREE)
+				{
+					pt::ptree scopes_tree;
+					scopes_tree.put("tt:ScopeDef", "Fixed");
+					scopes_tree.put("tt:ScopeItem",
+						"onvif://www.onvif.org/" + it.first + "/" + it.second.get_value<std::string>());
+
+					envelope_tree.add_child("s:Body.tds:GetScopesResponse", scopes_tree);
+				}
+
+				pt::ptree root_tree;
+				root_tree.put_child("s:Envelope", envelope_tree);
+
+				std::ostringstream os;
+				pt::write_xml(os, root_tree);
+
+				utility::http::fillResponseWithHeaders(*response, os.str());
+			}
+		};
+
+		struct GetSystemDateAndTimeHandler : public RequestHandlerBase
+		{
+			GetSystemDateAndTimeHandler() : RequestHandlerBase("GetSystemDateAndTime", osrv::auth::SECURITY_LEVELS::PRE_AUTH)
+			{
+			}
+
+			OVERLOAD_HANDLER
+			{
+				auto envelope_tree = utility::soap::getEnvelopeTree(XML_NAMESPACES);
+
+				envelope_tree.put("s:Body.tds:GetSystemDateAndTimeResponse.tds:SystemDateAndTime.tt:DateTimeType", "NTP");
+				envelope_tree.put("s:Body.tds:GetSystemDateAndTimeResponse.tds:SystemDateAndTime.tt:DaylightSavings", "false");
+
+				pt::ptree root_tree;
+				root_tree.put_child("s:Envelope", envelope_tree);
+
+				std::ostringstream os;
+				pt::write_xml(os, root_tree);
+
+				utility::http::fillResponseWithHeaders(*response, os.str());
+			}
+		};
+
 		//DEFAULT HANDLER
 		void DeviceServiceHandler(std::shared_ptr<HttpServer::Response> response,
 			std::shared_ptr<HttpServer::Request> request)
@@ -237,20 +301,27 @@ namespace osrv
 				log_->Error(e.what());
 			}
 
-			auto it = handlers.find(method);
+			auto handler_it = std::find_if(handlers.begin(), handlers.end(),
+				[&method](const HandlerSP handler) {
+					return handler->get_name() == method;
+				});
+
+			SessionInfoHolder session_info;
 
 			//handle requests
-			if (it != handlers.end())
+			if (handler_it != handlers.end())
 			{
 				try
 				{
-					it->second(response, request);
+					auto handler_ptr = *handler_it;
+					log_->Debug("Handling DeviceService request: " + handler_ptr->get_name());
+					(*handler_ptr)(response, request, session_info);
 				}
 				catch (const std::exception& e)
 				{
 					log_->Error("A server's error occured in DeviceService while processing: " + method
 						+ ". Info: " + e.what());
-				
+					
 					*response << "HTTP/1.1 500 Server error\r\nContent-Length: " << 0 << "\r\n\r\n";
 				}
 			}
@@ -274,17 +345,17 @@ namespace osrv
 
 			//getting service's configs
 			pt::read_json(configs_path + DEVICE_CONFIGS_FILE, CONFIGS_TREE);
-			
+
 			auto namespaces_tree = CONFIGS_TREE.get_child("Namespaces");
 			for (const auto& n : namespaces_tree)
 				XML_NAMESPACES.insert({ n.first, n.second.get_value<std::string>() });
 
-			handlers.insert({ GetCapabilities, &GetCapabilitiesHandler });
-			handlers.insert({ GetDeviceInformation, &GetDeviceInformationHandler });
-			handlers.insert({ GetNetworkInterfaces, &GetNetworkInterfacesHandler });
-			handlers.insert({ GetServices, &GetServicesHandler });
-			handlers.insert({ GetScopes, &GetScopesHandler });
-			handlers.insert({ GetSystemDateAndTime, &GetSystemDateAndTimeHandler });
+			handlers.emplace_back(new GetCapabilitiesHandler());
+			handlers.emplace_back(new GetDeviceInformationHandler());
+			handlers.emplace_back(new GetNetworkInterfacesHandler());
+			handlers.emplace_back(new GetServicesHandler());
+			handlers.emplace_back(new GetScopesHandler());
+			handlers.emplace_back(new GetSystemDateAndTimeHandler());
 
 			srv.resource["/onvif/device_service"]["POST"] = DeviceServiceHandler;
 		}
