@@ -311,11 +311,34 @@ namespace osrv
 			//handle requests
 			if (handler_it != handlers.end())
 			{
+				//check user credentials
 				try
 				{
 					auto handler_ptr = *handler_it;
 					log_->Debug("Handling DeviceService request: " + handler_ptr->get_name());
+
+					//extract user credentials
+					osrv::auth::USER_TYPE current_user = osrv::auth::USER_TYPE::ANON;
+					auto auth_header_it = request->header.find(utility::http::HEADER_AUTHORIZATION);
+					if (auth_header_it != request->header.end())
+					{
+						//do extract user creds
+					}
+
+					if (!osrv::auth::isUserHasAccess(current_user, handler_ptr->get_security_level()))
+					{
+						throw osrv::auth::digest_failed{};
+					}
+
 					(*handler_ptr)(response, request, session_info);
+				}
+				catch (const osrv::auth::digest_failed& e)
+				{
+					log_->Error(e.what());
+					
+					*response << utility::http::RESPONSE_UNAUTHORIZED << "\r\n"
+						<<"Content-Length: " << 0 << "\r\n"
+						<< "\r\n";
 				}
 				catch (const std::exception& e)
 				{

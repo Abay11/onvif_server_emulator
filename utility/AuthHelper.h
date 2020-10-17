@@ -1,9 +1,17 @@
 #pragma once
 
+#include <stdexcept>
+
 namespace osrv
 {
 	namespace auth
 	{
+
+		struct digest_failed : public std::runtime_error
+		{
+			digest_failed() : runtime_error("HTTP Digest authentication failed!") {}
+		};
+
 		enum class USER_TYPE
 		{
 			ANON = 0,
@@ -24,7 +32,7 @@ namespace osrv
 			UNRECOVERABLE = 3,
 		};
 
-		bool isUserHasAccess(USER_TYPE user, SECURITY_LEVELS lvl)
+		inline bool isUserHasAccess(USER_TYPE user, SECURITY_LEVELS lvl)
 		{
 			return static_cast<int>(user) >= static_cast<int>(lvl);
 		}
