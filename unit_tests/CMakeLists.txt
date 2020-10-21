@@ -11,6 +11,8 @@ find_package(Boost REQUIRED
 add_executable(test_executable
 	tests_main.cpp
 	auth_tests.cpp
+	http_da_tests.cpp
+	../utility/HttpDigestHelper.cpp
 )
 
 # indicates the include paths

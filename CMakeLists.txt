@@ -42,10 +42,13 @@ FILE (GLOB UTILITY_SRC
 	"utility/XmlParser.h"
 	"utility/XmlParser.cpp"
 	"utility/HttpHelper.h"
+	"utility/HttpHelper.cpp"
 	"utility/SoapHelper.h"
 	"utility/SoapHelper.cpp"
 	"utility/AuthHelper.h"
 	"utility/AuthHelper.cpp"
+	"utility/HttpDigestHelper.h"
+	"utility/HttpDigestHelper.cpp"
 )
 
 source_group("OnvifServices" FILES ${SERVICES_SRC})
