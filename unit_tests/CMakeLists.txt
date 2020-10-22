@@ -13,6 +13,7 @@ add_executable(test_executable
 	auth_tests.cpp
 	http_da_tests.cpp
 	../utility/HttpDigestHelper.cpp
+	../utility/HttpHelper.cpp
 )
 
 # indicates the include paths

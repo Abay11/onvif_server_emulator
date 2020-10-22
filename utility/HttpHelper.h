@@ -12,6 +12,18 @@ namespace utility
 		//HTTP Headers
 		extern const char HEADER_AUTHORIZATION[];
 
+		//HTTP Digest Authentication fields
+		extern const char DIGEST_USERNAME[];
+		extern const char DIGEST_REALM[];
+		extern const char DIGEST_MESSAGE_QOP[];
+		extern const char DIGEST_ALGORITHM[];
+		extern const char DIGEST_URI[];
+		extern const char DIGEST_NONCE[];
+		extern const char DIGEST_NONCE_COUNT[];
+		extern const char DIGEST_CNONCE[];
+		extern const char DIGEST_RESPONSE[];
+		extern const char DIGEST_OPAQUE[];
+
 		//HTTP Responses
 		extern const char RESPONSE_UNAUTHORIZED[];
 

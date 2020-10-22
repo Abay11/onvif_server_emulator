@@ -1,5 +1,7 @@
 #include "HttpDigestHelper.h"
 
+#include "../utility/HttpHelper.h"
+
 #include <regex>
 
 #include <cryptopp/md5.h>
@@ -15,7 +17,19 @@ namespace utility
 
 		DigestRequestHeader extract_DA(const std::string& www_auth_line)
 		{
-			return DigestRequestHeader();
+			DigestRequestHeader result;
+			result.username = utility::string::search_value(www_auth_line, http::DIGEST_USERNAME);
+			result.realm = utility::string::search_value(www_auth_line, http::DIGEST_REALM);
+			result.message_qop = utility::string::search_value(www_auth_line, http::DIGEST_MESSAGE_QOP);
+			result.algorithm = utility::string::search_value(www_auth_line, http::DIGEST_ALGORITHM);
+			result.digest_uri = utility::string::search_value(www_auth_line, http::DIGEST_URI);
+			result.nonce = utility::string::search_value(www_auth_line, http::DIGEST_NONCE);
+			result.nonce_count = utility::string::search_value(www_auth_line, http::DIGEST_NONCE_COUNT);
+			result.cnonce = utility::string::search_value(www_auth_line, http::DIGEST_CNONCE);
+			result.response = utility::string::search_value(www_auth_line, http::DIGEST_RESPONSE);
+			result.opaque = utility::string::search_value(www_auth_line, http::DIGEST_OPAQUE);
+
+			return result;
 		}
 	}
 
