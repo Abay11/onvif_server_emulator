@@ -49,13 +49,13 @@ namespace utility
 			std::string nonce;
 			std::string digest_uri;
 
-			using optional_t = boost::optional<std::string>;
-			optional_t response;
-			optional_t algorithm;
-			optional_t cnonce;
-			optional_t opaque;
-			optional_t message_qop;
-			optional_t nonce_count;
+			//this fialds are optional actually, so they could be empty
+			std::string response;
+			std::string algorithm;
+			std::string cnonce;
+			std::string opaque;
+			std::string message_qop;
+			std::string nonce_count;
 		};
 
 		DigestRequestHeader extract_DA(const std::string& /*www_auth_line*/);
