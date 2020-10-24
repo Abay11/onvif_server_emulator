@@ -3,6 +3,7 @@
 #include "Types.inl"
 #include "Logger.hpp"
 #include "RtspServer.h"
+#include "utility/HttpDigestHelper.h"
 
 #include <memory>
 
@@ -31,6 +32,8 @@ namespace osrv
 		Logger& log_;
 
 		std::shared_ptr<HttpServer> http_server_instance_ = nullptr;
+
+		DigestSessionSP digest_session_;
 
 		rtsp::Server* rtspServer_;
 	};

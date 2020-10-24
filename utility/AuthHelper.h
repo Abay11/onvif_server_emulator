@@ -1,5 +1,6 @@
 #pragma once
 
+#include "../Types.inl"
 #include "HttpDigestHelper.h"
 
 #include <stdexcept>
@@ -15,6 +16,7 @@ namespace osrv
 		extern const char TYPE_OPER_STR[];
 		extern const char TYPE_USER_STR[];
 
+		
 		struct digest_failed : public std::runtime_error
 		{
 			digest_failed() : runtime_error("HTTP Digest authentication failed!") {}
@@ -40,11 +42,6 @@ namespace osrv
 			UNRECOVERABLE = 3,
 		};
 
-		inline bool isUserHasAccess(USER_TYPE user, SECURITY_LEVELS lvl)
-		{
-			return static_cast<int>(user) >= static_cast<int>(lvl);
-		}
-
 		struct UserAccount
 		{
 			std::string login;
@@ -52,9 +49,15 @@ namespace osrv
 			USER_TYPE type;
 		};
 
-		using UsersList_t = std::vector<UserAccount>;
-
 		UsersList_t read_system_users(const std::string& /*config_path*/);
 
-	}//osrv
-}
+		inline bool isUserHasAccess(USER_TYPE user, SECURITY_LEVELS lvl)
+		{
+			return static_cast<int>(user) >= static_cast<int>(lvl);
+		}
+
+		//If could not found Username in users lists, ANON mode will be returned as default
+		USER_TYPE get_usertype_by_username(const std::string& /*username*/, const UsersList_t& /*users*/);
+
+	}//auth
+}//osrv

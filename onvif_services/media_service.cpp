@@ -440,7 +440,7 @@ namespace osrv
 		void init_service(HttpServer& srv, const std::string& configs_path, Logger& logger)
         {
             if(log_ != nullptr)
-                return log_->Error("MediaService is already inited!");
+                return log_->Error("MediaService is already initiated!");
             
             log_ = &logger;
             

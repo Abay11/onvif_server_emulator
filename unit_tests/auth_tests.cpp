@@ -47,3 +47,17 @@ BOOST_AUTO_TEST_CASE(read_system_users_func)
 		BOOST_ASSERT(false);
 	}
 }
+
+BOOST_AUTO_TEST_CASE(get_usertype_by_username_func)
+{
+	using namespace osrv::auth;
+	UsersList_t users;
+	const std::string username = "agent007";
+	users.emplace_back(UserAccount{ username, "", USER_TYPE::ADMIN });
+	auto res = get_usertype_by_username(username, users);
+	BOOST_TEST(true == (res == USER_TYPE::ADMIN));
+
+	std::string username2 = "no_such_user";
+	auto res2 = get_usertype_by_username(username2, users);
+	BOOST_TEST(true == (res2 == USER_TYPE::ANON));
+}

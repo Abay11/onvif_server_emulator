@@ -10,11 +10,6 @@ namespace utility
 {
 	namespace digest
 	{
-		std::string NonceGeneratorConcrete::generate()
-		{
-			return std::string();
-		}
-
 		DigestRequestHeader extract_DA(const std::string& www_auth_line)
 		{
 			DigestRequestHeader result;
@@ -31,12 +26,21 @@ namespace utility
 
 			return result;
 		}
+
+		bool DigestSessionImpl::verifyDigest(const DigestRequestHeader& digestInfo, bool& isStaled)
+		{
+			//TODO: NOW it's just search only for specified username, fix and check full digest verification
+			return std::find_if(system_users.begin(), system_users.end(),
+				[&digestInfo](const osrv::auth::UserAccount& user_ac) {
+					return user_ac.login == digestInfo.username;
+				}) != system_users.end();
+		}
 	}
 
 	std::string utility::string::search_value(const std::string& source, std::string key)
 	{
 		using namespace std;
-		
+
 		// key1="value1", key2 = "value2", key3=value3
 		key += "\\s?=\\s?\"?([^,\"\\s]*)\"?";
 		regex value_regex(key, regex::flag_type::icase);

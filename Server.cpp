@@ -9,6 +9,7 @@
 
 //TODO: make more general the way of getting configs path
 static const std::string CONFIGS_PATH = "../server_configs/";
+static const std::string COMMON_CONFIGS_NAME = "common.config";
 
 static char RTSP_PORT[] = "8554";
 
@@ -18,7 +19,8 @@ namespace osrv
 	Server::Server(Logger& log)
 		: log_(log),
 		http_server_instance_(new HttpServer),
-		rtspServer_(new rtsp::Server(&log, RTSP_PORT))
+		rtspServer_(new rtsp::Server(&log, RTSP_PORT)),
+		digest_session_(std::make_shared<utility::digest::DigestSessionImpl>())
 	{
 		http_server_instance_->config.port = MASTER_PORT;
 	
@@ -34,10 +36,11 @@ namespace osrv
 			response->write(SimpleWeb::StatusCode::client_error_bad_request, "Bad request");
 		};
 
-		device::init_service(*http_server_instance_, CONFIGS_PATH, log);
+		digest_session_->set_users_list(osrv::auth::read_system_users(CONFIGS_PATH + COMMON_CONFIGS_NAME));
+
+		device::init_service(*http_server_instance_, digest_session_, CONFIGS_PATH, log);
 		media::init_service(*http_server_instance_, CONFIGS_PATH, log);
 		event::init_service(*http_server_instance_, CONFIGS_PATH, log);
-
 	}
 
 	Server::~Server()

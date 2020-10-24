@@ -5,6 +5,7 @@ namespace utility
 	namespace http
 	{
 		const char HEADER_AUTHORIZATION[] = "Authorization";
+		const char HEADER_WWW_AUTHORIZATION[] = "WWW-Authenticate";
 		
 		const char DIGEST_USERNAME[] = "Digest username";
 		const char DIGEST_REALM[] = "realm";

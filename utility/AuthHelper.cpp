@@ -60,5 +60,20 @@ namespace osrv
 
 			return result;
 		}
+
+		USER_TYPE get_usertype_by_username(const std::string& username, const UsersList_t& users)
+		{
+			auto it = std::find_if(users.begin(), users.end(),
+				[&username, &users](const UserAccount& user) {
+					return user.login == username;
+				});
+
+			if (it != users.end())
+			{
+				return it->type;
+			}
+
+			return USER_TYPE::ANON;
+		}
 	}
 }

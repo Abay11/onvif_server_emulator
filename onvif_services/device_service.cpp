@@ -4,6 +4,7 @@
 #include "../utility/XmlParser.h"
 #include "../utility/HttpHelper.h"
 #include "../utility/SoapHelper.h"
+#include "../utility/HttpDigestHelper.h"
 
 #include "../Simple-Web-Server/server_http.hpp"
 
@@ -14,6 +15,8 @@
 #include <map>
 
 static Logger* log_ = nullptr;
+
+static DigestSessionSP digest_session;
 
 //List of implemented methods
 const std::string GetCapabilities = "GetCapabilities";
@@ -33,6 +36,7 @@ static const std::string DEVICE_CONFIGS_FILE = "device.config";
 static std::string SERVER_ADDRESS = "http://127.0.0.1:8080/";
 
 using utility::http::SessionInfoHolder;
+using DigestSessionSP = std::shared_ptr<utility::digest::IDigestSession>;
 
 namespace osrv
 {
@@ -323,6 +327,16 @@ namespace osrv
 					if (auth_header_it != request->header.end())
 					{
 						//do extract user creds
+						auto da_from_request = utility::digest::extract_DA(auth_header_it->second);
+
+						bool isStaled;
+						auto isCredsOk = digest_session->verifyDigest(da_from_request, isStaled);
+
+						//if provided credentials are OK, upgrade UserType from Anon to appropriate Type
+						if (isCredsOk)
+						{
+							current_user = osrv::auth::get_usertype_by_username(da_from_request.username, digest_session->get_users_list());
+						}
 					}
 
 					if (!osrv::auth::isUserHasAccess(current_user, handler_ptr->get_security_level()))
@@ -337,7 +351,9 @@ namespace osrv
 					log_->Error(e.what());
 					
 					*response << utility::http::RESPONSE_UNAUTHORIZED << "\r\n"
-						<<"Content-Length: " << 0 << "\r\n"
+						<< "Content-Type: application/soap+xml; charset=utf-8" << "\r\n"
+						<< "Content-Length: " << 0 << "\r\n"
+						<< utility::http::HEADER_WWW_AUTHORIZATION << ": " << digest_session->generateDigest().to_string() << "\r\n"
 						<< "\r\n";
 				}
 				catch (const std::exception& e)
@@ -355,10 +371,12 @@ namespace osrv
 			}
 		}
 
-		void init_service(HttpServer& srv, const std::string& configs_path, Logger& logger)
+		void init_service(HttpServer& srv, DigestSessionSP digest_session_sp, const std::string& configs_path, Logger& logger)
 		{
 			if (log_ != nullptr)
-				return log_->Error("DeviceService is already inited!");
+				return log_->Error("DeviceService is already initiated!");
+
+			digest_session = digest_session_sp;
 
 			log_ = &logger;
 

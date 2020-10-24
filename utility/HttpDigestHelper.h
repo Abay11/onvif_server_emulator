@@ -5,6 +5,9 @@
 #include <chrono>
 #include <memory>
 
+#include "../Types.inl"
+#include "AuthHelper.h"
+
 #include <boost/optional/optional_io.hpp>
 
 namespace utility
@@ -22,24 +25,18 @@ namespace utility
 
 	namespace digest
 	{
-		class INonceValueGeneratorStrategy
-		{
-		public:
-			virtual std::string generate() = 0;
-		};
-
-		class NonceGeneratorConcrete : public INonceValueGeneratorStrategy
-		{
-		public:
-			// Inherited via INonceValueGeneratorStrategyresponse
-			virtual std::string generate() override;
-		};
-
 		struct DigestResponseHeader
 		{
 			std::string realm;
 			std::string nonce;
 			std::string qop;
+
+			std::string to_string() const
+			{
+				return "Digest realm=\"" + realm + "\""
+					+ ", qop=\"" + qop + "\""
+					+ ", nonce=\"" + nonce + "\"";
+			}
 		};
 
 		struct DigestRequestHeader
@@ -71,9 +68,22 @@ namespace utility
 			//whether a nonce is staled or not using @isStaled flag
 			virtual bool verifyDigest(const DigestRequestHeader& digestInfo, bool& isStaled) = 0;
 
+			void set_users_list(const UsersList_t& users_list)
+			{
+				system_users.resize(users_list.size());
+				std::copy(users_list.begin(), users_list.end(), system_users.begin());
+			}
+
+			const UsersList_t& get_users_list() const
+			{
+				return system_users;
+			}
+
 		protected:
 			IDigestSession(const std::string& realm, const std::string& qop)
 				:realm_(realm), qop_(qop) {}
+
+			UsersList_t system_users;
 
 			//the pool is used to hold all generated nonce
 			std::map<std::string, std::chrono::milliseconds> nonce_pool;
@@ -83,9 +93,9 @@ namespace utility
 		};
 
 
-		
 		class DigestSessionImpl : public utility::digest::IDigestSession
 		{
+
 		public:
 			DigestSessionImpl(const std::string& realm = "Realm", const std::string& qop = "auth")
 				: IDigestSession(realm, qop)
@@ -94,20 +104,15 @@ namespace utility
 
 			DigestResponseHeader generateDigest() override
 			{
-				nonce_generator_->generate();
+				DigestResponseHeader result;
+				result.nonce = "need_to_fix_nonce"; //FIX: generate normally
+				result.realm = realm_;
+				result.qop = qop_;
+
+				return result;
 			}
 
-			void setGenerator(const std::shared_ptr<INonceValueGeneratorStrategy>& generator)
-			{
-				nonce_generator_ = generator;
-			}
-
-			bool verifyDigest(const DigestRequestHeader& digestInfo, bool& isStaled) override
-			{
-				return false;
-			}
-
-			std::shared_ptr<INonceValueGeneratorStrategy> nonce_generator_;
+			bool verifyDigest(const DigestRequestHeader& digestInfo, bool& isStaled) override;
 		};
 
 	}

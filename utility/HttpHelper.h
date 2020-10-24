@@ -10,7 +10,8 @@ namespace utility
 	namespace http
 	{
 		//HTTP Headers
-		extern const char HEADER_AUTHORIZATION[];
+		extern const char HEADER_AUTHORIZATION[]; //is used in requests
+		extern const char HEADER_WWW_AUTHORIZATION[]; //is used in responses
 
 		//HTTP Digest Authentication fields
 		extern const char DIGEST_USERNAME[];
