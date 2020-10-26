@@ -7,8 +7,6 @@
 
 #include <string>
 
-//TODO: make more general the way of getting configs path
-static const std::string CONFIGS_PATH = "../server_configs/";
 static const std::string COMMON_CONFIGS_NAME = "common.config";
 
 static char RTSP_PORT[] = "8554";
@@ -16,11 +14,11 @@ static char RTSP_PORT[] = "8554";
 namespace osrv
 {
 
-	Server::Server(Logger& log)
-		: log_(log),
-		http_server_instance_(new HttpServer),
-		rtspServer_(new rtsp::Server(&log, RTSP_PORT)),
-		digest_session_(std::make_shared<utility::digest::DigestSessionImpl>())
+	Server::Server(std::string configs_dir, Logger& log)
+		: log_(log)
+		,http_server_instance_(new HttpServer)
+		,digest_session_(std::make_shared<utility::digest::DigestSessionImpl>())
+		,rtspServer_(new rtsp::Server(&log, RTSP_PORT))
 	{
 		http_server_instance_->config.port = MASTER_PORT;
 	
@@ -36,11 +34,12 @@ namespace osrv
 			response->write(SimpleWeb::StatusCode::client_error_bad_request, "Bad request");
 		};
 
-		digest_session_->set_users_list(osrv::auth::read_system_users(CONFIGS_PATH + COMMON_CONFIGS_NAME));
+		configs_dir += "/";
+		digest_session_->set_users_list(osrv::auth::read_system_users(configs_dir + COMMON_CONFIGS_NAME));
 
-		device::init_service(*http_server_instance_, digest_session_, CONFIGS_PATH, log);
-		media::init_service(*http_server_instance_, CONFIGS_PATH, log);
-		event::init_service(*http_server_instance_, CONFIGS_PATH, log);
+		device::init_service(*http_server_instance_, digest_session_, configs_dir, log);
+		media::init_service(*http_server_instance_, configs_dir, log);
+		event::init_service(*http_server_instance_, configs_dir, log);
 	}
 
 	Server::~Server()

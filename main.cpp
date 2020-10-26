@@ -7,6 +7,10 @@
 static const std::string SERVER_VERSION = "0.1";
 
 int main()
+
+static const std::string DEFAULT_CONFIGS_DIR = "./server_configs";
+
+int main(int argc, char** argv)
 {
 	using namespace std;
 
@@ -14,19 +18,29 @@ int main()
 	
 	log.Info("Simple ONVIF Server ver. " + SERVER_VERSION);
 
-	osrv::Server server(log);
+	std::string configs_dir = DEFAULT_CONFIGS_DIR;
+
+	if (argc > 1)
+	{
+		configs_dir = argv[1];
+		log.Info("Command line arguments are found. "
+			"Configuration files will be read from " + configs_dir);
+	}
+
 	try
 	{
+		osrv::Server server(configs_dir, log);
 		server.run();
 	}
-	catch (const boost::system::system_error& e)
+	catch (const std::exception& e)
 	{
 		std::string msg = "Issues with the Server's work: ";
 		msg += e.what();
 		log.Error(msg);
-
-		return -1;
 	}
 
 	log.Info("Server is stopped");
+
+	cout << "\n\nPress any key to exit";
+	getchar();
 }

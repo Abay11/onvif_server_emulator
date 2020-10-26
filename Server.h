@@ -18,7 +18,7 @@ namespace osrv
 	class Server
 	{
 	public:
-		Server(Logger& log);
+		Server(std::string /*configs_dir*/, Logger& log);
 		Server(const Logger&) = delete;
 		Server(Logger&&) = delete;
 		~Server();

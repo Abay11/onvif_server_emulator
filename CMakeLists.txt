@@ -66,6 +66,10 @@ add_executable(main
 	"${UTILITY_SRC}"
 	)
 
+#pass application CONFIGS_FILES directory as command line arguments
+set_target_properties(main PROPERTIES VS_DEBUGGER_COMMAND_ARGUMENTS
+	"${CMAKE_CURRENT_SOURCE_DIR}/server_configs")
+
 IF(WIN32)
 	### JUST HELPS TO AVOID WARNINGS WITH Boost
 	add_definitions(-D_WIN32_WINDOWS)
@@ -87,3 +91,7 @@ target_link_libraries(main "${GST_LIBRARIES}")
 set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT main)
 
 add_subdirectory(unit_tests)
+
+#copy config files to the same folder with the execution for standalone running .exe outside IDE
+execute_process(COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_CURRENT_SOURCE_DIR}/server_configs"
+	"${CMAKE_CURRENT_BINARY_DIR}/Debug/server_configs")
