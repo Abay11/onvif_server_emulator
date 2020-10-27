@@ -35,61 +35,20 @@ static const std::string DEVICE_CONFIGS_FILE = "device.config";
 
 static std::string SERVER_ADDRESS = "http://127.0.0.1:8080/";
 
-using utility::http::SessionInfoHolder;
-using DigestSessionSP = std::shared_ptr<utility::digest::IDigestSession>;
-
 namespace osrv
 {
 	namespace device
 	{
-		//using handler_t = void(std::shared_ptr<HttpServer::Response> response,
-		//	std::shared_ptr<HttpServer::Request> request,
-		//	const SessionInfoHolder& sessionInfo);
+		//TODO:: Need release
+		static std::vector<utility::http::HandlerSP> handlers;
 
-#define OVERLOAD_HANDLER void operator()(std::shared_ptr<HttpServer::Response> response, \
-		std::shared_ptr<HttpServer::Request> request, const SessionInfoHolder& sessionInfo) override
-
-		struct RequestHandlerBase
+		struct GetCapabilitiesHandler : public utility::http::RequestHandlerBase
 		{
-			RequestHandlerBase(const std::string& name, osrv::auth::SECURITY_LEVELS lvl) :
-				name_(name),
-				security_level_(lvl)
+			GetCapabilitiesHandler() : utility::http::RequestHandlerBase("GetCapabilities", osrv::auth::SECURITY_LEVELS::PRE_AUTH)
 			{
 			}
 
-			virtual void operator()(std::shared_ptr<HttpServer::Response> response,
-				std::shared_ptr<HttpServer::Request> request, const SessionInfoHolder& sessionInfo)
-			{
-				throw std::exception("Method is not implemented");
-			}
-
-			std::string get_name() const
-			{
-				return name_;
-			}
-
-			osrv::auth::SECURITY_LEVELS get_security_level()
-			{
-				return security_level_;
-			}
-
-		private:
-			//Method name should be exactly match the name in the specification
-			std::string name_;
-
-			osrv::auth::SECURITY_LEVELS security_level_;
-		};
-		using HandlerSP = std::shared_ptr<RequestHandlerBase>;
-
-		static std::vector<HandlerSP> handlers;
-
-		struct GetCapabilitiesHandler : public RequestHandlerBase
-		{
-			GetCapabilitiesHandler() : RequestHandlerBase("GetCapabilities", osrv::auth::SECURITY_LEVELS::PRE_AUTH)
-			{
-			}
-
-			OVERLOAD_HANDLER
+			OVERLOAD_REQUEST_HANDLER
 			{
 				auto envelope_tree = utility::soap::getEnvelopeTree(XML_NAMESPACES);
 
@@ -122,13 +81,13 @@ namespace osrv
 			}
 		};
 
-		struct GetDeviceInformationHandler : public RequestHandlerBase
+		struct GetDeviceInformationHandler : public utility::http::RequestHandlerBase
 		{
-			GetDeviceInformationHandler() : RequestHandlerBase(GetDeviceInformation, osrv::auth::SECURITY_LEVELS::READ_SYSTEM)
+			GetDeviceInformationHandler() : utility::http::RequestHandlerBase(GetDeviceInformation, osrv::auth::SECURITY_LEVELS::READ_SYSTEM)
 			{
 			}
 
-			OVERLOAD_HANDLER
+			OVERLOAD_REQUEST_HANDLER
 			{
 				auto envelope_tree = utility::soap::getEnvelopeTree(XML_NAMESPACES);
 
@@ -149,13 +108,13 @@ namespace osrv
 			}
 		};
 
-		struct GetNetworkInterfacesHandler : public RequestHandlerBase
+		struct GetNetworkInterfacesHandler : public utility::http::RequestHandlerBase
 		{
-			GetNetworkInterfacesHandler() : RequestHandlerBase(GetNetworkInterfaces, osrv::auth::SECURITY_LEVELS::READ_SYSTEM)
+			GetNetworkInterfacesHandler() : utility::http::RequestHandlerBase(GetNetworkInterfaces, osrv::auth::SECURITY_LEVELS::READ_SYSTEM)
 			{
 			}
 
-			OVERLOAD_HANDLER
+			OVERLOAD_REQUEST_HANDLER
 			{
 				auto envelope_tree = utility::soap::getEnvelopeTree(XML_NAMESPACES);
 
@@ -193,13 +152,13 @@ namespace osrv
 			}
 		};
 
-		struct GetServicesHandler : public RequestHandlerBase
+		struct GetServicesHandler : public utility::http::RequestHandlerBase
 		{
-			GetServicesHandler() : RequestHandlerBase(GetServices, osrv::auth::SECURITY_LEVELS::PRE_AUTH)
+			GetServicesHandler() : utility::http::RequestHandlerBase(GetServices, osrv::auth::SECURITY_LEVELS::PRE_AUTH)
 			{
 			}
 
-			OVERLOAD_HANDLER
+			OVERLOAD_REQUEST_HANDLER
 			{
 				auto envelope_tree = utility::soap::getEnvelopeTree(XML_NAMESPACES);
 
@@ -231,13 +190,13 @@ namespace osrv
 		};
 
 
-		struct GetScopesHandler : public RequestHandlerBase
+		struct GetScopesHandler : public utility::http::RequestHandlerBase
 		{
-			GetScopesHandler() : RequestHandlerBase(GetScopes, osrv::auth::SECURITY_LEVELS::READ_SYSTEM)
+			GetScopesHandler() : utility::http::RequestHandlerBase(GetScopes, osrv::auth::SECURITY_LEVELS::READ_SYSTEM)
 			{
 			}
 
-			OVERLOAD_HANDLER
+			OVERLOAD_REQUEST_HANDLER
 			{
 				auto envelope_tree = utility::soap::getEnvelopeTree(XML_NAMESPACES);
 
@@ -262,13 +221,13 @@ namespace osrv
 			}
 		};
 
-		struct GetSystemDateAndTimeHandler : public RequestHandlerBase
+		struct GetSystemDateAndTimeHandler : public utility::http::RequestHandlerBase
 		{
-			GetSystemDateAndTimeHandler() : RequestHandlerBase("GetSystemDateAndTime", osrv::auth::SECURITY_LEVELS::PRE_AUTH)
+			GetSystemDateAndTimeHandler() : utility::http::RequestHandlerBase("GetSystemDateAndTime", osrv::auth::SECURITY_LEVELS::PRE_AUTH)
 			{
 			}
 
-			OVERLOAD_HANDLER
+			OVERLOAD_REQUEST_HANDLER
 			{
 				auto envelope_tree = utility::soap::getEnvelopeTree(XML_NAMESPACES);
 
@@ -306,11 +265,9 @@ namespace osrv
 			}
 
 			auto handler_it = std::find_if(handlers.begin(), handlers.end(),
-				[&method](const HandlerSP handler) {
+				[&method](const utility::http::HandlerSP handler) {
 					return handler->get_name() == method;
 				});
-
-			SessionInfoHolder session_info;
 
 			//handle requests
 			if (handler_it != handlers.end())
@@ -344,7 +301,7 @@ namespace osrv
 						throw osrv::auth::digest_failed{};
 					}
 
-					(*handler_ptr)(response, request, session_info);
+					(*handler_ptr)(response, request);
 				}
 				catch (const osrv::auth::digest_failed& e)
 				{
@@ -376,11 +333,10 @@ namespace osrv
 			if (log_ != nullptr)
 				return log_->Error("DeviceService is already initiated!");
 
-			digest_session = digest_session_sp;
-
 			log_ = &logger;
-
 			log_->Debug("Initiating Device service...");
+
+			digest_session = digest_session_sp;
 
 			CONFIGS_PATH = configs_path;
 

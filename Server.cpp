@@ -39,7 +39,7 @@ namespace osrv
 
 		device::init_service(*http_server_instance_, digest_session_, configs_dir, log);
 		media::init_service(*http_server_instance_, configs_dir, log);
-		event::init_service(*http_server_instance_, configs_dir, log);
+		event::init_service(*http_server_instance_, digest_session_, configs_dir, log);
 	}
 
 	Server::~Server()

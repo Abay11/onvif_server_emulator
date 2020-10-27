@@ -6,7 +6,6 @@
 //#include <http_parser/http_parser.h>
 static const std::string SERVER_VERSION = "0.1";
 
-int main()
 
 static const std::string DEFAULT_CONFIGS_DIR = "./server_configs";
 
