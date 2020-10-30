@@ -1,6 +1,7 @@
 #include "event_service.h"
 
 #include "../Logger.hpp"
+#include "../Server.h"
 #include "../utility/XmlParser.h"
 #include "../utility/HttpHelper.h"
 
@@ -14,10 +15,11 @@
 
 static Logger* log_ = nullptr;
 
+static const osrv::ServerConfigs* server_configs;
 static DigestSessionSP digest_session;
 
 namespace pt = boost::property_tree;
-static pt::ptree CONFIGS_TREE;
+static pt::ptree EVENT_CONFIGS_TREE;
 
 static std::string CONFIGS_PATH; //will be init with the service initialization
 static const std::string EVENT_CONFIGS_FILE = "event.config";
@@ -40,7 +42,7 @@ namespace osrv
 
 			OVERLOAD_REQUEST_HANDLER
 			{
-				auto configs_node = CONFIGS_TREE.get_child(GetEventProperties);
+				auto configs_node = EVENT_CONFIGS_TREE.get_child(GetEventProperties);
 
 				std::string response_body;
 				auto isStaticResponse = configs_node.get<bool>("ReadResponseFromFile");
@@ -104,25 +106,28 @@ namespace osrv
 					
 					//extract user credentials
 					osrv::auth::USER_TYPE current_user = osrv::auth::USER_TYPE::ANON;
-					auto auth_header_it = request->header.find(utility::http::HEADER_AUTHORIZATION);
-					if (auth_header_it != request->header.end())
+					if (server_configs->auth_scheme_ == osrv::AUTH_SCHEME::DIGEST)
 					{
-						//do extract user creds
-						auto da_from_request = utility::digest::extract_DA(auth_header_it->second);
-
-						bool isStaled;
-						auto isCredsOk = digest_session->verifyDigest(da_from_request, isStaled);
-
-						//if provided credentials are OK, upgrade UserType from Anon to appropriate Type
-						if (isCredsOk)
+						auto auth_header_it = request->header.find(utility::http::HEADER_AUTHORIZATION);
+						if (auth_header_it != request->header.end())
 						{
-							current_user = osrv::auth::get_usertype_by_username(da_from_request.username, digest_session->get_users_list());
-						}
-					}
+							//do extract user creds
+							auto da_from_request = utility::digest::extract_DA(auth_header_it->second);
 
-					if (!osrv::auth::isUserHasAccess(current_user, handler_ptr->get_security_level()))
-					{
-						throw osrv::auth::digest_failed{};
+							bool isStaled;
+							auto isCredsOk = digest_session->verifyDigest(da_from_request, isStaled);
+
+							//if provided credentials are OK, upgrade UserType from Anon to appropriate Type
+							if (isCredsOk)
+							{
+								current_user = osrv::auth::get_usertype_by_username(da_from_request.username, digest_session->get_users_list());
+							}
+						}
+
+						if (!osrv::auth::isUserHasAccess(current_user, handler_ptr->get_security_level()))
+						{
+							throw osrv::auth::digest_failed{};
+						}
 					}
 
 					(*handler_ptr)(response, request);
@@ -152,7 +157,7 @@ namespace osrv
 			}
 		}
 
-		void init_service(HttpServer& srv, DigestSessionSP digest_session_sp, const std::string& configs_path, Logger& logger)
+		void init_service(HttpServer& srv, const osrv::ServerConfigs& server_configs_instance, const std::string& configs_path, Logger& logger)
 		{
 			if (log_ != nullptr)
 				return log_->Error("EventService is already inited!");
@@ -160,12 +165,13 @@ namespace osrv
 			log_ = &logger;
 			log_->Debug("Initiating Event service...");
 
-			digest_session = digest_session_sp;
+			server_configs = &server_configs_instance;
+			digest_session = server_configs_instance.digest_session_;
 
 			CONFIGS_PATH = configs_path;
 
 			//getting service's configs
-			pt::read_json(configs_path + EVENT_CONFIGS_FILE, CONFIGS_TREE);
+			pt::read_json(configs_path + EVENT_CONFIGS_FILE, EVENT_CONFIGS_TREE);
 
 			//event service handlers
 			handlers.emplace_back(new GetEventPropertiesHandler{});

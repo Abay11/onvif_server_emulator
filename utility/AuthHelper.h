@@ -22,14 +22,6 @@ namespace osrv
 			digest_failed() : runtime_error("HTTP Digest authentication failed!") {}
 		};
 
-		enum class USER_TYPE
-		{
-			ANON = 0,
-			USER,
-			OPERATOR,
-			ADMIN
-		};
-
 		enum class SECURITY_LEVELS
 		{
 			PRE_AUTH = 0,
@@ -41,15 +33,26 @@ namespace osrv
 			WRITE_SYSTEM = 3,
 			UNRECOVERABLE = 3,
 		};
+		
+		enum class USER_TYPE
+		{
+			ANON = 0,
+			USER,
+			OPERATOR,
+			ADMIN
+		};
 
 		struct UserAccount
 		{
 			std::string login;
 			std::string password;
 			USER_TYPE type;
-		};
 
-		UsersList_t read_system_users(const std::string& /*config_path*/);
+			//by this contants should be read values from config files
+			static const std::string LOGIN;
+			static const std::string PASS;
+			static const std::string TYPE;
+		};
 
 		inline bool isUserHasAccess(USER_TYPE user, SECURITY_LEVELS lvl)
 		{
@@ -59,5 +62,7 @@ namespace osrv
 		//If could not found Username in users lists, ANON mode will be returned as default
 		USER_TYPE get_usertype_by_username(const std::string& /*username*/, const UsersList_t& /*users*/);
 
+		//This converts for ex. "administrator" -> USER_TYPE::ADMIN
+		USER_TYPE str_to_usertype(const std::string& /*str*/);
 	}//auth
 }//osrv
