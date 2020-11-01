@@ -4,6 +4,7 @@
 #include "../Server.h"
 #include "../utility/XmlParser.h"
 #include "../utility/HttpHelper.h"
+#include "pull_point.h"
 
 #include "../Simple-Web-Server/server_http.hpp"
 
@@ -17,6 +18,8 @@ static Logger* log_ = nullptr;
 
 static const osrv::ServerConfigs* server_configs;
 static DigestSessionSP digest_session;
+
+static std::unique_ptr<osrv::event::NotificationsManager> notifications_manager;
 
 namespace pt = boost::property_tree;
 static pt::ptree EVENT_CONFIGS_TREE;
@@ -157,7 +160,8 @@ namespace osrv
 			}
 		}
 
-		void init_service(HttpServer& srv, const osrv::ServerConfigs& server_configs_instance, const std::string& configs_path, Logger& logger)
+		void init_service(HttpServer& srv, const osrv::ServerConfigs& server_configs_instance,
+			const std::string& configs_path, Logger& logger)
 		{
 			if (log_ != nullptr)
 				return log_->Error("EventService is already inited!");
@@ -172,6 +176,16 @@ namespace osrv
 
 			//getting service's configs
 			pt::read_json(configs_path + EVENT_CONFIGS_FILE, EVENT_CONFIGS_TREE);
+
+			notifications_manager = std::unique_ptr<osrv::event::NotificationsManager>(
+				new osrv::event::NotificationsManager(logger));
+
+			// add event generators
+			auto di_event_generator = std::shared_ptr<osrv::event::IEventGenerator>(
+				new event::DInputEventGenerator(3, notifications_manager->get_io_context()));
+			notifications_manager->add_generator(di_event_generator);
+
+			notifications_manager->run();
 
 			//event service handlers
 			handlers.emplace_back(new GetEventPropertiesHandler{});
