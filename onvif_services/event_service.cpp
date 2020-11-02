@@ -4,6 +4,7 @@
 #include "../Server.h"
 #include "../utility/XmlParser.h"
 #include "../utility/HttpHelper.h"
+#include "../utility/SoapHelper.h"
 #include "pull_point.h"
 
 #include "../Simple-Web-Server/server_http.hpp"
@@ -24,6 +25,8 @@ static std::unique_ptr<osrv::event::NotificationsManager> notifications_manager;
 namespace pt = boost::property_tree;
 static pt::ptree EVENT_CONFIGS_TREE;
 
+static osrv::StringsMap XML_NAMESPACES;
+
 static std::string CONFIGS_PATH; //will be init with the service initialization
 static const std::string EVENT_CONFIGS_FILE = "event.config";
 
@@ -35,6 +38,47 @@ namespace osrv
 	namespace event
 	{
 		static std::vector<utility::http::HandlerSP> handlers;
+
+		//PullPoint handlers
+		struct CreatePullPointSubscriptionHandler : public utility::http::RequestHandlerBase
+		{
+			CreatePullPointSubscriptionHandler() : utility::http::RequestHandlerBase("CreatePullPointSubscription",
+				osrv::auth::SECURITY_LEVELS::READ_MEDIA)
+			{
+			}
+
+			OVERLOAD_REQUEST_HANDLER
+			{
+				//TODO: Handler filters
+				
+				auto pullpoint = notifications_manager->CreatePullPoint();
+
+				pt::ptree analytics_configs;
+				auto envelope_tree = utility::soap::getEnvelopeTree(XML_NAMESPACES);
+
+				envelope_tree.add("s:Header.wsa:Action", "http://www.onvif.org/ver10/events/wsdl/EventPortType/CreatePullPointSubscriptionResponse");
+
+				std::string sub_ref = "http://127.0.0.1:8080/";
+				sub_ref += pullpoint->GetSubscriptionReference();
+
+				pt::ptree response_node;
+				response_node.add("tet:SubscriptionReference.wsa:Address", sub_ref);
+				
+				response_node.add("tet:SubscriptionReference.wsnt:CurrentTime", pullpoint->GetLastRenew());
+				response_node.add("tet:SubscriptionReference.wsnt:TerminationTime", pullpoint->GetTerminationTime());
+
+				envelope_tree.add_child("s:Body.tet:CreatePullPointSubscriptionResponse", response_node);
+
+				pt::ptree root_tree;
+				root_tree.put_child("s:Envelope", envelope_tree);
+
+				std::ostringstream os;
+				pt::write_xml(os, root_tree);
+
+				utility::http::fillResponseWithHeaders(*response, os.str());
+			}
+		};
+		
 
 		//EVENTS SERVICE PORT
 		struct GetEventPropertiesHandler : public utility::http::RequestHandlerBase
@@ -105,7 +149,7 @@ namespace osrv
 				try
 				{
 					auto handler_ptr = *handler_it;
-					log_->Debug("Handling DeviceService request: " + handler_ptr->get_name());
+					log_->Debug("Handling EventService request: " + handler_ptr->get_name());
 					
 					//extract user credentials
 					osrv::auth::USER_TYPE current_user = osrv::auth::USER_TYPE::ANON;
@@ -177,6 +221,10 @@ namespace osrv
 			//getting service's configs
 			pt::read_json(configs_path + EVENT_CONFIGS_FILE, EVENT_CONFIGS_TREE);
 
+			auto namespaces_tree = EVENT_CONFIGS_TREE.get_child("Namespaces");
+			for (const auto& n : namespaces_tree)
+				XML_NAMESPACES.insert({ n.first, n.second.get_value<std::string>() });
+
 			notifications_manager = std::unique_ptr<osrv::event::NotificationsManager>(
 				new osrv::event::NotificationsManager(logger));
 
@@ -189,6 +237,7 @@ namespace osrv
 
 			//event service handlers
 			handlers.emplace_back(new GetEventPropertiesHandler{});
+			handlers.emplace_back(new CreatePullPointSubscriptionHandler{});
 
 			srv.resource["/onvif/event_service"]["POST"] = EventServiceHandler;
 		}

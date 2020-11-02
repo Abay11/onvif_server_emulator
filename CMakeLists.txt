@@ -90,7 +90,11 @@ include_directories(
 include_directories(main "${GST_INCLUDE_DIRS}")
 target_compile_options(main PUBLIC "${GST_CFLAGS}")
 target_link_directories(main PUBLIC "${GST_INSTALLATION_PATH}/gstreamer/1.0/x86_64/lib")
-target_link_libraries(main onvif_server "${GST_LIBRARIES}")
+target_link_libraries(main
+	onvif_server
+	"${GST_LIBRARIES}"
+	Boost::date_time
+	)
 
 set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT main)
 

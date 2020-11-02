@@ -15,6 +15,7 @@ add_executable(test_executable
 	http_da_tests.cpp
 	server_tests.cpp
 	date_time_tests.cpp
+	pull_point_tests.cpp
 )
 
 # indicates the include paths

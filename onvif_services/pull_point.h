@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../Logger.hpp"
+#include "../utility/DateTime.hpp"
 
 #include <queue>
 #include <string>
@@ -9,6 +10,7 @@
 
 #include <boost/asio.hpp>
 #include <boost/signals2.hpp>
+#include <boost/date_time/posix_time/posix_time.hpp>
 
 namespace osrv
 {
@@ -41,6 +43,7 @@ namespace osrv
 				, timeout_timer_(io_context)
 				, timeout_interval_(timeout_interval)
 			{
+				current_time_ = boost::posix_time::microsec_clock::universal_time();
 			}
 
 			std::string GetSubscriptionReference() const
@@ -85,6 +88,16 @@ namespace osrv
 				}
 			}
 
+			std::string GetLastRenew()
+			{
+				return utility::datetime::posix_to_utc(current_time_);
+			}
+
+			std::string GetTerminationTime()
+			{
+				return utility::datetime::posix_to_utc(current_time_ + boost::posix_time::seconds(timeout_interval_));
+			}
+
 		protected:
 			// This is called in 3 cases:
 			// 1. when PullMessages requested and the event's queue is not empty (response immediately)
@@ -113,6 +126,8 @@ namespace osrv
 			const Logger* logger_;
 			boost::asio::io_context& io_context_;
 			boost::asio::steady_timer timeout_timer_;
+
+			boost::posix_time::ptime current_time_;
 
 			const std::string subscription_ref_;
 			int timeout_interval_;
@@ -204,24 +219,25 @@ namespace osrv
 			// This method is used to handle corresponding Onvif PullPoint subscription request
 			// It's required to generate unique link for each subscriber 
 			// Also need to schedule a subscription expiration timeout - and in that case delete subscription
-			void CreatePullPoint()
+			// Returns the created subscription's reference
+			std::shared_ptr<PullPoint> CreatePullPoint()
 			{
 				// When register a new PullPoint
 				// depending on subcription filter in a request
 				// need to connection the PullPoint instance only with correspondance event generators
 				// FIX: the current implementation connects PullPoint instances with all generators
+				auto test_subscription_reference = "test_reference";
+				int pp_timeout_sec = 60;
+				auto pp = std::shared_ptr<PullPoint>(new PullPoint(test_subscription_reference, pp_timeout_sec, io_context_, *logger_));
+				pullpoints_.push_back(pp);
 				for (auto& eg : event_generators_)
 				{
-					auto test_subscription_reference = "test_reference";
-					int pp_timeout = 10;
-					auto pp = std::shared_ptr<PullPoint>(new PullPoint(test_subscription_reference, pp_timeout, io_context_, *logger_));
-					pullpoints_.push_back(pp);
-
 					eg->Connect([pp, this](NotificationMessage event_description) {
 							pp->Notify(std::move(event_description));
 						});
 				}
-			
+
+				return pp;
 			}
 
 			// If there are messages for specified subscriber - return them immediately

@@ -8,7 +8,7 @@ namespace utility
 {
 	namespace datetime
 	{
-		std::string posix_to_utc(boost::posix_time::ptime tm)
+		inline std::string posix_to_utc(boost::posix_time::ptime tm)
 		{
 			std::stringstream ss;
 
@@ -24,7 +24,7 @@ namespace utility
 			return ss.str();
 		}
 
-		std::string system_utc_datetime()
+		inline std::string system_utc_datetime()
 		{
 			namespace pt = boost::posix_time;
 
