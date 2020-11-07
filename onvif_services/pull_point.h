@@ -320,6 +320,16 @@ namespace osrv
 			std::vector<std::shared_ptr<IEventGenerator>> event_generators_;
 		};
 
+		struct PullMessagesRequest
+		{
+			std::string timeout;
+			int messages_limit;
+
+			std::string header_action;
+			std::string header_to;
+		};
+
+		PullMessagesRequest parse_pullmessages(const std::string&);
 	}
 
 }

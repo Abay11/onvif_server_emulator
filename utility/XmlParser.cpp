@@ -1,5 +1,10 @@
 #include "XmlParser.h"
 
+#include <string>
+#include <vector>
+
+#include <boost/algorithm/string.hpp>
+
 //return XML Element without NS
 //Example: if passed value equal "ns:element", returned value is "element"
 //Example: if passed value equal "element", returned value also is "element"
@@ -26,5 +31,60 @@ namespace exns
 		}
 
 		return node.not_found();
+	}
+
+	std::string find_hierarchy(const std::string& path, const pt::ptree& node)
+	{
+		std::vector<std::string> tokens;
+		boost::split(tokens, path, boost::is_any_of("."));
+
+		int i = 0;
+		auto assoc_it = node.begin();
+		while(true)
+		{
+			std::string no_ns_node = get_element_without_ns(assoc_it->first);
+			// we are looking for only elements in nodes, not in attributes
+			if ("<xmlattr>" != no_ns_node)
+			{
+				if (boost::iequals(tokens[i], no_ns_node)) // do intensive comparision
+				{
+					if (i == tokens.size() - 1)
+					{
+						return assoc_it->second.get_value<std::string>();
+					}
+					else if (i >= tokens.size())
+					{
+						return {};
+					}
+				}
+				else
+				{
+					// On the same level, elements are not the same - return not found
+					return {};
+				}
+
+				if(++i >= tokens.size())
+				{
+					return {};
+				}
+
+				// As a node may have many childrens, need to search for
+				// a children with a node name equals to our next token 
+				auto childrens = assoc_it;
+				for (assoc_it = childrens->second.begin(); assoc_it != childrens->second.end()
+					&& get_element_without_ns(assoc_it->first) != tokens[i]; ++assoc_it) {}
+
+				if (assoc_it == childrens->second.end())
+					return {};
+			}
+			else
+			{
+				// move to next non-attribute value
+				++assoc_it;
+			}
+
+		}
+
+		return {};
 	}
 }

@@ -16,6 +16,7 @@ add_executable(test_executable
 	server_tests.cpp
 	date_time_tests.cpp
 	pull_point_tests.cpp
+	xmlparser_tests.cpp
 )
 
 # indicates the include paths

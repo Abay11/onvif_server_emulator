@@ -1,5 +1,12 @@
 #include "pull_point.h"
 
+#include "../utility/XmlParser.h"
+
+#include <sstream>
+
+#include <boost/property_tree/xml_parser.hpp>
+#include <boost/property_tree/ptree.hpp>
+
 namespace osrv
 {
 
@@ -25,7 +32,24 @@ namespace osrv
 			event_signal_(nm);
 		}
 
+		PullMessagesRequest parse_pullmessages(const std::string& request)
+		{
+			PullMessagesRequest result;
 
+			auto copy = request;
+			std::istringstream is(copy);
+
+			namespace pt = boost::property_tree;
+			pt::ptree xml_tree;
+			pt::xml_parser::read_xml(is, xml_tree);
+
+			result.header_action = exns::find_hierarchy("Envelope.Header.Action", xml_tree);
+			result.header_to = exns::find_hierarchy("Envelope.Header.To", xml_tree);
+			result.timeout = exns::find_hierarchy("Envelope.Body.PullMessages.Timeout", xml_tree);
+			result.messages_limit = std::stoi((exns::find_hierarchy("Envelope.Body.PullMessages.MessageLimit", xml_tree)));
+
+			return result;
+		}
 
 	}
 }

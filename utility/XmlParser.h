@@ -110,4 +110,9 @@ namespace exns
 	//do the same thing as ptree::find member class, different in that, this method searchs ignoring
 	//XML NS preffix if it even is present
 	pt::ptree::const_assoc_iterator find(const pt::ptree::key_type& /*key*/, const pt::ptree& /*node*/);
+	
+	// Do the same as exns::find(), but return a value as a string and accept a whole hierarchy for searching, 
+	// Expected format is same as the way in Boost::Property_tree - childs is dot separated:  ex: "el1.el2.el3"
+	std::string find_hierarchy(const std::string& /*path*/, const pt::ptree& /*node*/);
+
 }
