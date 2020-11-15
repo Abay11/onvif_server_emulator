@@ -20,28 +20,28 @@ public:
 	{
 	}
 
-	void Error(const std::string& msg)
+	void Error(const std::string& msg) const
 	{
 		write(msg, LVL_ERR);
 	}
 
-	void Warn(const std::string& msg)
+	void Warn(const std::string& msg) const
 	{
 		write(msg, LVL_WARN);
 	}
 	
-	void Info(const std::string& msg)
+	void Info(const std::string& msg) const
 	{
 		write(msg, LVL_INFO);
 	}
 
-	void Debug(const std::string& msg)
+	void Debug(const std::string& msg) const
 	{
 		write(msg, LVL_DEBUG);
 	}
 
 private:
-	void write(const std::string& msg, int level)
+	void write(const std::string& msg, int level) const
 	{
 		if (level > m_loggingLevel)
 			return;
@@ -71,7 +71,7 @@ private:
 	}
 
 private:
-	std::mutex log_writer_mutex;
+	mutable std::mutex log_writer_mutex;
 
 	int m_loggingLevel;
 };

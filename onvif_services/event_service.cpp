@@ -1,8 +1,10 @@
 #include "event_service.h"
 
 #include "../Logger.hpp"
+#include "../Server.h"
 #include "../utility/XmlParser.h"
 #include "../utility/HttpHelper.h"
+#include "pull_point.h"
 
 #include "../Simple-Web-Server/server_http.hpp"
 
@@ -14,8 +16,13 @@
 
 static Logger* log_ = nullptr;
 
+static const osrv::ServerConfigs* server_configs;
+static DigestSessionSP digest_session;
+
+static std::unique_ptr<osrv::event::NotificationsManager> notifications_manager;
+
 namespace pt = boost::property_tree;
-static pt::ptree CONFIGS_TREE;
+static pt::ptree EVENT_CONFIGS_TREE;
 
 static std::string CONFIGS_PATH; //will be init with the service initialization
 static const std::string EVENT_CONFIGS_FILE = "event.config";
@@ -27,41 +34,43 @@ namespace osrv
 {
 	namespace event
 	{
-		using handler_t = void(std::shared_ptr<HttpServer::Response> response,
-			std::shared_ptr<HttpServer::Request> request);
-		static std::map<std::string, handler_t*> handlers;
+		static std::vector<utility::http::HandlerSP> handlers;
 
 		//EVENTS SERVICE PORT
-		void GetEventPropertiesHandler(std::shared_ptr<HttpServer::Response> response,
-			std::shared_ptr<HttpServer::Request> request)
+		struct GetEventPropertiesHandler : public utility::http::RequestHandlerBase
 		{
-			log_->Debug("Handle GetEventProperties");
-
-			auto configs_node = CONFIGS_TREE.get_child(GetEventProperties);
-
-			std::string response_body;
-			auto isStaticResponse = configs_node.get<bool>("ReadResponseFromFile");
-			if(isStaticResponse)
+			GetEventPropertiesHandler() : utility::http::RequestHandlerBase("GetEventProperties", osrv::auth::SECURITY_LEVELS::READ_MEDIA)
 			{
-				auto response_filename = configs_node.get<std::string>("ResponseFilePath");
-				std::ifstream event_file(CONFIGS_PATH + response_filename);
-				if (!event_file.is_open())
-					throw std::runtime_error("Couldn't read specified response file: " + response_filename);
-
-				std::string read_configs((std::istreambuf_iterator<char>(event_file)),
-					(std::istreambuf_iterator<char>()));
-				event_file.close();
-
-				std::swap(response_body, read_configs);
-			}
-			else
-			{
-				//TODO
-				throw std::runtime_error("Not implemented yet");
 			}
 
-			utility::http::fillResponseWithHeaders(*response, response_body);
-		}
+			OVERLOAD_REQUEST_HANDLER
+			{
+				auto configs_node = EVENT_CONFIGS_TREE.get_child(GetEventProperties);
+
+				std::string response_body;
+				auto isStaticResponse = configs_node.get<bool>("ReadResponseFromFile");
+				if (isStaticResponse)
+				{
+					auto response_filename = configs_node.get<std::string>("ResponseFilePath");
+					std::ifstream event_file(CONFIGS_PATH + response_filename);
+					if (!event_file.is_open())
+						throw std::runtime_error("Couldn't read specified response file: " + response_filename);
+
+					std::string read_configs((std::istreambuf_iterator<char>(event_file)),
+						(std::istreambuf_iterator<char>()));
+					event_file.close();
+
+					std::swap(response_body, read_configs);
+				}
+				else
+				{
+					//TODO
+					throw std::runtime_error("Not implemented yet");
+				}
+
+				utility::http::fillResponseWithHeaders(*response, response_body);
+			}
+		};
 		
 		//DEFAULT HANDLER
 		void EventServiceHandler(std::shared_ptr<HttpServer::Response> response,
@@ -83,14 +92,58 @@ namespace osrv
 				log_->Error(e.what());
 			}
 
-			auto it = handlers.find(method);
+			//auto it = handlers.find(method);
+			auto handler_it = std::find_if(handlers.begin(), handlers.end(),
+				[&method](const utility::http::HandlerSP handler) {
+					return handler->get_name() == method;
+				});
 
 			//handle requests
-			if (it != handlers.end())
+			if (handler_it != handlers.end())
 			{
+				//checking user credentials
 				try
 				{
-					it->second(response, request);
+					auto handler_ptr = *handler_it;
+					log_->Debug("Handling DeviceService request: " + handler_ptr->get_name());
+					
+					//extract user credentials
+					osrv::auth::USER_TYPE current_user = osrv::auth::USER_TYPE::ANON;
+					if (server_configs->auth_scheme_ == osrv::AUTH_SCHEME::DIGEST)
+					{
+						auto auth_header_it = request->header.find(utility::http::HEADER_AUTHORIZATION);
+						if (auth_header_it != request->header.end())
+						{
+							//do extract user creds
+							auto da_from_request = utility::digest::extract_DA(auth_header_it->second);
+
+							bool isStaled;
+							auto isCredsOk = digest_session->verifyDigest(da_from_request, isStaled);
+
+							//if provided credentials are OK, upgrade UserType from Anon to appropriate Type
+							if (isCredsOk)
+							{
+								current_user = osrv::auth::get_usertype_by_username(da_from_request.username, digest_session->get_users_list());
+							}
+						}
+
+						if (!osrv::auth::isUserHasAccess(current_user, handler_ptr->get_security_level()))
+						{
+							throw osrv::auth::digest_failed{};
+						}
+					}
+
+					(*handler_ptr)(response, request);
+				}
+				catch (const osrv::auth::digest_failed& e)
+				{
+					log_->Error(e.what());
+
+					*response << utility::http::RESPONSE_UNAUTHORIZED << "\r\n"
+						<< "Content-Type: application/soap+xml; charset=utf-8" << "\r\n"
+						<< "Content-Length: " << 0 << "\r\n"
+						<< utility::http::HEADER_WWW_AUTHORIZATION << ": " << digest_session->generateDigest().to_string() << "\r\n"
+						<< "\r\n";
 				}
 				catch (const std::exception& e)
 				{
@@ -107,22 +160,35 @@ namespace osrv
 			}
 		}
 
-		void init_service(HttpServer& srv, const std::string& configs_path, Logger& logger)
+		void init_service(HttpServer& srv, const osrv::ServerConfigs& server_configs_instance,
+			const std::string& configs_path, Logger& logger)
 		{
 			if (log_ != nullptr)
 				return log_->Error("EventService is already inited!");
 
 			log_ = &logger;
-
 			log_->Debug("Initiating Event service...");
+
+			server_configs = &server_configs_instance;
+			digest_session = server_configs_instance.digest_session_;
 
 			CONFIGS_PATH = configs_path;
 
 			//getting service's configs
-			pt::read_json(configs_path + EVENT_CONFIGS_FILE, CONFIGS_TREE);
+			pt::read_json(configs_path + EVENT_CONFIGS_FILE, EVENT_CONFIGS_TREE);
+
+			notifications_manager = std::unique_ptr<osrv::event::NotificationsManager>(
+				new osrv::event::NotificationsManager(logger));
+
+			// add event generators
+			auto di_event_generator = std::shared_ptr<osrv::event::IEventGenerator>(
+				new event::DInputEventGenerator(3, notifications_manager->get_io_context()));
+			notifications_manager->add_generator(di_event_generator);
+
+			notifications_manager->run();
 
 			//event service handlers
-			handlers.insert({ GetEventProperties, &GetEventPropertiesHandler });
+			handlers.emplace_back(new GetEventPropertiesHandler{});
 
 			srv.resource["/onvif/event_service"]["POST"] = EventServiceHandler;
 		}

@@ -2,13 +2,19 @@
 
 #include "AuthHelper.h"
 
+#include "../Simple-Web-Server/server_http.hpp"
+
 #include <string>
 #include <iostream>
+
+#define OVERLOAD_REQUEST_HANDLER void operator()(std::shared_ptr<HttpServer::Response> response, \
+	std::shared_ptr<HttpServer::Request> request) override
 
 namespace utility
 {
 	namespace http
 	{
+
 		//HTTP Headers
 		extern const char HEADER_AUTHORIZATION[]; //is used in requests
 		extern const char HEADER_WWW_AUTHORIZATION[]; //is used in responses
@@ -39,13 +45,6 @@ namespace utility
 			osrv::auth::USER_TYPE type;
 		};
 
-		//NOTE: this structure is not usefull at current time after refactoring
-		//maybe should be removed entirely
-		struct SessionInfoHolder
-		{
-			UserCredentials user_creds;
-		};
-
 		using HeadersWriter = void(std::ostream&, const std::string&);
 
 		inline void NoErrorDefaultWriter(std::ostream& os, const std::string& content)
@@ -72,5 +71,39 @@ namespace utility
 		{
 			writer(os, content);
 		}
+
+		struct RequestHandlerBase
+		{
+			RequestHandlerBase(const std::string& name, osrv::auth::SECURITY_LEVELS lvl) :
+				name_(name),
+				security_level_(lvl)
+			{
+			}
+
+			virtual ~RequestHandlerBase(){}
+
+			virtual void operator()(std::shared_ptr<osrv::HttpServer::Response> response,
+				std::shared_ptr<osrv::HttpServer::Request> request)
+			{
+				throw std::exception("Method is not implemented");
+			}
+
+			std::string get_name() const
+			{
+				return name_;
+			}
+
+			osrv::auth::SECURITY_LEVELS get_security_level()
+			{
+				return security_level_;
+			}
+
+		private:
+			//Method name should be exactly match the name in the specification
+			std::string name_;
+
+			osrv::auth::SECURITY_LEVELS security_level_;
+		};
+		using HandlerSP = std::shared_ptr<RequestHandlerBase>;
 	}
 }

@@ -5,6 +5,7 @@ project(OnvifServerUnitTests)
 set(CMAKE_CXX_STANDARD 11)
 
 find_package(Boost REQUIRED
+	date_time
 	unit_test_framework
 )
 
@@ -13,9 +14,8 @@ add_executable(test_executable
 	auth_tests.cpp
 	media2_tests.cpp
 	http_da_tests.cpp
-	../utility/HttpDigestHelper.cpp
-	../utility/HttpHelper.cpp
-	../utility/AuthHelper.cpp
+	server_tests.cpp
+	date_time_tests.cpp
 )
 
 # indicates the include paths
@@ -23,8 +23,13 @@ target_include_directories(test_executable PRIVATE ${Boost_INCLUDE_DIRS})
 
 # indicates the shared library variant
 target_compile_definitions(test_executable PRIVATE "BOOST_TEST_DYN_LINK=1")
+
+target_link_directories(test_executable PUBLIC "${GST_INSTALLATION_PATH}/gstreamer/1.0/x86_64/lib")
 # indicates the link paths
-target_link_libraries(test_executable ${Boost_UNIT_TEST_FRAMEWORK_LIBRARY})
+target_link_libraries(test_executable onvif_server
+Boost::date_time
+${Boost_UNIT_TEST_FRAMEWORK_LIBRARY}
+"${GST_LIBRARIES}")
 
 # declares a test with our executable
 add_test(NAME test1 COMMAND test_executable)

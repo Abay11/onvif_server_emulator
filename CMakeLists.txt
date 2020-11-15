@@ -38,6 +38,8 @@ FILE(GLOB SERVICES_SRC
 	"onvif_services/media2_service.cpp"
 	"onvif_services/event_service.h"
 	"onvif_services/event_service.cpp"
+	"onvif_services/pull_point.h"
+	"onvif_services/pull_point.cpp"
 )
 
 FILE (GLOB UTILITY_SRC
@@ -51,13 +53,13 @@ FILE (GLOB UTILITY_SRC
 	"utility/AuthHelper.cpp"
 	"utility/HttpDigestHelper.h"
 	"utility/HttpDigestHelper.cpp"
+	"utility/DateTime.hpp"
 )
 
 source_group("OnvifServices" FILES ${SERVICES_SRC})
 source_group("Utility" FILES ${UTILITY_SRC})
 
-add_executable(main
-	main.cpp
+add_library(onvif_server STATIC
 	Logger.hpp
 	Types.inl
 	Server.cpp
@@ -66,7 +68,9 @@ add_executable(main
 	RtspServer.h
 	"${SERVICES_SRC}"
 	"${UTILITY_SRC}"
-	)
+)
+
+add_executable(main main.cpp)
 
 #pass application CONFIGS_FILES directory as command line arguments
 set_target_properties(main PROPERTIES VS_DEBUGGER_COMMAND_ARGUMENTS
@@ -88,7 +92,7 @@ include_directories(
 include_directories(main "${GST_INCLUDE_DIRS}")
 target_compile_options(main PUBLIC "${GST_CFLAGS}")
 target_link_directories(main PUBLIC "${GST_INSTALLATION_PATH}/gstreamer/1.0/x86_64/lib")
-target_link_libraries(main "${GST_LIBRARIES}")
+target_link_libraries(main onvif_server "${GST_LIBRARIES}")
 
 set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT main)
 

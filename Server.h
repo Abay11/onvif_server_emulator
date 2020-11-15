@@ -15,10 +15,25 @@ namespace {
 //namespace onvif server
 namespace osrv
 {
+	enum class AUTH_SCHEME
+	{
+		NONE = 0,
+		WSS,
+		DIGEST,
+		DIGEST_WSS,
+	};
+
+	struct ServerConfigs
+	{
+		UsersList_t system_users_;
+		AUTH_SCHEME auth_scheme_{};
+		DigestSessionSP digest_session_;
+	};
+
 	class Server
 	{
 	public:
-		Server(std::string /*configs_dir*/, Logger& log);
+		Server(std::string /*configs_dir*/, Logger& /*log*/);
 		Server(const Logger&) = delete;
 		Server(Logger&&) = delete;
 		~Server();
@@ -27,14 +42,14 @@ namespace osrv
 		void run();
 
 	private:
-
-	private:
 		Logger& log_;
 
 		std::shared_ptr<HttpServer> http_server_instance_ = nullptr;
 
-		DigestSessionSP digest_session_;
+		ServerConfigs server_configs_;
 
 		rtsp::Server* rtspServer_;
 	};
+	
+	ServerConfigs read_server_configs(const std::string& /*config_path*/);
 }
