@@ -399,6 +399,8 @@ namespace osrv
 			handlers.emplace_back(new GetSystemDateAndTimeHandler());
 
 			srv.resource["/onvif/device_service"]["POST"] = DeviceServiceHandler;
+
+			log_->Info("ONVIF Device service is working on " + SERVER_ADDRESS + "onvif/device_service");
 		}
 
 	}

@@ -1,6 +1,7 @@
 #include "Server.h"
 #include "../onvif_services/device_service.h"
 #include "../onvif_services/media_service.h"
+#include "../onvif_services/media2_service.h"
 #include "../onvif_services/event_service.h"
 
 #include "Simple-Web-Server\server_http.hpp"
@@ -39,6 +40,7 @@ namespace osrv
 
 		device::init_service(*http_server_instance_, digest_session_, configs_dir, log);
 		media::init_service(*http_server_instance_, configs_dir, log);
+		media2::init_service(*http_server_instance_, configs_dir, log);
 		event::init_service(*http_server_instance_, configs_dir, log);
 	}
 
