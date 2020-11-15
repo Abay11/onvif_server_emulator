@@ -12,6 +12,9 @@
 #include <boost/signals2.hpp>
 #include <boost/date_time/posix_time/posix_time.hpp>
 
+#include "../Types.inl"
+#include "../Simple-Web-Server/server_http.hpp"
+
 namespace osrv
 {
 	namespace event
@@ -36,12 +39,13 @@ namespace osrv
 			using pull_messages_handler_t = std::function<void(const std::string& subscription_reference,
 				std::queue<NotificationMessage>&& events)>;
 
-			PullPoint(const std::string& subscription_reference, int timeout_interval, boost::asio::io_context& io_context, const Logger& logger)
+			PullPoint(const std::string& subscription_reference, boost::asio::io_context& io_context, const Logger& logger)
 				: logger_(&logger)
 				, io_context_(io_context)
 				, subscription_ref_(subscription_reference)
 				, timeout_timer_(io_context)
-				, timeout_interval_(timeout_interval)
+				, max_messages_(50)
+				, is_client_waiting_(false)
 			{
 				current_time_ = boost::posix_time::microsec_clock::universal_time();
 			}
@@ -54,7 +58,7 @@ namespace osrv
 			// This method is called when a subscriber want to pull events
 			void PullMessages(pull_messages_handler_t handler)
 			{
-				handler_ = handler;
+				is_client_waiting_ = true;
 
 				if (!events_.empty())
 				{
@@ -62,13 +66,14 @@ namespace osrv
 					response_to_pullmessages();
 				}
 
-				is_events_requested = true;
-
 				// Do charge the timeout timer
+				timeout_timer_.cancel();
 				timeout_timer_.expires_after(std::chrono::seconds(timeout_interval_));
-				timeout_timer_.async_wait([this](const boost::system::error_code& error) {
+				timeout_timer_.async_wait([&handler, this](const boost::system::error_code& error) {
 						if (error == boost::asio::error::operation_aborted)
+						{
 							return;
+						}
 
 						response_to_pullmessages();
 					});
@@ -80,12 +85,7 @@ namespace osrv
 			{
 				events_.push(std::move(event));
 
-				if (is_events_requested)
-				{
-					// a subcriber is waiting for a events
-					// when one is ready - do response
-					response_to_pullmessages();
-				}
+				response_to_pullmessages();
 			}
 
 			std::string GetLastRenew()
@@ -98,6 +98,11 @@ namespace osrv
 				return utility::datetime::posix_to_utc(current_time_ + boost::posix_time::seconds(timeout_interval_));
 			}
 
+			void SetMaxMessages(size_t n)
+			{
+				max_messages_ = n;
+			}
+
 		protected:
 			// This is called in 3 cases:
 			// 1. when PullMessages requested and the event's queue is not empty (response immediately)
@@ -105,22 +110,20 @@ namespace osrv
 			// 3. by timeout timer, if there are no events were generated (response with an empty message)
 			void response_to_pullmessages()
 			{
+				if (!is_client_waiting_)
+					return;
+
 				logger_->Debug("PullMessages response");
 				
 				// Do serialize all stored events
 
-				if (handler_)
-				{
-					// Do copy only less then specified in a PullMessages messages limit
-					// FIX: in current implementation all events is copied
-					std::queue<NotificationMessage> copied_events;
-					copied_events.swap(events_);
-					handler_(subscription_ref_, std::move(copied_events));
-				}
-
-				is_events_requested = false;
+				// Do copy only less then specified in a PullMessages messages limit
+				// FIX: in current implementation all events is copied
+				std::queue<NotificationMessage> copied_events;
+				copied_events.swap(events_);
+				handler_(subscription_ref_, std::move(copied_events));
+				is_client_waiting_ = false;
 			}
-
 
 		private:
 			const Logger* logger_;
@@ -130,13 +133,15 @@ namespace osrv
 			boost::posix_time::ptime current_time_;
 
 			const std::string subscription_ref_;
-			int timeout_interval_;
+			int timeout_interval_ = 60;
+
+			int max_messages_;
 
 			std::queue<NotificationMessage> events_;
 
 			pull_messages_handler_t handler_;
 
-			bool is_events_requested = false;
+			bool is_client_waiting_;
 		};
 
 		class IEventGenerator
@@ -226,9 +231,8 @@ namespace osrv
 				// depending on subcription filter in a request
 				// need to connection the PullPoint instance only with correspondance event generators
 				// FIX: the current implementation connects PullPoint instances with all generators
-				auto test_subscription_reference = "test_reference";
-				int pp_timeout_sec = 60;
-				auto pp = std::shared_ptr<PullPoint>(new PullPoint(test_subscription_reference, pp_timeout_sec, io_context_, *logger_));
+				auto test_subscription_reference = "onvif/event_service/s0";
+				auto pp = std::shared_ptr<PullPoint>(new PullPoint(test_subscription_reference, io_context_, *logger_));
 				pullpoints_.push_back(pp);
 				for (auto& eg : event_generators_)
 				{
@@ -242,28 +246,8 @@ namespace osrv
 
 			// If there are messages for specified subscriber - return them immediately
 			// Otherwise wait until timeout or any events will be generated 
-			void PullMessages(const std::string& subscription_reference)
-			{
-				auto test_subs_ref = "test_reference";
-				auto pp_it = std::find_if(pullpoints_.begin(), pullpoints_.end(),
-					[test_subs_ref](std::shared_ptr<PullPoint> pp) {
-
-						return pp->GetSubscriptionReference() == test_subs_ref;
-
-					});
-
-				if (pp_it != pullpoints_.end())
-				{
-					(*pp_it)->PullMessages([this](const std::string& subscr_ref, std::queue<NotificationMessage> events) {
-							do_response();
-						});
-				}
-				else
-				{
-					// ? Need to check specification, more likely it's need to response with an error code
-					return;
-				}
-			}
+			void PullMessages(std::shared_ptr<HttpServer::Response> response,
+				const std::string& subscription_reference, int timeout, int msg_limit);
 
 			// Delete PullPoint and cancel all related timers
 			void Unsubscribe(const std::string& subscription_reference)
@@ -301,10 +285,7 @@ namespace osrv
 			~NotificationsManager() {}
 
 		private:
-			void do_response()
-			{
-				logger_->Debug("Writing a resposne");
-			}
+			void do_response(const std::string& /*ref*/, std::shared_ptr<HttpServer::Response> /*response*/);
 
 		private:
 			const Logger* logger_;
@@ -330,6 +311,12 @@ namespace osrv
 		};
 
 		PullMessagesRequest parse_pullmessages(const std::string&);
+
+		void pullmessages_response_to_soap(PullPoint);
+
+		//return compare references without address, only end
+		bool compare_subscription_references(const std::string& /*ref_with_address_prefix*/,
+			const std::string& /*reference_path*/);
 	}
 
 }

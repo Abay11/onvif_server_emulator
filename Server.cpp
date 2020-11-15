@@ -33,9 +33,10 @@ namespace osrv
 			response->write(SimpleWeb::StatusCode::client_error_bad_request, "Could not open path " + request->path);
 		};
 		
-		http_server_instance_->default_resource["POST"] = [](std::shared_ptr<HttpServer::Response> response,
+		http_server_instance_->default_resource["POST"] = [this](std::shared_ptr<HttpServer::Response> response,
 			std::shared_ptr<HttpServer::Request> request)
 		{
+			log_.Warn("The server could not handle a request:" + request->method + " " + request->path);
 			response->write(SimpleWeb::StatusCode::client_error_bad_request, "Bad request");
 		};
 

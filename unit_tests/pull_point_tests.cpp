@@ -88,3 +88,15 @@ BOOST_AUTO_TEST_CASE(parse_pullmessages_func_1)
 	BOOST_TEST(actual.timeout == expected.timeout);
 	BOOST_TEST(actual.messages_limit == expected.messages_limit);
 }
+
+BOOST_AUTO_TEST_CASE(compare_subscription_references_func)
+{
+	using namespace osrv::event;
+
+	const std::string full_ref = "http://127.0.0.1:8080/onvif/event_service/s0";
+	const std::string test_subscription_ref = "onvif/event_service/s0";
+	const std::string test_subscription_ref2 = "onvif/event_service/s1";
+
+	BOOST_TEST(true == compare_subscription_references(full_ref, test_subscription_ref));
+	BOOST_TEST(false == compare_subscription_references(full_ref, test_subscription_ref2));
+}
