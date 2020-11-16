@@ -1,4 +1,5 @@
 #include "media2_service.h"
+#include "media_service.h" // to use some util functions
 
 #include "../Logger.hpp"
 #include "../utility/XmlParser.h"
@@ -49,11 +50,11 @@ namespace osrv
 
 			auto profiles_config = PROFILES_CONFIGS_TREE.get_child("MediaProfiles");
 			pt::ptree response_node;
-			profiles_config.begin();
 			for (auto elements : profiles_config)
 			{
 				pt::ptree profile_node;
-				fill_soap_media2_profile(elements.second, profile_node, "trt:Profiles");
+				//util::profile_to_soap(elements.second, profile_node);
+				//fill_soap_media2_profile(elements.second, profile_node, "trt:Profiles");
 
 				response_node.insert(response_node.end(),
 					profile_node.begin(),
@@ -136,6 +137,37 @@ namespace osrv
             srv.resource["/onvif/media2_service"]["POST"] = Media2ServiceHandler;
 
         }
+
+
+		namespace util
+		{
+			using ptree = boost::property_tree::ptree;
+			void profile_to_soap(const ptree& profile_config, const ptree& configs_file, ptree& result)
+			{
+				result.add("<xmlattr>.token", profile_config.get<std::string>("token"));
+				result.add("<xmlattr>.fixed", profile_config.get<std::string>("fixed"));
+				result.add("Name", profile_config.get<std::string>("Name"));
+
+				//Videosource
+				{
+					const std::string vs_token = profile_config.get<std::string>("VideoSourceConfiguration");
+					auto vs_configs_list = configs_file.get_child("VideoSourceConfigurations");
+					auto vs_config = std::find_if(vs_configs_list.begin(), vs_configs_list.end(),
+						[vs_token](pt::ptree::value_type vs_obj)
+						{
+							return vs_obj.second.get<std::string>("token") == vs_token;
+						});
+
+					if (vs_config == vs_configs_list.end())
+						throw std::runtime_error("Can't find VideoSourceConfiguration with token '" + vs_token + "'");
+
+					pt::ptree videosource_configuration;
+					osrv::media::util::fill_soap_videosource_configuration(vs_config->second, videosource_configuration);
+					result.put_child("tr2:Configurations.tr2:VideoSource", videosource_configuration);
+				}
+			}
+			
+		}
     }
 }
 

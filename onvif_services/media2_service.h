@@ -17,10 +17,9 @@ namespace osrv
 		namespace util
 		{
 			using ptree = boost::property_tree::ptree;
-			inline void profile_to_soap(const ptree& profile_config, ptree& result)
-			{
-
-			}
+			// functions throw an exception if error occured
+			void profile_to_soap(const ptree& profile_config, const ptree& configs_file, ptree& result);
+			//void videosource_to_soap(const std::string& config_token, const ptree& configs_file, ptree& result);
 		}
 	}
 }

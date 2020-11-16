@@ -41,8 +41,6 @@ static const std::string GetStreamUri = "GetStreamUri";
 void fill_soap_media_profile(const pt::ptree& /*in_json_config*/, pt::ptree& /*out_profile_node*/,
 	const std::string& /*root_node_value*/);
 
-void fill_soap_videosource_configuration(const pt::ptree& /*in_json_config*/, pt::ptree& /*out_profile_node*/);
-
 namespace osrv
 {
     namespace media
@@ -251,7 +249,7 @@ namespace osrv
 				throw std::runtime_error("The requested configuration indicated with ConfigurationToken does not exist.");
 			
 			pt::ptree videosource_configuration_node;
-			fill_soap_videosource_configuration(vs_config->second, videosource_configuration_node);
+			util::fill_soap_videosource_configuration(vs_config->second, videosource_configuration_node);
 
 			auto envelope_tree = utility::soap::getEnvelopeTree(XML_NAMESPACES);
 			envelope_tree.add_child("s:Body.trt:GetVideoSourceConfigurationResponse.trt:Configuration", videosource_configuration_node);
@@ -276,7 +274,7 @@ namespace osrv
 			for (const auto& vs_config : vs_config_list)
 			{
 				pt::ptree vs_config_node;
-				fill_soap_videosource_configuration(vs_config.second, vs_config_node);
+				util::fill_soap_videosource_configuration(vs_config.second, vs_config_node);
 				vs_configs_node.add_child("trt:Configurations", vs_config_node);
 			}
 
@@ -491,7 +489,7 @@ void fill_soap_media_profile(const pt::ptree& json_config, pt::ptree& profile_no
 			throw std::runtime_error("Can't find VideoSourceConfiguration with token '" + vs_token + "'");
 
 		pt::ptree videosource_configuration;
-		fill_soap_videosource_configuration(vs_config->second, videosource_configuration);
+		osrv::media::util::fill_soap_videosource_configuration(vs_config->second, videosource_configuration);
 		profile_node.put_child(root_node_value + ".tt:VideoSourceConfiguration", videosource_configuration);
 	}
 
@@ -572,7 +570,7 @@ void fill_soap_media_profile(const pt::ptree& json_config, pt::ptree& profile_no
 	}
 }
 
-void fill_soap_videosource_configuration(const pt::ptree& config_node, pt::ptree& videosource_node)
+void osrv::media::util::fill_soap_videosource_configuration(const pt::ptree& config_node, pt::ptree& videosource_node)
 {
 	videosource_node.put("<xmlattr>.token",
 		config_node.get<std::string>("token"));
