@@ -19,7 +19,7 @@ namespace osrv
 			using ptree = boost::property_tree::ptree;
 			// functions throw an exception if error occured
 			void profile_to_soap(const ptree& profile_config, const ptree& configs_file, ptree& result);
-			//void videosource_to_soap(const std::string& config_token, const ptree& configs_file, ptree& result);
+			void fill_video_encoder(const ptree& config_node, ptree& videoencoder_node);
 		}
 	}
 }

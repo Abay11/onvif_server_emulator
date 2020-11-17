@@ -33,6 +33,13 @@ BOOST_AUTO_TEST_CASE(profiles_to_soap_func)
 	auto vs_config_result = result_profile_tree.get_child("tr2:Configurations.tr2:VideoSource");
 	BOOST_TEST(vs_config_result.get<std::string>("<xmlattr>.token") == "VideoSrcConfigToken0");
 	BOOST_TEST(vs_config_result.get<std::string>("tt:Name") == "VideoSrcConfigToken0");
+
+
+	// VIDEOENCODERS
+	auto ve_config_result = result_profile_tree.get_child("tr2:Configurations.tr2:VideoEncoder");
+	BOOST_TEST(ve_config_result.get<std::string>("<xmlattr>.token") == "VideoEncoderToken0");
+	BOOST_TEST(ve_config_result.get<std::string>("tt:Name") == "VideoEncConfig0");
+
 	
 	// Just make sure that the profile node also is in the result tree
 	ptree profile2_configs = configs_file.get_child("MediaProfiles").back().second;
