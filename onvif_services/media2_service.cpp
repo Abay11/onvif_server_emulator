@@ -28,6 +28,7 @@ static std::string SERVER_ADDRESS = "http://127.0.0.1:8080/";
 
 //the list of implemented methods
 static const std::string GetProfiles = "GetProfiles";
+static const std::string GetVideoSourceConfigurations = "GetVideoSourceConfigurations";
 
 namespace osrv
 {
@@ -57,6 +58,30 @@ namespace osrv
 
 			pt::ptree root_tree;
 			root_tree.put_child("s:Envelope", envelope_tree);
+
+			std::ostringstream os;
+			pt::write_xml(os, root_tree);
+
+			utility::http::fillResponseWithHeaders(*response, os.str());
+		}
+		
+		void GetVideoSourceConfigurationsHandler(std::shared_ptr<HttpServer::Response> response,
+			std::shared_ptr<HttpServer::Request> request)
+		{
+			log_->Debug("Handle " + GetVideoSourceConfigurations);
+			
+			auto vs_config_list = PROFILES_CONFIGS_TREE.get_child("VideoSourceConfigurations");
+			pt::ptree vs_configs_node;
+			for (const auto& vs_config : vs_config_list)
+			{
+				pt::ptree videosource_configuration;
+				osrv::media::util::fill_soap_videosource_configuration(vs_config.second, videosource_configuration);
+				vs_configs_node.put_child("tr2:Configurations", videosource_configuration);
+			}
+			auto env_tree = utility::soap::getEnvelopeTree(XML_NAMESPACES);
+			env_tree.put_child("tr2:GetVideoSourceConfigurationsResponse", vs_configs_node);
+			pt::ptree root_tree;
+			root_tree.put_child("s:Envelope", env_tree);
 
 			std::ostringstream os;
 			pt::write_xml(os, root_tree);
@@ -103,7 +128,7 @@ namespace osrv
 			}
 			else
 			{
-				log_->Error("Not found an appropriate handler in MediaService for: " + method);
+				log_->Error("Not found an appropriate handler in Media2Service for: " + method);
 				*response << "HTTP/1.1 400 Bad request\r\nContent-Length: " << 0 << "\r\n\r\n";
 			}
         }
@@ -125,6 +150,7 @@ namespace osrv
                 XML_NAMESPACES.insert({ n.first, n.second.get_value<std::string>() });
 
             handlers.insert({ GetProfiles, &GetProfilesHandler });
+            handlers.insert({ GetVideoSourceConfigurations, &GetVideoSourceConfigurationsHandler });
 
             srv.resource["/onvif/media2_service"]["POST"] = Media2ServiceHandler;
 
