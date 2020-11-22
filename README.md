@@ -1,3 +1,7 @@
+# About the project
+
+Simple Onvif Server is a simulator of an IP device (camera, NVR) compatible with standardized ONVIF interfaces, which can be used for tests purpoces.
+
 # Server execution
 
 A configuration's directory may be passed as command line argument.
