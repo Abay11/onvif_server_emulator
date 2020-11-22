@@ -4,6 +4,7 @@
 #include "../Server.h"
 #include "../utility/XmlParser.h"
 #include "../utility/HttpHelper.h"
+#include "../utility/SoapHelper.h"
 #include "pull_point.h"
 
 #include "../Simple-Web-Server/server_http.hpp"
@@ -16,13 +17,18 @@
 
 static Logger* log_ = nullptr;
 
-static const osrv::ServerConfigs* server_configs;
+//this instance is required when handlers should be registered for a new PullPoint's subscriber
+static osrv::HttpServer* http_server_intance = nullptr;
+
+static const osrv::ServerConfigs* server_configs = nullptr;
 static DigestSessionSP digest_session;
 
 static std::unique_ptr<osrv::event::NotificationsManager> notifications_manager;
 
 namespace pt = boost::property_tree;
 static pt::ptree EVENT_CONFIGS_TREE;
+
+static osrv::StringsMap XML_NAMESPACES;
 
 static std::string CONFIGS_PATH; //will be init with the service initialization
 static const std::string EVENT_CONFIGS_FILE = "event.config";
@@ -36,6 +42,66 @@ namespace osrv
 	{
 		static std::vector<utility::http::HandlerSP> handlers;
 
+		//PullPoint handlers
+		struct CreatePullPointSubscriptionHandler : public utility::http::RequestHandlerBase
+		{
+			CreatePullPointSubscriptionHandler() : utility::http::RequestHandlerBase("CreatePullPointSubscription",
+				osrv::auth::SECURITY_LEVELS::READ_MEDIA)
+			{
+			}
+
+			OVERLOAD_REQUEST_HANDLER
+			{
+				//TODO: Handler filters
+
+				pt::ptree analytics_configs;
+				auto envelope_tree = utility::soap::getEnvelopeTree(XML_NAMESPACES);
+
+				envelope_tree.add("s:Header.wsa:Action", "http://www.onvif.org/ver10/events/wsdl/EventPortType/CreatePullPointSubscriptionResponse");
+
+				std::string sub_ref = "http://127.0.0.1:8080/";
+				auto pullpoint = notifications_manager->CreatePullPoint();
+				sub_ref += pullpoint->GetSubscriptionReference();
+
+				pt::ptree response_node;
+				response_node.add("tet:SubscriptionReference.wsa:Address", sub_ref);
+				
+				response_node.add("tet:SubscriptionReference.wsnt:CurrentTime", pullpoint->GetLastRenew());
+				response_node.add("tet:SubscriptionReference.wsnt:TerminationTime", pullpoint->GetTerminationTime());
+
+				envelope_tree.add_child("s:Body.tet:CreatePullPointSubscriptionResponse", response_node);
+
+				pt::ptree root_tree;
+				root_tree.put_child("s:Envelope", envelope_tree);
+
+				std::ostringstream os;
+				pt::write_xml(os, root_tree);
+
+				utility::http::fillResponseWithHeaders(*response, os.str());
+			}
+		};
+
+		//PullPoint port entrance handler
+		void PullPointRequestsHandler(std::shared_ptr<HttpServer::Response> response,
+			std::shared_ptr<HttpServer::Request> request)
+		{
+			//osrv::auth::SECURITY_LEVELS::READ_MEDIA
+			log_->Debug("Handling PullPoint request: " + request->method + " " + request->path);
+
+			auto parsed_request = parse_pullmessages(request->content.string());
+
+			const static std::string ACTION_PULLMESSAGESS = "http://www.onvif.org/ver10/events/wsdl/PullPointSubscription/PullMessagesRequest";
+			if (parsed_request.header_action == ACTION_PULLMESSAGESS)
+			{
+				// NOTE: current implementation reads a timeout from the configuration and ignores a value in the request
+				notifications_manager->PullMessages(response, parsed_request.header_to, EVENT_CONFIGS_TREE.get<int>("PullPoint.Timeout"),
+					parsed_request.messages_limit);
+			}
+			
+			// If there was no error, a response will be send asynchronously
+			// *response << "HTTP/1.1 200 OK\r\n" << "Content-Length: 0\r\n" << "Connection: close\r\n" << "\r\n";
+		}
+		
 		//EVENTS SERVICE PORT
 		struct GetEventPropertiesHandler : public utility::http::RequestHandlerBase
 		{
@@ -105,7 +171,7 @@ namespace osrv
 				try
 				{
 					auto handler_ptr = *handler_it;
-					log_->Debug("Handling DeviceService request: " + handler_ptr->get_name());
+					log_->Debug("Handling EventService request: " + handler_ptr->get_name());
 					
 					//extract user credentials
 					osrv::auth::USER_TYPE current_user = osrv::auth::USER_TYPE::ANON;
@@ -169,6 +235,8 @@ namespace osrv
 			log_ = &logger;
 			log_->Debug("Initiating Event service...");
 
+			http_server_intance = &srv;
+
 			server_configs = &server_configs_instance;
 			digest_session = server_configs_instance.digest_session_;
 
@@ -176,6 +244,10 @@ namespace osrv
 
 			//getting service's configs
 			pt::read_json(configs_path + EVENT_CONFIGS_FILE, EVENT_CONFIGS_TREE);
+
+			auto namespaces_tree = EVENT_CONFIGS_TREE.get_child("Namespaces");
+			for (const auto& n : namespaces_tree)
+				XML_NAMESPACES.insert({ n.first, n.second.get_value<std::string>() });
 
 			notifications_manager = std::unique_ptr<osrv::event::NotificationsManager>(
 				new osrv::event::NotificationsManager(logger));
@@ -189,8 +261,16 @@ namespace osrv
 
 			//event service handlers
 			handlers.emplace_back(new GetEventPropertiesHandler{});
+			
+			//PullPoint handlers
+			handlers.emplace_back(new CreatePullPointSubscriptionHandler{});
 
 			srv.resource["/onvif/event_service"]["POST"] = EventServiceHandler;
+
+			//register a default handler for the Pullpoint requests
+			//NOTE: this path pattern should be match the one generated
+			//in the NotificationsManager for a new subscription
+			srv.resource["/onvif/event_service/s([0-9]+)"]["POST"] = PullPointRequestsHandler;
 		}
 
 	}
