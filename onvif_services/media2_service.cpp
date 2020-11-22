@@ -45,12 +45,44 @@ namespace osrv
 
 			auto envelope_tree = utility::soap::getEnvelopeTree(XML_NAMESPACES);
 
-			auto profiles_config = PROFILES_CONFIGS_TREE.get_child("MediaProfiles");
-			pt::ptree response_node;
-			for (auto elements : profiles_config)
+			auto profiles_configs_list = PROFILES_CONFIGS_TREE.get_child("MediaProfiles");
+
+			// extract requested profile token (if there it is) 
+			std::string profile_token;
 			{
+				auto request_str = request->content.string();
+				std::istringstream is(request_str );
+				pt::ptree xml_tree;
+				pt::xml_parser::read_xml(is, xml_tree);
+				profile_token = exns::find_hierarchy("Envelope.Body.GetProfiles.Token", xml_tree);
+			}
+
+			pt::ptree response_node;
+			if (profile_token.empty())
+			{
+				// response all media profiles' configs
+				for (auto elements : profiles_configs_list)
+				{
+					pt::ptree profile_node;
+					util::profile_to_soap(elements.second, PROFILES_CONFIGS_TREE, profile_node);
+					response_node.add_child("tr2:Profiles", profile_node);
+				}
+			}
+			else
+			{
+				// response only one profile's configs
+				auto profiles_config_it = std::find_if(profiles_configs_list.begin(),
+					profiles_configs_list.end(),
+					[&profile_token](const pt::ptree::value_type& i)
+					{
+						return i.second.get<std::string>("token") == profile_token;
+					});
+
+				if (profiles_config_it == profiles_configs_list.end())
+					throw std::runtime_error("Not found a profile with token: " + profile_token);
+
 				pt::ptree profile_node;
-				util::profile_to_soap(elements.second, PROFILES_CONFIGS_TREE, profile_node);
+				util::profile_to_soap(profiles_config_it->second, PROFILES_CONFIGS_TREE, profile_node);
 				response_node.add_child("tr2:Profiles", profile_node);
 			}
 
