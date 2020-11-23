@@ -27,9 +27,10 @@ static std::string SERVER_ADDRESS = "http://127.0.0.1:8080/";
 
 
 //the list of implemented methods
+static const std::string GetAudioDecoderConfigurations = "GetAudioDecoderConfigurations";
 static const std::string GetProfiles = "GetProfiles";
 static const std::string GetVideoSourceConfigurations = "GetVideoSourceConfigurations";
-static const std::string GetAudioDecoderConfigurations = "GetAudioDecoderConfigurations";
+static const std::string GetStreamUri = "GetStreamUri";
 
 namespace osrv
 {
@@ -139,6 +140,59 @@ namespace osrv
 
 			utility::http::fillResponseWithHeaders(*response, os.str());
 		}
+		
+		void GetStreamUriHandler(std::shared_ptr<HttpServer::Response> response,
+			std::shared_ptr<HttpServer::Request> request)
+		{
+			log_->Debug("Handle " + GetStreamUri);
+
+			pt::ptree request_xml;
+			pt::xml_parser::read_xml(std::istringstream{ request->content.string() }, request_xml);
+
+			std::string requested_token;
+			{
+				requested_token = exns::find_hierarchy("Envelope.Body.GetStreamUri.ProfileToken", request_xml);
+
+				log_->Debug("Requested token to get URI=" + requested_token);
+			}
+
+			auto profiles_config_list = PROFILES_CONFIGS_TREE.get_child("MediaProfiles");
+
+			auto profile_config = std::find_if(profiles_config_list.begin(), profiles_config_list.end(),
+				[requested_token](const pt::ptree::value_type& vs_obj)
+				{
+					return vs_obj.second.get<std::string>("token") == requested_token;
+				});
+
+			if (profile_config == profiles_config_list.end())
+				throw std::runtime_error("Can't find a proper URI: the media profile does not exist. token=" + requested_token);
+
+			auto encoder_token = profile_config->second.get<std::string>("VideoEncoderConfiguration");
+
+			auto stream_configs_list = CONFIGS_TREE.get_child("GetStreamUri");
+			auto stream_config_it = std::find_if(stream_configs_list.begin(), stream_configs_list.end(),
+				[encoder_token](const pt::ptree::value_type& el)
+				{return el.second.get<std::string>("VideoEncoderToken") == encoder_token; });
+
+			if (stream_config_it == stream_configs_list.end())
+				throw std::runtime_error("Could not find a stream for the requested Media Profile token=" + requested_token);
+
+			pt::ptree response_node;
+			response_node.put("tr2:Uri",
+				"rtsp://127.0.0.1:8554/" + stream_config_it->second.get<std::string>("Uri"));
+
+			auto envelope_tree = utility::soap::getEnvelopeTree(XML_NAMESPACES);
+			envelope_tree.put_child("s:Body.tr2:GetStreamUriResponse", response_node);
+
+			pt::ptree root_tree;
+			root_tree.put_child("s:Envelope", envelope_tree);
+
+			std::ostringstream os;
+			pt::write_xml(os, root_tree);
+
+			utility::http::fillResponseWithHeaders(*response, os.str());
+		}
+
 
         //DEFAULT HANDLER
         void Media2ServiceHandler(std::shared_ptr<HttpServer::Response> response,
@@ -203,6 +257,7 @@ namespace osrv
             handlers.insert({ GetAudioDecoderConfigurations, &GetAudioDecoderConfigurationsHandler});
             handlers.insert({ GetProfiles, &GetProfilesHandler });
             handlers.insert({ GetVideoSourceConfigurations, &GetVideoSourceConfigurationsHandler });
+            handlers.insert({ GetStreamUri, &GetStreamUriHandler });
 
             srv.resource["/onvif/media2_service"]["POST"] = Media2ServiceHandler;
 
