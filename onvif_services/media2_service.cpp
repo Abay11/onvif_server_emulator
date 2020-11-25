@@ -27,8 +27,11 @@ static std::string SERVER_ADDRESS = "http://127.0.0.1:8080/";
 
 
 //the list of implemented methods
+static const std::string GetAnalyticsConfigurations = "GetAnalyticsConfigurations";
+static const std::string GetAudioDecoderConfigurations = "GetAudioDecoderConfigurations";
 static const std::string GetProfiles = "GetProfiles";
 static const std::string GetVideoSourceConfigurations = "GetVideoSourceConfigurations";
+static const std::string GetStreamUri = "GetStreamUri";
 
 namespace osrv
 {
@@ -38,6 +41,43 @@ namespace osrv
 			std::shared_ptr<HttpServer::Request> request);
 		static std::map<std::string, handler_t*> handlers;
 
+		void GetAnalyticsConfigurationsHandler(std::shared_ptr<HttpServer::Response> response,
+			std::shared_ptr<HttpServer::Request> request)
+		{
+			log_->Debug("Handle GetAnalyticsConfigurations");
+
+			pt::ptree analytics_configs;
+			auto envelope_tree = utility::soap::getEnvelopeTree(XML_NAMESPACES);
+			envelope_tree.add_child("s:Body.tr2:GetAnalyticsConfigurationsResponse", analytics_configs);
+
+			pt::ptree root_tree;
+			root_tree.put_child("s:Envelope", envelope_tree);
+
+			std::ostringstream os;
+			pt::write_xml(os, root_tree);
+
+			utility::http::fillResponseWithHeaders(*response, os.str());
+		}
+
+		
+		void GetAudioDecoderConfigurationsHandler(std::shared_ptr<HttpServer::Response> response,
+			std::shared_ptr<HttpServer::Request> request)
+		{
+			log_->Debug("Handle GetAudioDecoderConfigurations");
+
+			pt::ptree ad_configs;
+			auto envelope_tree = utility::soap::getEnvelopeTree(XML_NAMESPACES);
+			envelope_tree.add_child("s:Body.tr2:GetAudioDecoderConfigurationsResponse", ad_configs);
+
+			pt::ptree root_tree;
+			root_tree.put_child("s:Envelope", envelope_tree);
+
+			std::ostringstream os;
+			pt::write_xml(os, root_tree);
+
+			utility::http::fillResponseWithHeaders(*response, os.str());
+		}
+
 		void GetProfilesHandler(std::shared_ptr<HttpServer::Response> response,
 			std::shared_ptr<HttpServer::Request> request)
 		{
@@ -45,12 +85,44 @@ namespace osrv
 
 			auto envelope_tree = utility::soap::getEnvelopeTree(XML_NAMESPACES);
 
-			auto profiles_config = PROFILES_CONFIGS_TREE.get_child("MediaProfiles");
-			pt::ptree response_node;
-			for (auto elements : profiles_config)
+			auto profiles_configs_list = PROFILES_CONFIGS_TREE.get_child("MediaProfiles");
+
+			// extract requested profile token (if there it is) 
+			std::string profile_token;
 			{
+				auto request_str = request->content.string();
+				std::istringstream is(request_str );
+				pt::ptree xml_tree;
+				pt::xml_parser::read_xml(is, xml_tree);
+				profile_token = exns::find_hierarchy("Envelope.Body.GetProfiles.Token", xml_tree);
+			}
+
+			pt::ptree response_node;
+			if (profile_token.empty())
+			{
+				// response all media profiles' configs
+				for (auto elements : profiles_configs_list)
+				{
+					pt::ptree profile_node;
+					util::profile_to_soap(elements.second, PROFILES_CONFIGS_TREE, profile_node);
+					response_node.add_child("tr2:Profiles", profile_node);
+				}
+			}
+			else
+			{
+				// response only one profile's configs
+				auto profiles_config_it = std::find_if(profiles_configs_list.begin(),
+					profiles_configs_list.end(),
+					[&profile_token](const pt::ptree::value_type& i)
+					{
+						return i.second.get<std::string>("token") == profile_token;
+					});
+
+				if (profiles_config_it == profiles_configs_list.end())
+					throw std::runtime_error("Not found a profile with token: " + profile_token);
+
 				pt::ptree profile_node;
-				util::profile_to_soap(elements.second, PROFILES_CONFIGS_TREE, profile_node);
+				util::profile_to_soap(profiles_config_it->second, PROFILES_CONFIGS_TREE, profile_node);
 				response_node.add_child("tr2:Profiles", profile_node);
 			}
 
@@ -88,6 +160,59 @@ namespace osrv
 
 			utility::http::fillResponseWithHeaders(*response, os.str());
 		}
+		
+		void GetStreamUriHandler(std::shared_ptr<HttpServer::Response> response,
+			std::shared_ptr<HttpServer::Request> request)
+		{
+			log_->Debug("Handle " + GetStreamUri);
+
+			pt::ptree request_xml;
+			pt::xml_parser::read_xml(std::istringstream{ request->content.string() }, request_xml);
+
+			std::string requested_token;
+			{
+				requested_token = exns::find_hierarchy("Envelope.Body.GetStreamUri.ProfileToken", request_xml);
+
+				log_->Debug("Requested token to get URI=" + requested_token);
+			}
+
+			auto profiles_config_list = PROFILES_CONFIGS_TREE.get_child("MediaProfiles");
+
+			auto profile_config = std::find_if(profiles_config_list.begin(), profiles_config_list.end(),
+				[requested_token](const pt::ptree::value_type& vs_obj)
+				{
+					return vs_obj.second.get<std::string>("token") == requested_token;
+				});
+
+			if (profile_config == profiles_config_list.end())
+				throw std::runtime_error("Can't find a proper URI: the media profile does not exist. token=" + requested_token);
+
+			auto encoder_token = profile_config->second.get<std::string>("VideoEncoderConfiguration");
+
+			auto stream_configs_list = CONFIGS_TREE.get_child("GetStreamUri");
+			auto stream_config_it = std::find_if(stream_configs_list.begin(), stream_configs_list.end(),
+				[encoder_token](const pt::ptree::value_type& el)
+				{return el.second.get<std::string>("VideoEncoderToken") == encoder_token; });
+
+			if (stream_config_it == stream_configs_list.end())
+				throw std::runtime_error("Could not find a stream for the requested Media Profile token=" + requested_token);
+
+			pt::ptree response_node;
+			response_node.put("tr2:Uri",
+				"rtsp://127.0.0.1:8554/" + stream_config_it->second.get<std::string>("Uri"));
+
+			auto envelope_tree = utility::soap::getEnvelopeTree(XML_NAMESPACES);
+			envelope_tree.put_child("s:Body.tr2:GetStreamUriResponse", response_node);
+
+			pt::ptree root_tree;
+			root_tree.put_child("s:Envelope", envelope_tree);
+
+			std::ostringstream os;
+			pt::write_xml(os, root_tree);
+
+			utility::http::fillResponseWithHeaders(*response, os.str());
+		}
+
 
         //DEFAULT HANDLER
         void Media2ServiceHandler(std::shared_ptr<HttpServer::Response> response,
@@ -149,8 +274,11 @@ namespace osrv
             for (const auto& n : namespaces_tree)
                 XML_NAMESPACES.insert({ n.first, n.second.get_value<std::string>() });
 
+            handlers.insert({ GetAnalyticsConfigurations, &GetAnalyticsConfigurationsHandler});
+            handlers.insert({ GetAudioDecoderConfigurations, &GetAudioDecoderConfigurationsHandler});
             handlers.insert({ GetProfiles, &GetProfilesHandler });
             handlers.insert({ GetVideoSourceConfigurations, &GetVideoSourceConfigurationsHandler });
+            handlers.insert({ GetStreamUri, &GetStreamUriHandler });
 
             srv.resource["/onvif/media2_service"]["POST"] = Media2ServiceHandler;
 
