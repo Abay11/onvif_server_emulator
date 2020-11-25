@@ -4,6 +4,7 @@
 #include "Logger.hpp"
 #include "RtspServer.h"
 #include "utility/HttpDigestHelper.h"
+#include "onvif_services\discovery_service.h"
 
 #include <memory>
 

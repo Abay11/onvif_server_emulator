@@ -3,6 +3,7 @@
 #include "../onvif_services/media_service.h"
 #include "../onvif_services/media2_service.h"
 #include "../onvif_services/event_service.h"
+#include "../onvif_services/discovery_service.h"
 
 #include "utility/AuthHelper.h"
 
@@ -51,10 +52,12 @@ namespace osrv
 		media::init_service(*http_server_instance_, configs_dir, log);
 		media2::init_service(*http_server_instance_, configs_dir, log);
 		event::init_service(*http_server_instance_, server_configs_, configs_dir, log);
+		discovery::init_service(configs_dir, log);
 	}
 
 	Server::~Server()
 	{
+		discovery::stop();
 		delete rtspServer_;
 	}
 
@@ -72,6 +75,7 @@ void Server::run()
 		});
 
 	rtspServer_->run();
+	discovery::start();
 
 	std::string msg("Server is successfully started on port: ");
 	msg += std::to_string(server_port.get_future().get());

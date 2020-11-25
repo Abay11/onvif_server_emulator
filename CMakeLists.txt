@@ -40,6 +40,8 @@ FILE(GLOB SERVICES_SRC
 	"onvif_services/event_service.cpp"
 	"onvif_services/pull_point.h"
 	"onvif_services/pull_point.cpp"
+	"onvif_services/discovery_service.h"
+	"onvif_services/discovery_service.cpp"
 )
 
 FILE (GLOB UTILITY_SRC
