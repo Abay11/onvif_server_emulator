@@ -75,7 +75,15 @@ void Server::run()
 		});
 
 	rtspServer_->run();
-	discovery::start();
+	try
+	{
+		discovery::start();
+	}
+	catch (const std::exception& e)
+	{
+		std::string what(e.what());
+		log_.Error("Can't start Discovery Service: " + what);
+	}
 
 	std::string msg("Server is successfully started on port: ");
 	msg += std::to_string(server_port.get_future().get());

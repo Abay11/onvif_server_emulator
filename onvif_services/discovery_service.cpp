@@ -5,6 +5,7 @@
 
 #include <boost/asio/io_context.hpp>
 #include <boost/asio/ip/udp.hpp>
+#include <boost/asio.hpp>
 
 #include "../Logger.hpp"
 
@@ -17,7 +18,8 @@ class DiscoveryManager
 {
 public:
 	DiscoveryManager(Logger& logger)
-		:logger_(&logger)
+		:logger_(&logger),
+		sender_endpoint_()
 	{
 		io_ = std::make_shared<ba::io_context>();
 		io_work_ = std::make_shared<ba::io_context::work>(*io_);
@@ -28,9 +30,18 @@ public:
 		if (worker_)
 			return;
 
-		socket_ = std::make_shared<ba::ip::udp::socket>(*io_, ba::ip::udp::endpoint(ba::ip::udp::v4(), 3702));
-		boost::asio::socket_base::broadcast option(true);
-		socket_->set_option(option);
+		socket_ = std::make_shared<ba::ip::udp::socket>(*io_);
+		socket_->open(ba::ip::udp::v4());
+		socket_->set_option(ba::socket_base::reuse_address(true));
+		socket_->set_option(ba::socket_base::broadcast(true));
+		socket_->set_option(ba::ip::multicast::join_group(ba::ip::address::from_string("239.255.255.250")));
+
+		boost::system::error_code ec;
+		socket_->bind(ba::ip::udp::endpoint(ba::ip::udp::v4(), 3702), ec);
+		if (ec)
+		{
+			logger_->Error("Can't bind the Discovery's socket to the port 3702: " + ec.message());
+		}
 
 		io_->post([this]() {
 				do_receive();
@@ -41,6 +52,9 @@ public:
 
 	void Stop()
 	{
+		if (!io_work_)
+			return;
+
 		io_work_.reset();
 
 		try
@@ -57,6 +71,9 @@ private:
 	{
 		socket_->async_receive_from(ba::buffer(data_, max_length), sender_endpoint_,
 			[this](boost::system::error_code ec, std::size_t bytes_recvd) {
+				logger_->Info("Received a probe from: "
+					+ sender_endpoint_.address().to_string() + ":" + std::to_string(sender_endpoint_.port()));
+
 				if (!ec && bytes_recvd > 0)
 				{
 					do_send(bytes_recvd);
@@ -70,9 +87,8 @@ private:
 
 	void do_send(std::size_t length)
 	{
-		logger_->Debug("received: " + std::string(std::begin(data_), std::begin(data_) + length));
-
-		//now do nothing
+		logger_->Debug("A probe's message: " + std::string(std::begin(data_), std::begin(data_) + length));
+		io_->post([this]() { do_receive(); });
 	}
 
 private:
@@ -100,12 +116,14 @@ namespace osrv
 			logger_ = &logger;
 
 			logger_->Info("Init Discovery Service");
+
+			discovery_manager_ = std::make_shared<DiscoveryManager>(logger);
 		}
 
 		// may throw an exception if called before @init
 		void start()
 		{
-			if (logger_)
+			if (!logger_)
 				throw std::runtime_error("Discovery Service should be initialized before starting!");
 
 			logger_->Info("Starting Discovery Service");
