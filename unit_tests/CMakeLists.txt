@@ -18,6 +18,7 @@ add_executable(test_executable
 	date_time_tests.cpp
 	pull_point_tests.cpp
 	xmlparser_tests.cpp
+	discovery_tests.cpp
 )
 
 # indicates the include paths

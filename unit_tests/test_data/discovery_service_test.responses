@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<SOAP-ENV:Envelope xmlns:SOAP-ENV="http://www.w3.org/2003/05/soap-envelope"    
+    xmlns:wsa5="http://schemas.xmlsoap.org/ws/2004/08/addressing"    
+    xmlns:d="http://schemas.xmlsoap.org/ws/2005/04/discovery">
+    <SOAP-ENV:Header>
+        <wsa5:MessageID>uuid:1419d68a-1dd2-11b2-a105-0011350303D6</wsa5:MessageID>
+        <wsa5:RelatesTo>uuid:1f262df0-e469-44a9-9b40-08af841ec4d5</wsa5:RelatesTo>
+        <wsa5:To SOAP-ENV:mustUnderstand="true">http://schemas.xmlsoap.org/ws/2004/08/addressing/role/anonymous</wsa5:To>
+        <wsa5:Action>http://schemas.xmlsoap.org/ws/2005/04/discovery/ProbeMatches</wsa5:Action>
+    </SOAP-ENV:Header>
+    <SOAP-ENV:Body>
+        <d:ProbeMatches>
+            <d:ProbeMatch>
+                <wsa:EndpointReference>
+                    <wsa:Address>urn:uuid:1419d68a-1dd2-11b2-a105-0011350303D6</wsa:Address>
+                    <wsa:ReferenceProperties></wsa:ReferenceProperties>
+                    <wsa:ReferenceParameters></wsa:ReferenceParameters>
+                    <wsa:PortType>ttl</wsa:PortType>
+                </wsa:EndpointReference>
+                <d:Types>tds:Device dn:NetworkVideoTransmitter</d:Types>
+                <d:Scopes>onvif://www.onvif.org/Profile/Streaming onvif://www.onvif.org/name/Evolution12 onvif://www.onvif.org/hardware/EVO-12NxD oncam://www.oncamgrandeye.com/Fisheye onvif://www.onvif.org/location/country/unknown</d:Scopes>
+                <d:XAddrs>http://127.0.0.1:8080/onvif/device_service</d:XAddrs>
+                <d:MetadataVersion>1</d:MetadataVersion>
+            </d:ProbeMatch>
+        </d:ProbeMatches>
+    </SOAP-ENV:Body>
+</SOAP-ENV:Envelope>

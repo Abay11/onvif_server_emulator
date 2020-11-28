@@ -23,7 +23,7 @@ namespace osrv
 	AUTH_SCHEME str_to_auth(const std::string& /*scheme*/);
 
 	Server::Server(std::string configs_dir, Logger& log)
-		: log_(log)
+		:logger_(log)
 		,http_server_instance_(new HttpServer)
 		,rtspServer_(new rtsp::Server(&log, RTSP_PORT))
 	{
@@ -38,7 +38,7 @@ namespace osrv
 		http_server_instance_->default_resource["POST"] = [this](std::shared_ptr<HttpServer::Response> response,
 			std::shared_ptr<HttpServer::Request> request)
 		{
-			log_.Warn("The server could not handle a request:" + request->method + " " + request->path);
+			logger_.Warn("The server could not handle a request:" + request->method + " " + request->path);
 			response->write(SimpleWeb::StatusCode::client_error_bad_request, "Bad request");
 		};
 
@@ -51,7 +51,9 @@ namespace osrv
 		device::init_service(*http_server_instance_, server_configs_, configs_dir, log);
 		media::init_service(*http_server_instance_, configs_dir, log);
 		media2::init_service(*http_server_instance_, configs_dir, log);
-		event::init_service(*http_server_instance_, server_configs_, configs_dir, log);
+
+		// the event service is not completed yet, comment for master branch for now
+		// event::init_service(*http_server_instance_, server_configs_, configs_dir, log);
 		discovery::init_service(configs_dir, log);
 	}
 
@@ -70,7 +72,7 @@ void Server::run()
 	thread server_thread([this, &server_port]() {
 		// Start server
 		http_server_instance_->start([&server_port](unsigned short port) {
-			server_port.set_value(port);
+				server_port.set_value(port);
 			});
 		});
 
@@ -82,12 +84,12 @@ void Server::run()
 	catch (const std::exception& e)
 	{
 		std::string what(e.what());
-		log_.Error("Can't start Discovery Service: " + what);
+		logger_.Error("Can't start Discovery Service: " + what);
 	}
 
 	std::string msg("Server is successfully started on port: ");
 	msg += std::to_string(server_port.get_future().get());
-	log_.Info(msg);
+	logger_.Info(msg);
 
 	server_thread.join();
 }

@@ -43,7 +43,7 @@ namespace osrv
 		void run();
 
 	private:
-		Logger& log_;
+		Logger& logger_;
 
 		std::shared_ptr<HttpServer> http_server_instance_ = nullptr;
 
