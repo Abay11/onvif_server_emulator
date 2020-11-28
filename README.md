@@ -27,4 +27,8 @@ Each ONVIF service is implemented as a separate instance. Each service may have 
 
 "Timeout" - PullMessages timeout in seconds.
 
- 
+ ## Discovery service configs
+
+ #### Probe match properties
+
+ "UseStaticResponse" - values: true/false. Points whether to response to the discovery Probe match with static message. Content will be read from `discovery_service_responses/probe_match.responses`. Currently is implemented only static variant.

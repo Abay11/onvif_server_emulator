@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.16)
 
 project(OnvifServerUnitTests)
 
-set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD 17)
 
 find_package(Boost REQUIRED
 	date_time
