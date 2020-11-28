@@ -151,7 +151,7 @@ namespace osrv
 				vs_configs_node.put_child("tr2:Configurations", videosource_configuration);
 			}
 			auto env_tree = utility::soap::getEnvelopeTree(XML_NAMESPACES);
-			env_tree.put_child("tr2:GetVideoSourceConfigurationsResponse", vs_configs_node);
+			env_tree.put_child("s:Body.tr2:GetVideoSourceConfigurationsResponse", vs_configs_node);
 			pt::ptree root_tree;
 			root_tree.put_child("s:Envelope", env_tree);
 
@@ -212,7 +212,6 @@ namespace osrv
 
 			utility::http::fillResponseWithHeaders(*response, os.str());
 		}
-
 
         //DEFAULT HANDLER
         void Media2ServiceHandler(std::shared_ptr<HttpServer::Response> response,

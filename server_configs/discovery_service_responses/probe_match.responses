@@ -1,63 +1,30 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<SOAP-ENV:Envelope xmlns:SOAP-ENV="http://www.w3.org/2003/05/soap-envelope"
-    xmlns:SOAP-ENC="http://www.w3.org/2003/05/soap-encoding"
-    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+<s:Envelope xmlns:s="http://www.w3.org/2003/05/soap-envelope"
+    xmlns:enc="http://www.w3.org/2003/05/soap-encoding"
     xmlns:xsd="http://www.w3.org/2001/XMLSchema"
-    xmlns:chan="http://schemas.microsoft.com/ws/2005/02/duplex"
-    xmlns:c14n="http://www.w3.org/2001/10/xml-exc-c14n#"
-    xmlns:wsu="http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-utility-1.0.xsd"
-    xmlns:xenc="http://www.w3.org/2001/04/xmlenc#"
-    xmlns:wsc="http://schemas.xmlsoap.org/ws/2005/02/sc"
-    xmlns:ds="http://www.w3.org/2000/09/xmldsig#"
-    xmlns:wsse="http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-secext-1.0.xsd"
-    xmlns:wsa5="http://schemas.xmlsoap.org/ws/2004/08/addressing"
-    xmlns:wsdd="http://docs.oasis-open.org/ws-dd/ns/discovery/2009/01"
-    xmlns:xmime="http://tempuri.org/xmime.xsd"
-    xmlns:tt="http://www.onvif.org/ver10/schema"
-    xmlns:xop="http://www.w3.org/2004/08/xop/include"
-    xmlns:wsrfbf="http://docs.oasis-open.org/wsrf/bf-2"
-    xmlns:wstop="http://docs.oasis-open.org/wsn/t-1"
-    xmlns:d="http://schemas.xmlsoap.org/ws/2005/04/discovery"
     xmlns:wsa="http://schemas.xmlsoap.org/ws/2004/08/addressing"
-    xmlns:wsrfr="http://docs.oasis-open.org/wsrf/r-2"
+    xmlns:wsa5="http://www.w3.org/2005/08/addressing"
+    xmlns:d="http://schemas.xmlsoap.org/ws/2005/04/discovery"
     xmlns:dn="http://www.onvif.org/ver10/network/wsdl"
-    xmlns:tad="http://www.onvif.org/ver10/analyticsdevice/wsdl"
-    xmlns:tae="http://www.onvif.org/ver10/actionengine/wsdl"
-    xmlns:tan="http://www.onvif.org/ver20/analytics/wsdl"
-    xmlns:tds="http://www.onvif.org/ver10/device/wsdl"
-    xmlns:tev="http://www.onvif.org/ver10/events/wsdl"
-    xmlns:wsnt="http://docs.oasis-open.org/wsn/b-2"
-    xmlns:timg="http://www.onvif.org/ver20/imaging/wsdl"
-    xmlns:tls="http://www.onvif.org/ver10/display/wsdl"
-    xmlns:tmd="http://www.onvif.org/ver10/deviceIO/wsdl"
-    xmlns:tptz="http://www.onvif.org/ver20/ptz/wsdl"
-    xmlns:trc="http://www.onvif.org/ver10/recording/wsdl"
-    xmlns:trp="http://www.onvif.org/ver10/replay/wsdl"
-    xmlns:trt="http://www.onvif.org/ver10/media/wsdl"
-    xmlns:trv="http://www.onvif.org/ver10/receiver/wsdl"
-    xmlns:tse="http://www.onvif.org/ver10/search/wsdl"
-    xmlns:ter="http://www.onvif.org/ver10/error"
-    xmlns:tns1="http://www.onvif.org/ver10/topics">
-    <SOAP-ENV:Header>
-        <wsa5:MessageID>uuid:1419d68a-1dd2-11b2-a105-0011350303D6</wsa5:MessageID>
-        <wsa5:RelatesTo>uuid:1f262df0-e469-44a9-9b40-08af841ec4d5</wsa5:RelatesTo>
-        <wsa5:To SOAP-ENV:mustUnderstand="true">http://schemas.xmlsoap.org/ws/2004/08/addressing/role/anonymous</wsa5:To>
-        <wsa5:Action>http://schemas.xmlsoap.org/ws/2005/04/discovery/ProbeMatches</wsa5:Action>
-    </SOAP-ENV:Header>
-    <SOAP-ENV:Body>
+    xmlns:tt="http://www.onvif.org/ver10/schema"
+    xmlns:tds="http://www.onvif.org/ver10/device/wsdl">
+    <s:Header>
+        <wsa:MessageID>uuid:10101010-1010-1010-1010-000000000000</wsa:MessageID>
+        <wsa:RelatesTo>uuid:00000000-0000-0000-0000-000000000000</wsa:RelatesTo>
+        <wsa:To>http://schemas.xmlsoap.org/ws/2004/08/addressing/role/anonymous</wsa:To>
+        <wsa:Action>http://schemas.xmlsoap.org/ws/2005/04/discovery/ProbeMatches</wsa:Action>
+    </s:Header>
+    <s:Body>
         <d:ProbeMatches>
             <d:ProbeMatch>
                 <wsa:EndpointReference>
-                    <wsa:Address>urn:uuid:1419d68a-1dd2-11b2-a105-0011350303D6</wsa:Address>
-                    <wsa:ReferenceProperties></wsa:ReferenceProperties>
-                    <wsa:ReferenceParameters></wsa:ReferenceParameters>
-                    <wsa:PortType>ttl</wsa:PortType>
+                    <wsa:Address>urn:uuid:10101010-1010-1010-1010-000000000001</wsa:Address>
                 </wsa:EndpointReference>
-                <d:Types>tds:Device dn:NetworkVideoTransmitter</d:Types>
-                <d:Scopes>onvif://www.onvif.org/Profile/Streaming onvif://www.onvif.org/name/Evolution12 onvif://www.onvif.org/hardware/EVO-12NxD oncam://www.oncamgrandeye.com/Fisheye onvif://www.onvif.org/location/country/unknown</d:Scopes>
-                <d:XAddrs>http://127.0.0.1:8080/onvif/device_service</d:XAddrs>
+                <d:Types>dn:NetworkVideoTransmitter tds:Device</d:Types>
+                <d:Scopes>onvif://www.onvif.org/location/country/russia onvif://www.onvif.org/location/city/nalchik onvif://www.onvif.org/type/network_video_transmitter onvif://www.onvif.org/name/IP-Camera-Emulator onvif://www.onvif.org/hardware/Emulator onvif://www.onvif.org/Profile/Streaming</d:Scopes>
+                <d:XAddrs>http://192.168.43.120:8080/onvif/device_service</d:XAddrs>
                 <d:MetadataVersion>1</d:MetadataVersion>
             </d:ProbeMatch>
         </d:ProbeMatches>
-    </SOAP-ENV:Body>
-</SOAP-ENV:Envelope>
+    </s:Body>
+</s:Envelope>
