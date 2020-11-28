@@ -67,7 +67,7 @@ private:
 		decorated_msg += msg;
 		
 		std::lock_guard<std::mutex> lg(log_writer_mutex);
-		std::cout << decorated_msg << std::endl;
+		std::cout << "\n" << decorated_msg << std::endl;
 	}
 
 private:

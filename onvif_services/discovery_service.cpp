@@ -6,7 +6,7 @@
 #include <thread>
 #include <memory>
 #include <fstream>
-
+#include <algorithm>
 #include <regex>
 
 #include <boost/asio/io_context.hpp>
@@ -109,7 +109,8 @@ private:
 		}
 		else
 		{
-			response_ = osrv::discovery::utility::prepare_response("", relatesTo, std::move(response_));
+			response_ = osrv::discovery::utility::prepare_response(osrv::discovery::utility::generate_uuid(),
+				relatesTo, std::move(response_));
 
 			socket_->async_send_to(ba::buffer(response_), remote_endpoint_,
 				[this](const boost::system::error_code& ec, std::size_t bytes_transferred) {
@@ -208,11 +209,30 @@ namespace osrv
 			std::string prepare_response(const std::string& messageID, const std::string& relatesTo, std::string&& response)
 			{
 				//TODO: replace MessageID
+				std::regex re_msg_id("(<.*MessageID>)(.*)(</.*MessageID>)");
+				response = std::regex_replace(response, re_msg_id, "$1" + messageID + "$3");
 
 				// replace RelatesTo uuid
-				std::regex re("(<.*RelatesTo>)(.*)(</.*RelatesTo>)");
-				return std::regex_replace(response, re, "$1" + relatesTo + "$3");
+				std::regex re_rel_to("(<.*RelatesTo>)(.*)(</.*RelatesTo>)");
+				return std::regex_replace(response, re_rel_to, "$1" + relatesTo + "$3");
+			}
+			
+			std::string generate_uuid(std::string uuid)
+			{
+				if (uuid.empty())
+					return uuid;
 
+				// beginning part will be fixed, we just will increment the counter from 0 and will be
+				// replace the last characters in the ending
+				//std::string uuid = "urn:uuid:1419d68a-1dd2-11b2-a105-000000000000";
+
+				static int ID = 0;
+				std::string str_id = std::to_string(ID++);
+				uuid.replace(uuid.length() - str_id.length(), //start pos
+					str_id.length(), //num of symbols to replace
+					str_id); //new value
+
+				return uuid;
 			}
 		}
 		

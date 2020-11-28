@@ -19,6 +19,18 @@ BOOST_AUTO_TEST_CASE(extract_message_id_func)
 	BOOST_TEST("urn:uuid:4ff5ff0e-8478-4491-a547-e8917023ad90" == result);
 }
 
+BOOST_AUTO_TEST_CASE(generate_uuid_func)
+{
+	auto res1 = osrv::discovery::utility::generate_uuid("urn:uuid:1419d68a-1dd2-11b2-a105-000000000000");
+	BOOST_TEST(res1 == "urn:uuid:1419d68a-1dd2-11b2-a105-000000000000");
+	
+	auto res2 = osrv::discovery::utility::generate_uuid("urn:uuid:1419d68a-1dd2-11b2-a105-000000000000");
+	BOOST_TEST(res2 == "urn:uuid:1419d68a-1dd2-11b2-a105-000000000001");
+	
+	auto res3 = osrv::discovery::utility::generate_uuid("urn:uuid:1419d68a-1dd2-11b2-a105-000000000000");
+	BOOST_TEST(res3 == "urn:uuid:1419d68a-1dd2-11b2-a105-000000000002");
+}
+
 BOOST_AUTO_TEST_CASE(prepare_resposne_func)
 {
 	const std::string response_test_file = "../../unit_tests/test_data/discovery_service_test.responses";
@@ -28,17 +40,20 @@ BOOST_AUTO_TEST_CASE(prepare_resposne_func)
 	std::string response;
 	response.assign(std::istreambuf_iterator<char>(ifs), std::istreambuf_iterator<char>());
 
+	const std::string expected_message_id = osrv::discovery::utility::generate_uuid();
 	const std::string expected_relatesTo_id = "urn:uuid:4ff5ff0e-8478-4491-a547-e8917023ad90";
 
 	// this function should replace RelatesTo value in the response
-	response = osrv::discovery::utility::prepare_response("", expected_relatesTo_id, std::move(response));
+	response = osrv::discovery::utility::prepare_response(expected_message_id, expected_relatesTo_id, std::move(response));
 
 	namespace pt = boost::property_tree;
-
 	std::istringstream is(response);
 	pt::ptree response_tree;
 	pt::xml_parser::read_xml(is, response_tree);
 
-	auto actual_id = exns::find_hierarchy("Envelope.Header.RelatesTo", response_tree);
-	BOOST_TEST(actual_id == expected_relatesTo_id);
+	auto actual_msg_id = exns::find_hierarchy("Envelope.Header.MessageID", response_tree);
+	BOOST_TEST(actual_msg_id == expected_message_id);
+
+	auto actual_related_to = exns::find_hierarchy("Envelope.Header.RelatesTo", response_tree);
+	BOOST_TEST(actual_related_to == expected_relatesTo_id);
 }

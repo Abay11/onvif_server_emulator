@@ -29,6 +29,12 @@ namespace osrv
 			*/
 			std::string prepare_response(const std::string& /*messageID*/, const std::string& /*relatesTo*/,
 				std::string&& /*response*/);
+
+			/**
+			* user should pass corrected uuid
+			* there is no checks is complete on correctness of the passed uuid
+			*/
+			std::string generate_uuid(std::string uuid = "urn:uuid:1419d68a-1dd2-11b2-a105-000000000000");
 		}
 	}
 }
