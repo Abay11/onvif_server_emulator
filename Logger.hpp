@@ -1,5 +1,7 @@
 #pragma once
 
+#include "./utility/DateTime.hpp"
+
 #include <mutex>
 #include <iostream>
 #include <string>
@@ -48,19 +50,21 @@ private:
 
 		std::string decorated_msg;
 
+		decorated_msg += "[" + utility::datetime::system_utc_time() + "]";
+
 		switch (level)
 		{
 		case LVL_ERR:
-			decorated_msg += "ERR: ";
+			decorated_msg += "[ERROR] ";
 			break;
 		case LVL_WARN:
-			decorated_msg += "WARN: ";
+			decorated_msg += "[WARN] ";
 			break;
 		case LVL_INFO:
-			decorated_msg += "INFO: ";
+			decorated_msg += "[INFO] ";
 			break;
 		case LVL_DEBUG:
-			decorated_msg += "DEBUG: ";
+			decorated_msg += "[DEBUG] ";
 			break;
 		}
 

@@ -90,12 +90,12 @@ namespace osrv
 
 			std::string GetLastRenew()
 			{
-				return utility::datetime::posix_to_utc(current_time_);
+				return utility::datetime::posix_datetime_to_utc(current_time_);
 			}
 
 			std::string GetTerminationTime()
 			{
-				return utility::datetime::posix_to_utc(current_time_ + boost::posix_time::seconds(timeout_interval_));
+				return utility::datetime::posix_datetime_to_utc(current_time_ + boost::posix_time::seconds(timeout_interval_));
 			}
 
 			void SetMaxMessages(size_t n)

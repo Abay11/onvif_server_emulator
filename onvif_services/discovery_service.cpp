@@ -156,7 +156,7 @@ namespace osrv
 		{
 			logger_ = &logger;
 
-			logger_->Info("Init Discovery Service");
+			logger_->Info("Initiating Discovery Service");
 
 			CONFIGS_PATH = configs_path;
 

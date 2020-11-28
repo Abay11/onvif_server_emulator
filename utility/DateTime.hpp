@@ -8,7 +8,7 @@ namespace utility
 {
 	namespace datetime
 	{
-		inline std::string posix_to_utc(boost::posix_time::ptime tm)
+		inline std::string posix_datetime_to_utc(boost::posix_time::ptime tm)
 		{
 			std::stringstream ss;
 
@@ -23,12 +23,34 @@ namespace utility
 
 			return ss.str();
 		}
+		
+		inline std::string posix_time_to_utc(boost::posix_time::ptime tm)
+		{
+			std::stringstream ss;
+
+			namespace pt = boost::posix_time;
+			
+			pt::time_facet* tf = new pt::time_facet("%H:%M:%S:%fZ"); 
+			ss.imbue(std::locale(ss.getloc(), tf));
+
+			ss << tm;
+
+			return ss.str();
+		}
 
 		inline std::string system_utc_datetime()
 		{
 			namespace pt = boost::posix_time;
 
-			return posix_to_utc(pt::microsec_clock::universal_time());
+			return posix_datetime_to_utc(pt::microsec_clock::universal_time());
+		}
+
+		inline std::string system_utc_time()
+		{
+			namespace pt = boost::posix_time;
+
+			return posix_time_to_utc(pt::microsec_clock::universal_time());
+
 		}
 	}
 }
