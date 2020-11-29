@@ -19,7 +19,7 @@
 static const Logger* logger_ = nullptr;
 
 static std::string CONFIGS_PATH; //will be init with the service initialization
-static const std::string DISCOVERY_RESPONSES_FILE = "discovery_service_responses/probe_match.responses";
+static const std::string DISCOVERY_RESPONSE_FILE = "responses/ProbeMatch.response";
 
 
 namespace ba = boost::asio;
@@ -160,10 +160,10 @@ namespace osrv
 
 			CONFIGS_PATH = configs_path;
 
-			std::ifstream ifs(CONFIGS_PATH + DISCOVERY_RESPONSES_FILE);
+			std::ifstream ifs(CONFIGS_PATH + DISCOVERY_RESPONSE_FILE);
 			if (!ifs.is_open())
 			{
-				throw std::runtime_error("Can't open: " + DISCOVERY_RESPONSES_FILE);
+				throw std::runtime_error("Can't open: " + DISCOVERY_RESPONSE_FILE);
 			}
 	
 			std::string response;
