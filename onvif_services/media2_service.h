@@ -10,9 +10,12 @@ class Logger;
 
 namespace osrv
 {
+	struct ServerConfigs;
+
 	namespace media2
 	{
-		void init_service(HttpServer& srv, const std::string& configs_path, Logger& logger);
+		void init_service(HttpServer& srv, const ServerConfigs& server_configs_ptr,
+			const std::string& configs_path, Logger& logger);
 
 		namespace util
 		{

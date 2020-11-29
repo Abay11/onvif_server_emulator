@@ -15,7 +15,7 @@
 
 #include <map>
 
-static Logger* log_ = nullptr;
+static Logger* logger_ = nullptr;
 
 static const osrv::ServerConfigs* server_configs;
 static DigestSessionSP digest_session;
@@ -263,7 +263,7 @@ namespace osrv
 			}
 			catch (const pt::xml_parser_error& e)
 			{
-				log_->Error(e.what());
+				logger_->Error(e.what());
 			}
 
 			auto handler_it = std::find_if(handlers.begin(), handlers.end(),
@@ -279,7 +279,7 @@ namespace osrv
 				try
 				{
 					auto handler_ptr = *handler_it;
-					log_->Debug("Handling DeviceService request: " + handler_ptr->get_name());
+					logger_->Debug("Handling DeviceService request: " + handler_ptr->get_name());
 
 					//extract user credentials
 					osrv::auth::USER_TYPE current_user = osrv::auth::USER_TYPE::ANON;
@@ -311,7 +311,7 @@ namespace osrv
 				}
 				catch (const osrv::auth::digest_failed& e)
 				{
-					log_->Error(e.what());
+					logger_->Error(e.what());
 					
 					*response << utility::http::RESPONSE_UNAUTHORIZED << "\r\n"
 						<< "Content-Type: application/soap+xml; charset=utf-8" << "\r\n"
@@ -321,7 +321,7 @@ namespace osrv
 				}
 				catch (const std::exception& e)
 				{
-					log_->Error("A server's error occured in DeviceService while processing: " + method
+					logger_->Error("A server's error occured in DeviceService while processing: " + method
 						+ ". Info: " + e.what());
 					
 					*response << "HTTP/1.1 500 Server error\r\nContent-Length: " << 0 << "\r\n\r\n";
@@ -329,18 +329,18 @@ namespace osrv
 			}
 			else
 			{
-				log_->Error("Not found an appropriate handler in DeviceService for: " + method);
+				logger_->Error("Not found an appropriate handler in DeviceService for: " + method);
 				*response << "HTTP/1.1 400 Bad request\r\nContent-Length: " << 0 << "\r\n\r\n";
 			}
 		}
 
 		void init_service(HttpServer& srv, const osrv::ServerConfigs& server_configs_ptr, const std::string& configs_path, Logger& logger)
 		{
-			if (log_ != nullptr)
-				return log_->Error("DeviceService is already initiated!");
+			if (logger_ != nullptr)
+				return logger_->Error("DeviceService is already initiated!");
 
-			log_ = &logger;
-			log_->Debug("Initiating Device service...");
+			logger_ = &logger;
+			logger_->Debug("Initiating Device service...");
 
 			server_configs = &server_configs_ptr;
 			digest_session = server_configs_ptr.digest_session_;
@@ -363,7 +363,7 @@ namespace osrv
 
 			srv.resource["/onvif/device_service"]["POST"] = DeviceServiceHandler;
 
-			log_->Info("ONVIF Device service is working on " + SERVER_ADDRESS + "onvif/device_service");
+			logger_->Info("ONVIF Device service is working on " + SERVER_ADDRESS + "onvif/device_service");
 		}
 
 	}

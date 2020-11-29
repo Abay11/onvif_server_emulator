@@ -50,7 +50,7 @@ namespace osrv
 
 		device::init_service(*http_server_instance_, server_configs_, configs_dir, log);
 		media::init_service(*http_server_instance_, configs_dir, log);
-		media2::init_service(*http_server_instance_, configs_dir, log);
+		media2::init_service(*http_server_instance_, server_configs_, configs_dir, log);
 
 		// the event service is not completed yet, comment for master branch for now
 		// event::init_service(*http_server_instance_, server_configs_, configs_dir, log);
