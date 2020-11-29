@@ -49,9 +49,8 @@ namespace osrv
 		server_configs_.digest_session_->set_users_list(server_configs_.system_users_);
 
 		device::init_service(*http_server_instance_, server_configs_, configs_dir, log);
-		media::init_service(*http_server_instance_, configs_dir, log);
+		media::init_service(*http_server_instance_, server_configs_, configs_dir, log);
 		media2::init_service(*http_server_instance_, server_configs_, configs_dir, log);
-
 		// the event service is not completed yet, comment for master branch for now
 		// event::init_service(*http_server_instance_, server_configs_, configs_dir, log);
 		discovery::init_service(configs_dir, log);
