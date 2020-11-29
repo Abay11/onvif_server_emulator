@@ -19,6 +19,12 @@ Each ONVIF service is implemented as a separate instance. Each service may have 
 "authentication" - current authentication method is choosen via this variable. Any values from "authenticationMethods" can be used.
 "authenticationMethods" - enums available values. Here is they desctiption: "none" - authentication is not required; "ws-security" - only WS-Security; "digest" - only digest
 
+## Device service configs
+
+#### GetServices
+
+"Enabled" - boolean value. Can be used to do not include specific service in the response list. If this flag is absent, default value will be true. For example, it will be usefull to enabling/disabling Media2 service.
+
 ## Event service configs
 
 #### PullPoint

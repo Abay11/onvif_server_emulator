@@ -170,6 +170,9 @@ namespace osrv
 				//here's Services are enumerates as array, so handle them manualy
 				for (auto elements : services_config)
 				{
+					if (!elements.second.get<bool>("Enabled", true))
+						continue;
+
 					pt::ptree xml_service_node;
 					xml_service_node.put("tds:Namespace", elements.second.get<std::string>("namespace"));
 					xml_service_node.put("tds:XAddr", SERVER_ADDRESS + elements.second.get<std::string>("XAddr"));
