@@ -15,8 +15,6 @@
 
 static const std::string COMMON_CONFIGS_NAME = "common.config";
 
-static char RTSP_PORT[] = "8554";
-
 namespace osrv
 {
 	
@@ -25,7 +23,6 @@ namespace osrv
 	Server::Server(std::string configs_dir, Logger& log)
 		:logger_(log)
 		,http_server_instance_(new HttpServer)
-		,rtspServer_(new rtsp::Server(&log, RTSP_PORT))
 	{
 		http_server_instance_->config.port = MASTER_PORT;
 	
@@ -54,6 +51,8 @@ namespace osrv
 		// the event service is not completed yet, comment for master branch for now
 		// event::init_service(*http_server_instance_, server_configs_, configs_dir, log);
 		discovery::init_service(configs_dir, log);
+
+		rtspServer_ = new rtsp::Server(&log, server_configs_.ipv4_address_.c_str(), server_configs_.rtsp_port_.c_str());
 	}
 
 	Server::~Server()
@@ -102,10 +101,14 @@ ServerConfigs read_server_configs(const std::string& config_path)
 	namespace pt = boost::property_tree;
 	pt::ptree configs_tree;
 	pt::read_json(configs_file, configs_tree);
+	
+	ServerConfigs read_configs;
+
+	read_configs.ipv4_address_ = configs_tree.get<std::string>("addresses.ipv4");
+	read_configs.http_port_ = configs_tree.get<std::string>("addresses.http_port");
+	read_configs.rtsp_port_ = configs_tree.get<std::string>("addresses.rtsp_port");
 
 	auto auth_scheme = configs_tree.get<std::string>("authentication");
-
-	ServerConfigs read_configs;
 	read_configs.auth_scheme_ = str_to_auth(auth_scheme);
 
 	auto users_node = configs_tree.get_child("users");

@@ -15,7 +15,6 @@ namespace osrv
 		* will throw an exception if it's called before @init
 		*/
 		void start();
-
 		
 		void stop();
 

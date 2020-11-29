@@ -9,8 +9,9 @@ BOOST_AUTO_TEST_CASE(read_server_configs_func)
 	try {
 		actual_configs = osrv::read_server_configs(server_configs_path);
 	}
-	catch (const std::exception&)
+	catch (const std::exception& e)
 	{
+		BOOST_TEST("" == e.what());
 		BOOST_ASSERT(false);
 	}
 	

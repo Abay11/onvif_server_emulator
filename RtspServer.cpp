@@ -23,8 +23,8 @@ namespace osrv
 			server_ = gst_rtsp_server_new();
 
 			//FIX_ME: address and port are hardcoded
-			gst_rtsp_server_set_address(server_, "127.0.0.1");
-			//gst_rtsp_server_set_service(server_, "8554");
+			gst_rtsp_server_set_address(server_, addr);
+			gst_rtsp_server_set_service(server_, port);
 
 			mounts = gst_rtsp_server_get_mount_points(server_);
 			factoryHighStream = gst_rtsp_media_factory_new();

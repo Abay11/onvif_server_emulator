@@ -26,6 +26,10 @@ namespace osrv
 
 	struct ServerConfigs
 	{
+		std::string ipv4_address_;
+		std::string http_port_;
+		std::string rtsp_port_;
+
 		UsersList_t system_users_;
 		AUTH_SCHEME auth_scheme_{};
 		DigestSessionSP digest_session_;
