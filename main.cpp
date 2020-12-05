@@ -26,8 +26,10 @@ int main(int argc, char** argv)
 
 	try
 	{
-		osrv::Server server(configs_dir, log);
-		server.run();
+		osrv::Server* server = new osrv::Server(configs_dir, log);
+		server->run();
+
+		delete server;
 	}
 	catch (const std::exception& e)
 	{

@@ -2,6 +2,8 @@
 
 #include <string>
 
+#include <boost/property_tree/ptree.hpp>
+
 class Logger;
 
 namespace osrv
@@ -20,7 +22,9 @@ namespace osrv
 
 		namespace utility
 		{
-			std::string extract_message_id(const std::string& /*probe_msg*/);
+			std::string extract_types(const boost::property_tree::ptree& /*tree*/);
+
+			std::string extract_message_id(const boost::property_tree::ptree& /*probe_msg*/);
 
 			/**
 			* used when a static response message read from a file

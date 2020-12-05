@@ -4,6 +4,7 @@
 #include <vector>
 
 #include <boost/algorithm/string.hpp>
+#include <boost\property_tree\xml_parser.hpp>
 
 //return XML Element without NS
 //Example: if passed value equal "ns:element", returned value is "element"
@@ -86,5 +87,13 @@ namespace exns
 		}
 
 		return {};
+	}
+	
+	pt::ptree to_ptree(const std::string& str)
+	{
+		std::istringstream is(str);
+		pt::ptree tree;
+		pt::xml_parser::read_xml(is, tree);
+		return tree;
 	}
 }

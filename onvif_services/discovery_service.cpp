@@ -87,45 +87,64 @@ private:
 
 				if (!ec && bytes_recvd > 0)
 				{
-					do_send(bytes_recvd);
+					return do_send(bytes_recvd);
 				}
-				else
-				{
-					do_receive();
-				}
+
+				do_receive();
 			});
 	}
 
 	void do_send(std::size_t length)
 	{
 		std::string probe_msg(std::begin(data_), std::begin(data_) + length);
+		// TODO Log in Trace level
 		logger_->Debug("A probe's message: " + probe_msg);
 
-		const auto relatesTo = osrv::discovery::utility::extract_message_id(probe_msg);
+		auto probe_tree = exns::to_ptree(probe_msg);
 
-		if (relatesTo.empty())
+		const std::vector ONVIF_TYPES = {
+			"NetworkVideoTransmitter",
+			"NetworkVideoDisplay",
+			"Device"
+		};
+		auto types = osrv::discovery::utility::extract_types(probe_tree);
+		if (std::any_of(ONVIF_TYPES.begin(), ONVIF_TYPES.end(),
+			[&types](const auto& t) {
+				// here is very poor logic, but I think it's should be enough 
+				// and it's supposed to reply only for ONVIF devices and ignoring others
+				return types.find(t) != std::string::npos;
+			}))
 		{
-			logger_->Error("Probe's messageID is empty! Probe match dropped!");
+			const auto relatesTo = osrv::discovery::utility::extract_message_id(probe_tree);
+
+			if (relatesTo.empty())
+			{
+				logger_->Error("Probe's messageID is empty! Probe match dropped!");
+			}
+			else
+			{
+				response_ = osrv::discovery::utility::prepare_response(osrv::discovery::utility::generate_uuid(),
+					relatesTo, std::move(response_));
+
+				socket_->async_send_to(ba::buffer(response_), remote_endpoint_,
+					[this](const boost::system::error_code& ec, std::size_t bytes_transferred) {
+						if (ec)
+						{
+							logger_->Error("Something went wrong while sending a response to the Probe: " + ec.message());
+						}
+						else if (bytes_transferred != response_.size())
+						{
+							logger_->Warn("Sending message length on the Probe not match actual required size Probe!");
+						}
+
+						logger_->Info("Response a probe match to: "
+							+ remote_endpoint_.address().to_string() + ":" + std::to_string(remote_endpoint_.port()));
+					});
+			}
 		}
 		else
 		{
-			response_ = osrv::discovery::utility::prepare_response(osrv::discovery::utility::generate_uuid(),
-				relatesTo, std::move(response_));
-
-			socket_->async_send_to(ba::buffer(response_), remote_endpoint_,
-				[this](const boost::system::error_code& ec, std::size_t bytes_transferred) {
-					if (ec)
-					{
-						logger_->Error("Something went wrong while sending a response to the Probe: " + ec.message());
-					}
-					else if (bytes_transferred != response_.size())
-					{
-						logger_->Warn("Sending message length on the Probe not match actual required size Probe!");
-					}
-
-					logger_->Info("Response a probe match to: "
-						+ remote_endpoint_.address().to_string() + ":" + std::to_string(remote_endpoint_.port()));
-				});
+			logger_->Debug("Ignoring a Probe with Types: " + types);
 		}
 		
 		io_->post([this]() { do_receive(); });
@@ -196,14 +215,15 @@ namespace osrv
 			
 		namespace utility
 		{
-			std::string extract_message_id(const std::string& probe_msg)
+			std::string extract_types(const boost::property_tree::ptree& tree)
 			{
-				namespace pt = boost::property_tree;
-				std::istringstream is(probe_msg);
-				pt::ptree probe_tree;
-				pt::xml_parser::read_xml(is, probe_tree);
+				return exns::find_hierarchy("Envelope.Body.Probe.Types", tree);
+			}
 
-				return exns::find_hierarchy("Envelope.Header.MessageID", probe_tree);
+
+			std::string extract_message_id(const boost::property_tree::ptree& tree)
+			{
+				return exns::find_hierarchy("Envelope.Header.MessageID", tree);
 			}
 
 			std::string prepare_response(const std::string& messageID, const std::string& relatesTo, std::string&& response)
