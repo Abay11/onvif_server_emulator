@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Types.inl"
-#include "Logger.hpp"
+#include "Logger.h"
 #include "RtspServer.h"
 #include "utility/HttpDigestHelper.h"
 #include "onvif_services\discovery_service.h"
@@ -38,16 +38,16 @@ namespace osrv
 	class Server
 	{
 	public:
-		Server(std::string /*configs_dir*/, Logger& /*log*/);
-		Server(const Logger&) = delete;
-		Server(Logger&&) = delete;
+		Server(std::string /*configs_dir*/, ILogger& /*log*/);
+		Server(const ILogger&) = delete;
+		Server(ILogger&&) = delete;
 		~Server();
 
 		//throws exceptions in error
 		void run();
 
 	private:
-		Logger& logger_;
+		ILogger& logger_;
 
 		std::shared_ptr<HttpServer> http_server_instance_ = nullptr;
 

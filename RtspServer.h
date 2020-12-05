@@ -6,7 +6,7 @@
 #include <string>
 #include <thread>
 
-class Logger;
+class ILogger;
 
 namespace osrv
 {
@@ -15,7 +15,7 @@ namespace osrv
 		class Server
 		{
 		public:
-			Server(Logger* logger, const char* addr = "127.0.0.1", const char* port = "8554");
+			Server(ILogger* logger, const char* addr = "127.0.0.1", const char* port = "8554");
 			~Server();
 			void run();
 
@@ -31,7 +31,7 @@ namespace osrv
 
 			std::thread* worker_thread = nullptr;
 
-			Logger* logger_;
+			ILogger* logger_;
 		};
 	}
 }

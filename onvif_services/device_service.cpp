@@ -1,6 +1,6 @@
 #include "device_service.h"
 
-#include "../Logger.hpp"
+#include "../Logger.h"
 #include "../Server.h"
 #include "../utility/XmlParser.h"
 #include "../utility/HttpHelper.h"
@@ -15,7 +15,7 @@
 
 #include <map>
 
-static Logger* logger_ = nullptr;
+static ILogger* logger_ = nullptr;
 
 static const osrv::ServerConfigs* server_configs;
 static DigestSessionSP digest_session;
@@ -337,7 +337,7 @@ namespace osrv
 			}
 		}
 
-		void init_service(HttpServer& srv, const osrv::ServerConfigs& server_configs_ptr, const std::string& configs_path, Logger& logger)
+		void init_service(HttpServer& srv, const osrv::ServerConfigs& server_configs_ptr, const std::string& configs_path, ILogger& logger)
 		{
 			if (logger_ != nullptr)
 				return logger_->Error("DeviceService is already initiated!");

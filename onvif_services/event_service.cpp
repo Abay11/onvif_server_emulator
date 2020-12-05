@@ -1,6 +1,6 @@
 #include "event_service.h"
 
-#include "../Logger.hpp"
+#include "../Logger.h"
 #include "../Server.h"
 #include "../utility/XmlParser.h"
 #include "../utility/HttpHelper.h"
@@ -15,7 +15,7 @@
 
 #include <map>
 
-static Logger* log_ = nullptr;
+static ILogger* log_ = nullptr;
 
 //this instance is required when handlers should be registered for a new PullPoint's subscriber
 static osrv::HttpServer* http_server_intance = nullptr;
@@ -227,7 +227,7 @@ namespace osrv
 		}
 
 		void init_service(HttpServer& srv, const osrv::ServerConfigs& server_configs_instance,
-			const std::string& configs_path, Logger& logger)
+			const std::string& configs_path, ILogger& logger)
 		{
 			if (log_ != nullptr)
 				return log_->Error("EventService is already inited!");

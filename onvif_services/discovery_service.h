@@ -4,14 +4,14 @@
 
 #include <boost/property_tree/ptree.hpp>
 
-class Logger;
+class ILogger;
 
 namespace osrv
 {
 	namespace discovery
 	{
 		// should be called before before start
-		void init_service(const std::string& /*configs_path*/, Logger& /*logger*/);
+		void init_service(const std::string& /*configs_path*/, ILogger& /*logger*/);
 
 		/**
 		* will throw an exception if it's called before @init

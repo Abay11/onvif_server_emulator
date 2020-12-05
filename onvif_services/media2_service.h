@@ -2,7 +2,7 @@
 
 #include "../Types.inl"
 
-class Logger;
+class ILogger;
 
 #include <string>
 
@@ -15,7 +15,7 @@ namespace osrv
 	namespace media2
 	{
 		void init_service(HttpServer& srv, const ServerConfigs& server_configs_ptr,
-			const std::string& configs_path, Logger& logger);
+			const std::string& configs_path, ILogger& logger);
 
 		namespace util
 		{

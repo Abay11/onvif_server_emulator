@@ -1,6 +1,6 @@
 #include "media_service.h"
 
-#include "../Logger.hpp"
+#include "../Logger.h"
 #include "../utility/XmlParser.h"
 #include "../utility/HttpHelper.h"
 #include "../utility/SoapHelper.h"
@@ -15,7 +15,7 @@
 static const osrv::ServerConfigs* server_configs;
 static DigestSessionSP digest_session;
 
-static Logger* logger_ = nullptr;
+static ILogger* logger_ = nullptr;
 
 
 static const std::string PROFILES_CONFIGS_PATH = "media_profiles.config";
@@ -536,7 +536,7 @@ namespace osrv
 			}
 		}
 
-		void init_service(HttpServer& srv, const osrv::ServerConfigs& server_configs_ptr, const std::string& configs_path, Logger& logger)
+		void init_service(HttpServer& srv, const osrv::ServerConfigs& server_configs_ptr, const std::string& configs_path, ILogger& logger)
         {
             if(logger_ != nullptr)
                 return logger_->Error("MediaService is already initiated!");

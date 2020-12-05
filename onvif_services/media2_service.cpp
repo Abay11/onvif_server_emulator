@@ -1,7 +1,7 @@
 #include "media2_service.h"
 #include "media_service.h" // to use some util functions
 
-#include "../Logger.hpp"
+#include "../Logger.h"
 #include "../utility/XmlParser.h"
 #include "../utility/HttpHelper.h"
 #include "../utility/SoapHelper.h"
@@ -13,7 +13,7 @@
 #include <boost/property_tree/json_parser.hpp>
 #include <boost/property_tree/ptree.hpp>
 
-static Logger* logger_ = nullptr;
+static ILogger* logger_ = nullptr;
 
 static const osrv::ServerConfigs* server_configs;
 static DigestSessionSP digest_session;
@@ -327,7 +327,7 @@ namespace osrv
         }
 
         void init_service(HttpServer& srv, const osrv::ServerConfigs& server_configs_ptr,
-			const std::string& configs_path, Logger& logger)
+			const std::string& configs_path, ILogger& logger)
         {
             if (logger_ != nullptr)
                 return logger_->Error("Media2Service is already initiated!");

@@ -4,6 +4,7 @@
 #include "../onvif_services/media2_service.h"
 #include "../onvif_services/event_service.h"
 #include "../onvif_services/discovery_service.h"
+#include "utility/XmlParser.h"
 
 #include "utility/AuthHelper.h"
 
@@ -20,7 +21,7 @@ namespace osrv
 	
 	AUTH_SCHEME str_to_auth(const std::string& /*scheme*/);
 
-	Server::Server(std::string configs_dir, Logger& log)
+	Server::Server(std::string configs_dir, ILogger& log)
 		:logger_(log)
 		,http_server_instance_(new HttpServer)
 	{
@@ -39,7 +40,20 @@ namespace osrv
 			response->write(SimpleWeb::StatusCode::client_error_bad_request, "Bad request");
 		};
 
+
 		configs_dir += "/";
+		// TODO: as now here we read configs, we can refactor @read_server_configs function and pass ptree 
+		std::ifstream configs_file(configs_dir + COMMON_CONFIGS_NAME);
+		if (configs_file.is_open())
+		{
+			namespace pt = boost::property_tree;
+			pt::ptree configs_tree;
+			pt::read_json(configs_file, configs_tree);
+			auto log_lvl = configs_tree.get<std::string>("loggingLevel", "");
+			if (!log_lvl.empty())
+				logger_.SetLogLevel(ILogger::to_lvl(log_lvl));
+		}
+
 		server_configs_ = read_server_configs(configs_dir + COMMON_CONFIGS_NAME);
 		server_configs_.digest_session_ = std::make_shared<utility::digest::DigestSessionImpl>();
 		//TODO: here is the same list is copied into digest_session, although it's already stored in server_configs
@@ -94,6 +108,7 @@ void Server::run()
 
 ServerConfigs read_server_configs(const std::string& config_path)
 {
+
 	std::ifstream configs_file(config_path);
 	if (!configs_file.is_open())
 		throw std::runtime_error("Could not read a config file");

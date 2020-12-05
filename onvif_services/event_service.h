@@ -2,7 +2,7 @@
 
 #include "../Types.inl"
 
-class Logger;
+class ILogger;
 
 namespace osrv
 {
@@ -11,6 +11,6 @@ namespace osrv
 	namespace event
 	{
 		void init_service(HttpServer& /*srv*/, const osrv::ServerConfigs& /*configs*/,
-			const std::string& /*configs_path*/, Logger& /*logger*/);
+			const std::string& /*configs_path*/, ILogger& /*logger*/);
 	}
 }

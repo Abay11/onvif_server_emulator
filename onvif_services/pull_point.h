@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../Logger.hpp"
+#include "../Logger.h"
 #include "../utility/DateTime.hpp"
 
 #include <queue>
@@ -39,7 +39,7 @@ namespace osrv
 			using pull_messages_handler_t = std::function<void(const std::string& subscription_reference,
 				std::queue<NotificationMessage>&& events)>;
 
-			PullPoint(const std::string& subscription_reference, boost::asio::io_context& io_context, const Logger& logger)
+			PullPoint(const std::string& subscription_reference, boost::asio::io_context& io_context, const ILogger& logger)
 				: logger_(&logger)
 				, io_context_(io_context)
 				, subscription_ref_(subscription_reference)
@@ -126,7 +126,7 @@ namespace osrv
 			}
 
 		private:
-			const Logger* logger_;
+			const ILogger* logger_;
 			boost::asio::io_context& io_context_;
 			boost::asio::steady_timer timeout_timer_;
 
@@ -215,7 +215,7 @@ namespace osrv
 		class NotificationsManager
 		{
 		public:
-			NotificationsManager(const Logger& logger)
+			NotificationsManager(const ILogger& logger)
 				:
 				logger_(&logger)
 			{
@@ -288,7 +288,7 @@ namespace osrv
 			void do_response(const std::string& /*ref*/, std::shared_ptr<HttpServer::Response> /*response*/);
 
 		private:
-			const Logger* logger_;
+			const ILogger* logger_;
 
 			boost::asio::io_context io_context_;
 			using work_t = boost::asio::io_context::work;

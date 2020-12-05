@@ -4,7 +4,7 @@
 
 #include <boost/property_tree/ptree_fwd.hpp>
 
-class Logger;
+class ILogger;
 
 namespace osrv
 {
@@ -13,7 +13,7 @@ namespace osrv
 	namespace media
 	{
 		void init_service(HttpServer& /*srv*/, const osrv::ServerConfigs& /*configs*/,
-			const std::string& /*configs_path*/, Logger& /*logger*/);
+			const std::string& /*configs_path*/, ILogger& /*logger*/);
 
 		namespace util
 		{

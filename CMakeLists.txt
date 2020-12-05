@@ -62,7 +62,7 @@ source_group("OnvifServices" FILES ${SERVICES_SRC})
 source_group("Utility" FILES ${UTILITY_SRC})
 
 add_library(onvif_server STATIC
-	Logger.hpp
+	Logger.h
 	Types.inl
 	Server.cpp
 	Server.h
@@ -70,6 +70,9 @@ add_library(onvif_server STATIC
 	RtspServer.h
 	"${SERVICES_SRC}"
 	"${UTILITY_SRC}"
+
+	LoggerFactories.h
+	ConsoleLogger.h
 )
 
 add_executable(main main.cpp)

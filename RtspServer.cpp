@@ -1,5 +1,5 @@
 #include "RtspServer.h"
-#include "Logger.hpp"
+#include "Logger.h"
 
 #include <gst/gst.h>
 #include <gst/rtsp-server/rtsp-server.h>
@@ -11,7 +11,7 @@ namespace osrv
 {
 	namespace rtsp
 	{
-		Server::Server(Logger* logger, const char* addr, const char* port)
+		Server::Server(ILogger* logger, const char* addr, const char* port)
 			:logger_(logger),
 			rtsp_addr_(addr),
 			rtsp_port_(port)

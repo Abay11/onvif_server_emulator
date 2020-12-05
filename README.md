@@ -18,6 +18,7 @@ Each ONVIF service is implemented as a separate instance. Each service may have 
 
 "authentication" - current authentication method is choosen via this variable. Any values from "authenticationMethods" can be used.
 "authenticationMethods" - enums available values. Here is they desctiption: "none" - authentication is not required; "ws-security" - only WS-Security; "digest" - only digest
+"loggingLevel" - allowed values: ERROR, WARN, INFO, DEBUG, TRACE. Values list from highegt to lowest priority, i.e. if used level is INFO, all logs will be showed, except DEBUG and TRACE. If value is WARN - only errors and warnings messages will be showed.
 
 ## Device service configs
 

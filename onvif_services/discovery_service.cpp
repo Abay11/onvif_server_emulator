@@ -1,6 +1,6 @@
 #include "discovery_service.h"
 
-#include "../Logger.hpp"
+#include "../Logger.h"
 #include "../utility/XmlParser.h"
 
 #include <thread>
@@ -16,7 +16,7 @@
 #include <boost/property_tree/xml_parser.hpp>
 #include <boost/property_tree/ptree.hpp>
 
-static const Logger* logger_ = nullptr;
+static const ILogger* logger_ = nullptr;
 
 static std::string CONFIGS_PATH; //will be init with the service initialization
 static const std::string DISCOVERY_RESPONSE_FILE = "responses/ProbeMatch.response";
@@ -27,7 +27,7 @@ namespace ba = boost::asio;
 class DiscoveryManager
 {
 public:
-	DiscoveryManager(Logger& logger, std::string&& response)
+	DiscoveryManager(ILogger& logger, std::string&& response)
 		:logger_(&logger),
 		response_(std::move(response)),
 		remote_endpoint_()
@@ -97,8 +97,7 @@ private:
 	void do_send(std::size_t length)
 	{
 		std::string probe_msg(std::begin(data_), std::begin(data_) + length);
-		// TODO Log in Trace level
-		logger_->Debug("A probe's message: " + probe_msg);
+		logger_->Trace("Probe message: " + probe_msg);
 
 		auto probe_tree = exns::to_ptree(probe_msg);
 
@@ -151,7 +150,7 @@ private:
 	}
 
 private:
-Logger* logger_ = nullptr;
+ILogger* logger_ = nullptr;
 
 std::string response_;
 
@@ -171,7 +170,7 @@ namespace osrv
 {
 	namespace discovery
 	{
-		void init_service(const std::string& configs_path, Logger& logger)
+		void init_service(const std::string& configs_path, ILogger& logger)
 		{
 			logger_ = &logger;
 
