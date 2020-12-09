@@ -30,6 +30,11 @@ namespace osrv
 		std::string http_port_;
 		std::string rtsp_port_;
 
+		bool enabled_http_port_forwarding;
+		unsigned short forwarded_http_port;
+		bool enabled_rtsp_port_forwarding;
+		unsigned short forwarded_rtsp_port;
+
 		UsersList_t system_users_;
 		AUTH_SCHEME auth_scheme_{};
 		DigestSessionSP digest_session_;

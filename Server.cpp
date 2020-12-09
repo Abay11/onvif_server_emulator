@@ -55,6 +55,13 @@ namespace osrv
 		}
 
 		server_configs_ = read_server_configs(configs_dir + COMMON_CONFIGS_NAME);
+
+		if (server_configs_.enabled_http_port_forwarding)
+			logger_.Info("HTTP port forwarding simulated on port: " + std::to_string(server_configs_.forwarded_http_port));
+
+		if (server_configs_.enabled_rtsp_port_forwarding)
+			logger_.Info("RTSP port forwarding simulated on port: " + std::to_string(server_configs_.forwarded_rtsp_port));
+
 		server_configs_.digest_session_ = std::make_shared<utility::digest::DigestSessionImpl>();
 		//TODO: here is the same list is copied into digest_session, although it's already stored in server_configs
 		server_configs_.digest_session_->set_users_list(server_configs_.system_users_);
@@ -66,7 +73,7 @@ namespace osrv
 		// event::init_service(*http_server_instance_, server_configs_, configs_dir, log);
 		discovery::init_service(configs_dir, log);
 
-		rtspServer_ = new rtsp::Server(&log, server_configs_.ipv4_address_.c_str(), server_configs_.rtsp_port_.c_str());
+		rtspServer_ = new rtsp::Server(&log, server_configs_);
 	}
 
 	Server::~Server()
@@ -122,6 +129,14 @@ ServerConfigs read_server_configs(const std::string& config_path)
 	read_configs.ipv4_address_ = configs_tree.get<std::string>("addresses.ipv4");
 	read_configs.http_port_ = configs_tree.get<std::string>("addresses.http_port");
 	read_configs.rtsp_port_ = configs_tree.get<std::string>("addresses.rtsp_port");
+
+	read_configs.enabled_http_port_forwarding = configs_tree.get<bool>("portForwardingSimulation.enabled_for_http", false);
+	if (read_configs.enabled_http_port_forwarding)
+		read_configs.forwarded_http_port = configs_tree.get<unsigned short>("portForwardingSimulation.http_port");
+	
+	read_configs.enabled_rtsp_port_forwarding = configs_tree.get<bool>("portForwardingSimulation.enabled_for_rtsp", false);
+	if (read_configs.enabled_rtsp_port_forwarding)
+		read_configs.forwarded_rtsp_port = configs_tree.get<unsigned short>("portForwardingSimulation.rtsp_port");
 
 	auto auth_scheme = configs_tree.get<std::string>("authentication");
 	read_configs.auth_scheme_ = str_to_auth(auth_scheme);

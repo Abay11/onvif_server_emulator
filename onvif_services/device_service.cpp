@@ -35,7 +35,7 @@ static osrv::StringsMap XML_NAMESPACES;
 static std::string CONFIGS_PATH; //will be init with the service initialization
 static const std::string DEVICE_CONFIGS_FILE = "device.config";
 
-static std::string SERVER_ADDRESS = "http://127.0.0.1:8080/";
+static std::string SERVER_ADDRESS; // will be initiated in @init_service()
 
 namespace osrv
 {
@@ -61,7 +61,6 @@ namespace osrv
 					{
 						if (element == "XAddr")
 						{
-							//currently implemented only Loopback address
 							elData = SERVER_ADDRESS + elData;
 						}
 					}
@@ -365,6 +364,13 @@ namespace osrv
 			handlers.emplace_back(new GetSystemDateAndTimeHandler());
 
 			srv.resource["/onvif/device_service"]["POST"] = DeviceServiceHandler;
+
+			SERVER_ADDRESS = "http://";
+			SERVER_ADDRESS += server_configs->ipv4_address_ + ":";
+			SERVER_ADDRESS += server_configs->enabled_http_port_forwarding
+				? std::to_string(server_configs->forwarded_http_port)
+				: server_configs->http_port_;
+			SERVER_ADDRESS += "/";
 
 			logger_->Info("ONVIF Device service is working on " + SERVER_ADDRESS + "onvif/device_service");
 		}
