@@ -10,12 +10,13 @@ class ILogger;
 
 namespace osrv
 {
+	struct ServerConfigs;
 	namespace rtsp
 	{
 		class Server
 		{
 		public:
-			Server(ILogger* logger, const char* addr = "127.0.0.1", const char* port = "8554");
+			Server(ILogger* /*logger*/, ServerConfigs& /*server_configs*/);
 			~Server();
 			void run();
 
@@ -26,8 +27,7 @@ namespace osrv
 			GstRTSPMediaFactory* factoryHighStream;
 			GstRTSPMediaFactory* factoryLowStream;
 
-			std::string rtsp_addr_;
-			std::string rtsp_port_;
+			ServerConfigs* server_configs_ = nullptr;
 
 			std::thread* worker_thread = nullptr;
 

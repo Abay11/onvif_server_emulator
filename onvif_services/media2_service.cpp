@@ -26,9 +26,6 @@ static pt::ptree CONFIGS_TREE;
 static pt::ptree PROFILES_CONFIGS_TREE;
 static osrv::StringsMap XML_NAMESPACES;
 
-static std::string SERVER_ADDRESS = "http://127.0.0.1:8080/";
-
-
 //the list of implemented methods
 static const std::string GetAnalyticsConfigurations = "GetAnalyticsConfigurations";
 static const std::string GetAudioDecoderConfigurations = "GetAudioDecoderConfigurations";
@@ -223,8 +220,8 @@ namespace osrv
 					throw std::runtime_error("Could not find a stream for the requested Media Profile token=" + requested_token);
 
 				pt::ptree response_node;
-				response_node.put("tr2:Uri",
-					"rtsp://127.0.0.1:8554/" + stream_config_it->second.get<std::string>("Uri"));
+				auto rtsp_url = media::util::generate_rtsp_url(*server_configs, stream_config_it->second.get<std::string>("Uri"));
+				response_node.put("tr2:Uri", rtsp_url);
 
 				auto envelope_tree = utility::soap::getEnvelopeTree(XML_NAMESPACES);
 				envelope_tree.put_child("s:Body.tr2:GetStreamUriResponse", response_node);

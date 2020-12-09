@@ -26,8 +26,6 @@ static pt::ptree CONFIGS_TREE;
 static pt::ptree PROFILES_CONFIGS_TREE;
 static osrv::StringsMap XML_NAMESPACES;
 
-static std::string SERVER_ADDRESS = "http://127.0.0.1:8080/";
-
 //the list of implemented methods
 static const std::string GetAudioDecoderConfigurations = "GetAudioDecoderConfigurations";
 static const std::string GetAudioOutputs = "GetAudioOutputs";
@@ -426,8 +424,10 @@ namespace osrv
 					throw std::runtime_error("Could not find a stream for the requested Media Profile.");
 
 				pt::ptree response_node;
+
+				auto rtsp_url = util::generate_rtsp_url(*server_configs, stream_config_it->second.get<std::string>("Uri"));
 				response_node.put("trt:MediaUri.tt:Uri",
-					"rtsp://127.0.0.1:8554/" + stream_config_it->second.get<std::string>("Uri"));
+					rtsp_url);
 				response_node.put("trt:MediaUri.tt:InvalidAfterConnect",
 					stream_config_it->second.get<std::string>("InvalidAfterConnect"));
 				response_node.put("trt:MediaUri.tt:InvalidAfterReboot",
@@ -694,4 +694,15 @@ void osrv::media::util::fill_soap_videosource_configuration(const pt::ptree& con
 		config_node.get<std::string>("Bounds.width"));
 	videosource_node.put("tt:Bounds.<xmlattr>.height",
 		config_node.get<std::string>("Bounds.height"));
+}
+
+std::string osrv::media::util::generate_rtsp_url(const ServerConfigs& server_configs, const std::string& profile_stream_url)
+{
+	std::stringstream rtsp_url;
+	rtsp_url << "rtsp://" << server_configs.ipv4_address_ << ":"
+		<< (server_configs.enabled_rtsp_port_forwarding ? std::to_string(server_configs.forwarded_rtsp_port)
+			: server_configs.rtsp_port_)
+		<< "/" << profile_stream_url;
+
+	return rtsp_url.str();
 }

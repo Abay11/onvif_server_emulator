@@ -1,3 +1,4 @@
+#include "Server.h"
 #include "RtspServer.h"
 #include "Logger.h"
 
@@ -11,10 +12,9 @@ namespace osrv
 {
 	namespace rtsp
 	{
-		Server::Server(ILogger* logger, const char* addr, const char* port)
+		Server::Server(ILogger* logger, ServerConfigs& server_configs)
 			:logger_(logger),
-			rtsp_addr_(addr),
-			rtsp_port_(port)
+			server_configs_(&server_configs)
 		{
 			gst_init(NULL, NULL);
 					
@@ -23,8 +23,8 @@ namespace osrv
 			server_ = gst_rtsp_server_new();
 
 			//FIX_ME: address and port are hardcoded
-			gst_rtsp_server_set_address(server_, addr);
-			gst_rtsp_server_set_service(server_, port);
+			gst_rtsp_server_set_address(server_, server_configs_->ipv4_address_.c_str());
+			gst_rtsp_server_set_service(server_, server_configs_->rtsp_port_.c_str());
 
 			mounts = gst_rtsp_server_get_mount_points(server_);
 			factoryHighStream = gst_rtsp_media_factory_new();
@@ -64,7 +64,7 @@ namespace osrv
 					gst_rtsp_server_attach(server_, NULL);
 
 					int actually_used_port = gst_rtsp_server_get_bound_port(server_);
-					if (stoi(rtsp_port_) != actually_used_port)
+					if (stoi(server_configs_->rtsp_port_) != actually_used_port)
 						logger_->Warn("RTSP Server port is binding on: " + std::to_string(actually_used_port));
 
 					gchar* server_address = gst_rtsp_server_get_address(server_);
