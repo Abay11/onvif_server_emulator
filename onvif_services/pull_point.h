@@ -37,7 +37,8 @@ namespace osrv
 		public:
 
 			using pull_messages_handler_t = std::function<void(const std::string& subscription_reference,
-				std::queue<NotificationMessage>&& events)>;
+				std::queue<NotificationMessage>&& events,
+				std::shared_ptr<HttpServer::Response>)>;
 
 			PullPoint(const std::string& subscription_reference, boost::asio::io_context& io_context, const ILogger& logger)
 				: logger_(&logger)
@@ -56,9 +57,12 @@ namespace osrv
 			}
 
 			// This method is called when a subscriber want to pull events
-			void PullMessages(pull_messages_handler_t handler)
+			void PullMessages(pull_messages_handler_t handler, std::shared_ptr<HttpServer::Response> response)
 			{
 				is_client_waiting_ = true;
+
+				handler_ = handler;
+				response_writer_ = response;
 
 				if (!events_.empty())
 				{
@@ -69,11 +73,9 @@ namespace osrv
 				// Do charge the timeout timer
 				timeout_timer_.cancel();
 				timeout_timer_.expires_after(std::chrono::seconds(timeout_interval_));
-				timeout_timer_.async_wait([&handler, this](const boost::system::error_code& error) {
-						if (error == boost::asio::error::operation_aborted)
-						{
+				timeout_timer_.async_wait([handler,this](const boost::system::error_code& error) {
+						if (error)
 							return;
-						}
 
 						response_to_pullmessages();
 					});
@@ -113,15 +115,14 @@ namespace osrv
 				if (!is_client_waiting_)
 					return;
 
-				logger_->Debug("PullMessages response");
-				
 				// Do serialize all stored events
 
 				// Do copy only less then specified in a PullMessages messages limit
 				// FIX: in current implementation all events is copied
 				std::queue<NotificationMessage> copied_events;
 				copied_events.swap(events_);
-				handler_(subscription_ref_, std::move(copied_events));
+				handler_(subscription_ref_, std::move(copied_events), response_writer_);
+				response_writer_.reset(); // it's required to reset writer ptr, otherwise response will not be written in time
 				is_client_waiting_ = false;
 			}
 
@@ -140,6 +141,7 @@ namespace osrv
 			std::queue<NotificationMessage> events_;
 
 			pull_messages_handler_t handler_;
+			std::shared_ptr<HttpServer::Response> response_writer_;
 
 			bool is_client_waiting_;
 		};
@@ -231,6 +233,9 @@ namespace osrv
 				// depending on subcription filter in a request
 				// need to connection the PullPoint instance only with correspondance event generators
 				// FIX: the current implementation connects PullPoint instances with all generators
+
+				// FIX: current implementation handles only 1 subscriber, if some pullpoint did not be renewed,
+				// it should be deleted by timeout
 				auto test_subscription_reference = "onvif/event_service/s0";
 				auto pp = std::shared_ptr<PullPoint>(new PullPoint(test_subscription_reference, io_context_, *logger_));
 				pullpoints_.push_back(pp);

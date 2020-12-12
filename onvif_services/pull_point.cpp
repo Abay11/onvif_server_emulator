@@ -46,9 +46,10 @@ namespace osrv
 
 			if (pp_it != pullpoints_.end())
 			{
-				(*pp_it)->PullMessages([response, this](const std::string& subscr_ref, std::queue<NotificationMessage> events) {
-						do_response(subscr_ref, response);
-					});
+				(*pp_it)->PullMessages([this](const std::string& subscr_ref, std::queue<NotificationMessage> events,
+						std::shared_ptr<HttpServer::Response> response) {
+							do_response(subscr_ref, response);
+					}, response);
 			}
 			else
 			{
@@ -63,8 +64,6 @@ namespace osrv
 			logger_->Debug("Sending PullPoint response to: " + ref);
 
 			*response << "HTTP/1.1 200 OK\r\n" << "Content-Length: 0\r\n" << "Connection: close\r\n\r\n";
-			
-			response.reset();
 		}
 
 		PullMessagesRequest parse_pullmessages(const std::string& request)

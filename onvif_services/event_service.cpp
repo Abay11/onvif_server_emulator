@@ -252,9 +252,10 @@ namespace osrv
 			notifications_manager = std::unique_ptr<osrv::event::NotificationsManager>(
 				new osrv::event::NotificationsManager(logger));
 
+			// TODO: reading events generating interval from configs
 			// add event generators
 			auto di_event_generator = std::shared_ptr<osrv::event::IEventGenerator>(
-				new event::DInputEventGenerator(3, notifications_manager->get_io_context()));
+				new event::DInputEventGenerator(10, notifications_manager->get_io_context()));
 			notifications_manager->add_generator(di_event_generator);
 
 			notifications_manager->run();
