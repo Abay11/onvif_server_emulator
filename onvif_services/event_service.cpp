@@ -158,7 +158,6 @@ namespace osrv
 				log_->Error(e.what());
 			}
 
-			//auto it = handlers.find(method);
 			auto handler_it = std::find_if(handlers.begin(), handlers.end(),
 				[&method](const utility::http::HandlerSP handler) {
 					return handler->get_name() == method;

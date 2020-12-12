@@ -214,6 +214,8 @@ namespace osrv
 			void generate_event() override;
 		};
 
+		// NotificationsManager class links clients, PullPoint instances and event generators.
+		// Logic of their cooperation work is implemented in this class.
 		class NotificationsManager
 		{
 		public:
@@ -231,7 +233,7 @@ namespace osrv
 			{
 				// When register a new PullPoint
 				// depending on subcription filter in a request
-				// need to connection the PullPoint instance only with correspondance event generators
+				// need to connect a PullPoint instance only with appropriate event generators
 				// FIX: the current implementation connects PullPoint instances with all generators
 
 				// FIX: current implementation handles only 1 subscriber, if some pullpoint did not be renewed,
@@ -255,6 +257,7 @@ namespace osrv
 				const std::string& subscription_reference, int timeout, int msg_limit);
 
 			// Delete PullPoint and cancel all related timers
+			// Upd.: It seems need to delete all existed PullPoint instances, need to clarify how it's required by the standard
 			void Unsubscribe(const std::string& subscription_reference)
 			{
 			}
