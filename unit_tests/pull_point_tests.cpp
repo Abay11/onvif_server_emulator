@@ -1,7 +1,10 @@
 #include <boost/test/unit_test.hpp>
 
 #include "../utility/DateTime.hpp"
-#include "../onvif_services/pull_point.h"
+#include "../utility/XmlParser.h"
+#include "../onvif_services/pullpoint/pull_point.h"
+
+#include <boost/property_tree/ptree.hpp>
 
 
 BOOST_AUTO_TEST_CASE(parse_pullmessages_func_0)
@@ -99,4 +102,21 @@ BOOST_AUTO_TEST_CASE(compare_subscription_references_func)
 
 	BOOST_TEST(true == compare_subscription_references(full_ref, test_subscription_ref));
 	BOOST_TEST(false == compare_subscription_references(full_ref, test_subscription_ref2));
+}
+
+BOOST_AUTO_TEST_CASE(serialize_notification_messages_func)
+{
+	// empty queue
+
+	using namespace osrv::event;
+
+	std::queue<NotificationMessage> msgs;
+	boost::property_tree::ptree res = serialize_notification_messages(msgs);
+
+	auto ctime = exns::find_hierarchy("CurrentTime", res);
+	// FIX
+	// auto ttime = exns::find_hierarchy("TerminationTime", res);
+
+	BOOST_TEST(!ctime.empty());
+	//BOOST_TEST(!ttime.empty());
 }

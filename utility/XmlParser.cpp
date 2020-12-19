@@ -60,6 +60,14 @@ namespace exns
 				}
 				else
 				{
+					// FIX: here seems that current implementation not searching in
+					// all childrens on the same level, like if we have next xml
+					// and if we want value2, it returns empty value
+					// <root>
+					// <value>some</value>
+					// <value2>some2</value>
+					// </root>
+					
 					// On the same level, elements are not the same - return not found
 					return {};
 				}

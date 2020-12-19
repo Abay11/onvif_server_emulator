@@ -2,6 +2,7 @@
 
 #include "../Logger.h"
 #include "../utility/DateTime.hpp"
+#include "event_generators.h"
 
 #include <queue>
 #include <string>
@@ -11,6 +12,7 @@
 #include <boost/asio.hpp>
 #include <boost/signals2.hpp>
 #include <boost/date_time/posix_time/posix_time.hpp>
+#include <boost/property_tree/ptree_fwd.hpp>
 
 #include "../Types.inl"
 #include "../Simple-Web-Server/server_http.hpp"
@@ -146,83 +148,17 @@ namespace osrv
 			bool is_client_waiting_;
 		};
 
-		class IEventGenerator
-		{
-		public:
-			IEventGenerator(int interval, boost::asio::io_context& io_context)
-				:
-				event_interval_(interval)
-				,io_context_(io_context)
-				,alarm_timer_(io_context_)
-			{
-			}
-
-			virtual ~IEventGenerator() {}
-
-			//Before calling this method, no any events should be generated
-			void Run()
-			{
-				schedule_next_alarm();
-			}
-
-			//This will be connected
-			void Connect(std::function<void(NotificationMessage)> f)
-			{
-				event_signal_.connect(f);
-			}
-
-		protected:
-			// This method is should be overrided by implementors.
-			// Implementors should fill a NotificationMessage and emit the signal with it
-			virtual void generate_event()
-			{
-				//	NotificationMessage event_description;
-				// /*do somehow filling event_description...*/
-				// event_signal_(NotificationMessage);
-			}
-
-			void schedule_next_alarm()
-			{
-				alarm_timer_.expires_after(std::chrono::seconds(event_interval_));
-				alarm_timer_.async_wait([this](const boost::system::error_code& error) {
-							if(error == boost::asio::error::operation_aborted)
-								return;
-
-							generate_event();
-
-							schedule_next_alarm();
-						}
-					);
-			}
-
-		protected:
-			boost::signals2::signal<void(NotificationMessage)> event_signal_;
-
-		protected:
-			const int event_interval_;
-
-			boost::asio::io_context& io_context_;
-			boost::asio::steady_timer alarm_timer_;
-		};
-
-		class DInputEventGenerator : public IEventGenerator
-		{
-		public:
-			DInputEventGenerator(int /*interval*/, boost::asio::io_context& /*io_context*/);
-
-		protected:
-			void generate_event() override;
-		};
 
 		// NotificationsManager class links clients, PullPoint instances and event generators.
 		// Logic of their cooperation work is implemented in this class.
 		class NotificationsManager
 		{
 		public:
-			NotificationsManager(const ILogger& logger)
-				:
-				logger_(&logger)
+			NotificationsManager(const ILogger& logger, const osrv::StringsMap& xml_namespaces)
+				: logger_(&logger)
 			{
+				// XML namespaces are those, which added in the beginning of responses
+				xml_namespaces_ = &xml_namespaces;
 			}
 
 			// This method is used to handle corresponding Onvif PullPoint subscription request
@@ -243,6 +179,12 @@ namespace osrv
 				pullpoints_.push_back(pp);
 				for (auto& eg : event_generators_)
 				{
+					// It's may increase waiting time for already connected clients
+					// and now it properly works only for 1 subscriber
+					// but it's help to notifiying that one exactly in specified time interval
+					eg->Stop();
+					eg->Run();
+
 					eg->Connect([pp, this](NotificationMessage event_description) {
 							pp->Notify(std::move(event_description));
 						});
@@ -253,8 +195,8 @@ namespace osrv
 
 			// If there are messages for specified subscriber - return them immediately
 			// Otherwise wait until timeout or any events will be generated 
-			void PullMessages(std::shared_ptr<HttpServer::Response> response,
-				const std::string& subscription_reference, int timeout, int msg_limit);
+			void PullMessages(std::shared_ptr<HttpServer::Response> /*response*/,
+				const std::string& /*subscription_reference*/, const std::string& /*msg_id*/, int /*timeout*/, int /*msg_limit*/);
 
 			// Delete PullPoint and cancel all related timers
 			// Upd.: It seems need to delete all existed PullPoint instances, need to clarify how it's required by the standard
@@ -293,7 +235,8 @@ namespace osrv
 			~NotificationsManager() {}
 
 		private:
-			void do_response(const std::string& /*ref*/, std::shared_ptr<HttpServer::Response> /*response*/);
+			void do_pullmessages_response(const std::string& /*ref*/, const std::string& /*msg_id*/,
+				std::queue<NotificationMessage>&& /*events*/, std::shared_ptr<HttpServer::Response> /*response*/);
 
 		private:
 			const ILogger* logger_;
@@ -307,6 +250,8 @@ namespace osrv
 			std::vector<std::shared_ptr<PullPoint>> pullpoints_;
 
 			std::vector<std::shared_ptr<IEventGenerator>> event_generators_;
+
+			const osrv::StringsMap* xml_namespaces_ = nullptr;
 		};
 
 		struct PullMessagesRequest
@@ -316,6 +261,7 @@ namespace osrv
 
 			std::string header_action;
 			std::string header_to;
+			std::string msg_id;
 		};
 
 		PullMessagesRequest parse_pullmessages(const std::string&);
@@ -325,6 +271,8 @@ namespace osrv
 		//return compare references without address, only end
 		bool compare_subscription_references(const std::string& /*ref_with_address_prefix*/,
 			const std::string& /*reference_path*/);
+
+		boost::property_tree::ptree serialize_notification_messages(std::queue<NotificationMessage>& /*messages*/);
 	}
 
 }

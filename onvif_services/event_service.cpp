@@ -5,7 +5,7 @@
 #include "../utility/XmlParser.h"
 #include "../utility/HttpHelper.h"
 #include "../utility/SoapHelper.h"
-#include "pull_point.h"
+#include "pullpoint/pull_point.h"
 
 #include "../Simple-Web-Server/server_http.hpp"
 
@@ -90,11 +90,11 @@ namespace osrv
 
 			auto parsed_request = parse_pullmessages(request->content.string());
 
-			const static std::string ACTION_PULLMESSAGESS = "http://www.onvif.org/ver10/events/wsdl/PullPointSubscription/PullMessagesRequest";
-			if (parsed_request.header_action == ACTION_PULLMESSAGESS)
+			const static std::string ACTION_PULLMESSAGES = "http://www.onvif.org/ver10/events/wsdl/PullPointSubscription/PullMessagesRequest";
+			if (parsed_request.header_action == ACTION_PULLMESSAGES)
 			{
 				// NOTE: current implementation reads a timeout from the configuration and ignores a value in the request
-				notifications_manager->PullMessages(response, parsed_request.header_to, EVENT_CONFIGS_TREE.get<int>("PullPoint.Timeout"),
+				notifications_manager->PullMessages(response, parsed_request.header_to, parsed_request.msg_id, EVENT_CONFIGS_TREE.get<int>("PullPoint.Timeout"),
 					parsed_request.messages_limit);
 			}
 			
@@ -249,7 +249,7 @@ namespace osrv
 				XML_NAMESPACES.insert({ n.first, n.second.get_value<std::string>() });
 
 			notifications_manager = std::unique_ptr<osrv::event::NotificationsManager>(
-				new osrv::event::NotificationsManager(logger));
+				new osrv::event::NotificationsManager(logger, XML_NAMESPACES));
 
 			// TODO: reading events generating interval from configs
 			// add event generators
