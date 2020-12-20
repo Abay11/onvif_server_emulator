@@ -43,6 +43,38 @@ namespace osrv
 			}
 		}
 
+		void NotificationsManager::Renew(std::shared_ptr<HttpServer::Response> response, const std::string& header_to, const std::string& header_msg_id)
+		{
+			if (!xml_namespaces_)
+				throw std::runtime_error("XML namespaces not initialized in NotificationManager!");
+			
+			logger_->Debug("Sending RenewRequest: " + header_to);
+
+			namespace pt = boost::property_tree;
+
+			pt::ptree analytics_configs;
+			auto envelope_tree = utility::soap::getEnvelopeTree(*xml_namespaces_);
+
+			envelope_tree.add("s:Header.wsa:MessageID", header_msg_id);
+			envelope_tree.add("s:Header.wsa:To", "http://www.w3.org/2005/08/addressing/anonymous");
+			envelope_tree.add("s:Header.wsa:Action", "http://www.onvif.org/ver10/events/wsdl/PullPointSubscription/PullMessagesResponse");
+
+			pt::ptree response_node;
+			response_node.add("wsnt:CurrentTime", utility::datetime::system_utc_datetime());
+			response_node.add("wsnt:TerminationTime",
+				utility::datetime::posix_datetime_to_utc(boost::posix_time::microsec_clock::universal_time()
+					+ boost::posix_time::seconds(60)));
+
+			envelope_tree.add_child("s:Body.wsnt:RenewResponse", response_node);
+			pt::ptree root_tree;
+			root_tree.put_child("s:Envelope", envelope_tree);
+
+			std::ostringstream os;
+			pt::write_xml(os, root_tree);
+
+			utility::http::fillResponseWithHeaders(*response, os.str());
+		}
+
 		void NotificationsManager::do_pullmessages_response(const std::string& subscr_ref, const std::string& msg_id,
 			std::queue<NotificationMessage>&& events, std::shared_ptr<HttpServer::Response> response)
 		{
@@ -78,26 +110,6 @@ namespace osrv
 			pt::write_xml(os, root_tree);
 
 			utility::http::fillResponseWithHeaders(*response, os.str());
-		}
-
-		PullMessagesRequest parse_pullmessages(const std::string& request)
-		{
-			PullMessagesRequest result;
-
-			auto copy = request;
-			std::istringstream is(copy);
-
-			namespace pt = boost::property_tree;
-			pt::ptree xml_tree;
-			pt::xml_parser::read_xml(is, xml_tree);
-
-			result.header_action = exns::find_hierarchy("Envelope.Header.Action", xml_tree);
-			result.msg_id = exns::find_hierarchy("Envelope.Header.MessageID", xml_tree);
-			result.header_to = exns::find_hierarchy("Envelope.Header.To", xml_tree);
-			result.timeout = exns::find_hierarchy("Envelope.Body.PullMessages.Timeout", xml_tree);
-			result.messages_limit = std::stoi((exns::find_hierarchy("Envelope.Body.PullMessages.MessageLimit", xml_tree)));
-
-			return result;
 		}
 
 		bool compare_subscription_references(const std::string& full_ref, const std::string& short_ref)

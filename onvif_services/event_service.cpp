@@ -59,7 +59,9 @@ namespace osrv
 
 				envelope_tree.add("s:Header.wsa:Action", "http://www.onvif.org/ver10/events/wsdl/EventPortType/CreatePullPointSubscriptionResponse");
 
-				std::string sub_ref = "http://127.0.0.1:8080/";
+				std::string sub_ref = "http://";
+				sub_ref += server_configs->ipv4_address_ + ":" + server_configs->http_port_ + "/";
+
 				auto pullpoint = notifications_manager->CreatePullPoint();
 				sub_ref += pullpoint->GetSubscriptionReference();
 
@@ -82,24 +84,48 @@ namespace osrv
 		};
 
 		//PullPoint port entrance handler
-		void PullPointRequestsHandler(std::shared_ptr<HttpServer::Response> response,
+		void PullPointPortDefaultHandler(std::shared_ptr<HttpServer::Response> response,
 			std::shared_ptr<HttpServer::Request> request)
 		{
 			//osrv::auth::SECURITY_LEVELS::READ_MEDIA
 			log_->Debug("Handling PullPoint request: " + request->method + " " + request->path);
 
-			auto parsed_request = parse_pullmessages(request->content.string());
+			auto request_tree = exns::to_ptree(request->content.string());
+
+			//auto parsed_request = parse_pullmessages(request->content.string());
+
+			auto header_action = exns::find_hierarchy("Envelope.Header.Action", request_tree);
+			auto header_message_id = exns::find_hierarchy("Envelope.Header.MessageID", request_tree);
+			auto header_to = exns::find_hierarchy("Envelope.Header.To", request_tree);
 
 			const static std::string ACTION_PULLMESSAGES = "http://www.onvif.org/ver10/events/wsdl/PullPointSubscription/PullMessagesRequest";
-			if (parsed_request.header_action == ACTION_PULLMESSAGES)
+			const static std::string ACTION_RENEWREQUEST = "http://docs.oasis-open.org/wsn/bw-2/SubscriptionManager/RenewRequest";
+
+			if (header_action == ACTION_PULLMESSAGES)
 			{
+				auto timeout = exns::find_hierarchy("Envelope.Body.PullMessages.Timeout", request_tree);
+				auto messages_limit = std::stoi((exns::find_hierarchy("Envelope.Body.PullMessages.MessageLimit", request_tree)));
+
 				// NOTE: current implementation reads a timeout from the configuration and ignores a value in the request
-				notifications_manager->PullMessages(response, parsed_request.header_to, parsed_request.msg_id, EVENT_CONFIGS_TREE.get<int>("PullPoint.Timeout"),
-					parsed_request.messages_limit);
-			}
+				notifications_manager->PullMessages(response, header_to,
+					header_message_id,
+					EVENT_CONFIGS_TREE.get<int>("PullPoint.Timeout"),
+					messages_limit);
 			
-			// If there was no error, a response will be send asynchronously
-			// *response << "HTTP/1.1 200 OK\r\n" << "Content-Length: 0\r\n" << "Connection: close\r\n" << "\r\n";
+				// If there was no error, a response will be send asynchronously
+			}
+			else if (header_action == ACTION_RENEWREQUEST)
+			{
+				// it's not need now
+				// auto termination_time = exns::find_hierarchy("Envelope.Body.PullMessages.TerminationTime", request_tree);
+				
+				notifications_manager->Renew(response, header_to, header_message_id);
+			}
+			else
+			{
+				// TODO: send something
+				// *response << "HTTP/1.1 400 Bad request\r\n" << "Content-Length: 0\r\n" << "Connection: close\r\n" << "\r\n";
+			}
 		}
 		
 		//EVENTS SERVICE PORT
@@ -270,7 +296,7 @@ namespace osrv
 			//register a default handler for the Pullpoint requests
 			//NOTE: this path pattern should be match the one generated
 			//in the NotificationsManager for a new subscription
-			srv.resource["/onvif/event_service/s([0-9]+)"]["POST"] = PullPointRequestsHandler;
+			srv.resource["/onvif/event_service/s([0-9]+)"]["POST"] = PullPointPortDefaultHandler;
 		}
 
 	}

@@ -204,6 +204,8 @@ namespace osrv
 			{
 			}
 
+			void Renew(std::shared_ptr<HttpServer::Response> response, const std::string& header_to, const std::string& header_msg_id);
+
 			void run()
 			{
 				for (auto& eg : event_generators_)
@@ -263,8 +265,6 @@ namespace osrv
 			std::string header_to;
 			std::string msg_id;
 		};
-
-		PullMessagesRequest parse_pullmessages(const std::string&);
 
 		void pullmessages_response_to_soap(PullPoint);
 
