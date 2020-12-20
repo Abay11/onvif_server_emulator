@@ -99,7 +99,7 @@ namespace osrv
 			envelope_tree.add("s:Header.wsa:To", "http://www.w3.org/2005/08/addressing/anonymous");
 			envelope_tree.add("s:Header.wsa:Action", "http://www.onvif.org/ver10/events/wsdl/PullPointSubscription/PullMessagesResponse");
 
-			pt::ptree response_node = serialize_notification_messages(events);
+			pt::ptree response_node = serialize_notification_messages(events, subscr_ref);
 
 			envelope_tree.add_child("s:Body.tet:PullMessagesResponse", response_node);
 
@@ -122,7 +122,8 @@ namespace osrv
 				short_ref.begin(), short_ref.end()) != full_ref.end();
 		}
 
-		boost::property_tree::ptree serialize_notification_messages(std::queue<NotificationMessage>& msgs)
+		boost::property_tree::ptree serialize_notification_messages(std::queue<NotificationMessage>& msgs,
+			const std::string& subscription_ref)
 		{
 			namespace pt = boost::property_tree;
 			pt::ptree result;
@@ -131,6 +132,24 @@ namespace osrv
 			{
 				auto msg = msgs.front();
 				msgs.pop();
+
+				pt::ptree msg_node;
+				msg_node.add("wsnt:SubscriptionReference.wsa:Address", "http://192.168.43.120:8080/" + subscription_ref);
+				msg_node.add("wsnt:Topic", msg.topic);
+				msg_node.add("wsnt:Topic.<xmlattr>.Dialect", "http://docs.oasis-open.org/wsn/t-1/TopicExpression/Concrete");
+				
+				msg_node.add("wsnt:ProducerReference.wsa:Address", "http://192.168.43.120:8080/onvif/event_service");
+				
+				msg_node.add("wsnt:Message.tt:Message.<xmlattr>.PropertyOperation", msg.property_operation);
+				msg_node.add("wsnt:Message.tt:Message.<xmlattr>.UtcTime", msg.utc_time);
+
+				msg_node.add("wsnt:Message.tt:Message.tt:Source.SimpleItem.<xmlattr>.Value", msg.source_value);
+				msg_node.add("wsnt:Message.tt:Message.tt:Source.SimpleItem.<xmlattr>.Name", msg.source_name);
+				
+				msg_node.add("wsnt:Message.tt:Message.tt:Data.SimpleItem.<xmlattr>.Value", msg.data_value);
+				msg_node.add("wsnt:Message.tt:Message.tt:Data.SimpleItem.<xmlattr>.Name", msg.data_name);
+								
+				result.add_child("wsnt:NotificationMessage", msg_node);
 			}
 
 			namespace ptime = boost::posix_time;

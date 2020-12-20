@@ -272,7 +272,8 @@ namespace osrv
 		bool compare_subscription_references(const std::string& /*ref_with_address_prefix*/,
 			const std::string& /*reference_path*/);
 
-		boost::property_tree::ptree serialize_notification_messages(std::queue<NotificationMessage>& /*messages*/);
+		boost::property_tree::ptree serialize_notification_messages(std::queue<NotificationMessage>& /*messages*/,
+			const std::string& /*subscription_ref*/);
 	}
 
 }

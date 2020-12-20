@@ -83,6 +83,9 @@ namespace osrv
 
 		protected:
 			void generate_event() override;
+
+		private:
+			bool state = false;
 		};
 	}
 }

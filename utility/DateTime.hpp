@@ -16,7 +16,7 @@ namespace utility
 			
 			//date format example: 2020-10-27T11:20:42Z
 			//pt::time_facet* tf = new pt::time_facet("%Y-%m-%dT%H:M%:%S:%FZ"); 
-			pt::time_facet* tf = new pt::time_facet("%Y-%m-%dT%H:%M:%SZ"); 
+			pt::time_facet* tf = new pt::time_facet("%Y-%m-%dT%H:%M:%S.%fZ"); 
 			ss.imbue(std::locale(ss.getloc(), tf));
 
 			ss << tm;
@@ -30,7 +30,7 @@ namespace utility
 
 			namespace pt = boost::posix_time;
 			
-			pt::time_facet* tf = new pt::time_facet("%H:%M:%SZ"); 
+			pt::time_facet* tf = new pt::time_facet("%H:%M:%S.%fZ"); 
 			ss.imbue(std::locale(ss.getloc(), tf));
 
 			ss << tm;
