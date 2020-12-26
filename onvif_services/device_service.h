@@ -10,7 +10,7 @@ namespace osrv
 
 	namespace device
 	{
-		void init_service(HttpServer& srv, const osrv::ServerConfigs& /*configs*/,
+		void init_service(HttpServer& srv, osrv::ServerConfigs& /*configs*/,
 			const std::string& /*configs_path*/, ILogger& /*logger*/);
 	}
 }

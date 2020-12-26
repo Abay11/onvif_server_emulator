@@ -5,8 +5,8 @@
 #include "../onvif_services/event_service.h"
 #include "../onvif_services/discovery_service.h"
 #include "utility/XmlParser.h"
-
 #include "utility/AuthHelper.h"
+#include "../onvif_services/physical_components/IDigitalInput.h"
 
 #include "Simple-Web-Server\server_http.hpp"
 
@@ -70,7 +70,7 @@ namespace osrv
 		media::init_service(*http_server_instance_, server_configs_, configs_dir, log);
 		media2::init_service(*http_server_instance_, server_configs_, configs_dir, log);
 		// the event service is not completed yet, comment for master branch for now
-		 event::init_service(*http_server_instance_, server_configs_, configs_dir, log);
+		event::init_service(*http_server_instance_, server_configs_, configs_dir, log);
 		discovery::init_service(configs_dir, log);
 
 		rtspServer_ = new rtsp::Server(&log, server_configs_);
@@ -156,6 +156,28 @@ ServerConfigs read_server_configs(const std::string& config_path)
 	}
 
 	return read_configs;
+}
+
+DigitalInputsList read_digital_inputs(const boost::property_tree::ptree& configs_node)
+{
+	std::vector<std::shared_ptr<IDigitalInput>> result;
+	for (const auto& t : configs_node)
+	{
+		auto di = std::make_shared<SimpleDigitalInputImpl>(SimpleDigitalInputImpl(t.second.get<std::string>("Token")));
+
+		if (t.second.get<bool>("GenerateEvent"))
+		{
+			di->Enable();
+		}
+		else
+		{
+			di->Disable();
+		}
+
+		result.push_back(di);
+	}
+
+	return result;
 }
 
 AUTH_SCHEME str_to_auth(const std::string& scheme)

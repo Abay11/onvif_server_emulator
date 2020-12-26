@@ -44,6 +44,9 @@ FILE(GLOB SERVICES_SRC
 	"onvif_services/discovery_service.cpp"
 	"onvif_services/pullpoint/event_generators.h"
 	"onvif_services/pullpoint/event_generators.cpp"
+	"onvif_services/physical_components/IPhysicalComponent.h"
+  	"onvif_services/physical_components/IDigitalInput.h"
+  	"onvif_services/physical_components/IDigitalInput.cpp"
 )
 
 FILE (GLOB UTILITY_SRC

@@ -17,7 +17,7 @@
 
 static ILogger* logger_ = nullptr;
 
-static const osrv::ServerConfigs* server_configs;
+static osrv::ServerConfigs* server_configs;
 static DigestSessionSP digest_session;
 
 //List of implemented methods
@@ -69,6 +69,9 @@ namespace osrv
 				auto capabilities_config = CONFIGS_TREE.get_child("GetCapabilities");
 				pt::ptree capabilities_node;
 				utility::soap::jsonNodeToXml(capabilities_config, capabilities_node, "tt", XAddrProcessor());
+				
+				// here cound of DI is overrided dynamically depending on the actually count of DI in the config file
+				capabilities_node.add("tt:Device.tt:IO.tt:InputConnectors", server_configs->digital_inputs_.size());
 
 				envelope_tree.add_child("s:Body.tds:GetCapabilitiesResponse.tds:Capabilities", capabilities_node);
 
@@ -336,7 +339,7 @@ namespace osrv
 			}
 		}
 
-		void init_service(HttpServer& srv, const osrv::ServerConfigs& server_configs_ptr, const std::string& configs_path, ILogger& logger)
+		void init_service(HttpServer& srv, osrv::ServerConfigs& server_configs_instance, const std::string& configs_path, ILogger& logger)
 		{
 			if (logger_ != nullptr)
 				return logger_->Error("DeviceService is already initiated!");
@@ -344,8 +347,8 @@ namespace osrv
 			logger_ = &logger;
 			logger_->Debug("Initiating Device service...");
 
-			server_configs = &server_configs_ptr;
-			digest_session = server_configs_ptr.digest_session_;
+			server_configs = &server_configs_instance;
+			digest_session = server_configs_instance.digest_session_;
 
 			CONFIGS_PATH = configs_path;
 
@@ -355,6 +358,8 @@ namespace osrv
 			auto namespaces_tree = CONFIGS_TREE.get_child("Namespaces");
 			for (const auto& n : namespaces_tree)
 				XML_NAMESPACES.insert({ n.first, n.second.get_value<std::string>() });
+
+			server_configs->digital_inputs_ = read_digital_inputs(CONFIGS_TREE.get_child("DigitalInputs"));
 
 			handlers.emplace_back(new GetCapabilitiesHandler());
 			handlers.emplace_back(new GetDeviceInformationHandler());

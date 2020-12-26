@@ -1,7 +1,11 @@
 #include <boost/test/unit_test.hpp>
 
 #include "../Server.h"
+#include "../onvif_services/physical_components/IDigitalInput.h"
 
+#include <boost\property_tree\ptree.hpp>
+
+namespace pt = boost::property_tree;
 BOOST_AUTO_TEST_CASE(read_server_configs_func)
 {
 	const std::string server_configs_path = "../../unit_tests/test_data/system_users_list_test.config";
@@ -39,4 +43,48 @@ BOOST_AUTO_TEST_CASE(read_server_configs_func)
 	BOOST_TEST(user.login == "u");
 	BOOST_TEST(user.password == "u1");
 	BOOST_TEST(true == (user.type == USER_TYPE::USER));
+}
+
+BOOST_AUTO_TEST_CASE(read_digital_inputs_func)
+{
+
+	/*
+	* Example of DigitalInputs structure
+
+		"DigitalInputs":
+		[
+			{
+				"Token":"digital_input0",
+					"GenerateEvent" : true
+			}
+		]
+	*
+	*/
+
+
+	pt::ptree configs_node;
+	pt::ptree di_config_0;
+	di_config_0.add("Token", "digital_input0");
+	di_config_0.add("GenerateEvent", true);
+	configs_node.add_child("", di_config_0);
+	
+	pt::ptree di_config_1;
+	di_config_1.add("Token", "digital_input1");
+	di_config_1.add("GenerateEvent", false);
+	configs_node.add_child("", di_config_1);
+	
+	BOOST_TEST(2 == configs_node.size());
+
+	auto result = osrv::read_digital_inputs(configs_node);
+
+	BOOST_TEST(2 == result.size());
+
+	auto di0 = result[0];
+	BOOST_TEST("digital_input0" == di0->GetToken());
+	BOOST_TEST(true == di0->IsEnabled());
+	
+	auto di1 = result[1];
+	BOOST_TEST("digital_input1" == di1->GetToken());
+	BOOST_TEST(false == di1->IsEnabled());
+	
 }

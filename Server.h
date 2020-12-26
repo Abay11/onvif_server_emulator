@@ -5,6 +5,7 @@
 #include "RtspServer.h"
 #include "utility/HttpDigestHelper.h"
 #include "onvif_services\discovery_service.h"
+#include "onvif_services\physical_components\IDigitalInput.h"
 
 #include <memory>
 
@@ -38,6 +39,8 @@ namespace osrv
 		UsersList_t system_users_;
 		AUTH_SCHEME auth_scheme_{};
 		DigestSessionSP digest_session_;
+
+		DigitalInputsList digital_inputs_;
 	};
 
 	class Server
@@ -62,4 +65,6 @@ namespace osrv
 	};
 	
 	ServerConfigs read_server_configs(const std::string& /*config_path*/);
+
+	DigitalInputsList read_digital_inputs(const boost::property_tree::ptree& /*config_node*/);
 }
