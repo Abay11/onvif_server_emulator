@@ -279,8 +279,9 @@ namespace osrv
 
 			// TODO: reading events generating interval from configs
 			// add event generators
-			auto di_event_generator = std::shared_ptr<osrv::event::IEventGenerator>(
+			auto di_event_generator = std::shared_ptr<osrv::event::DInputEventGenerator>(
 				new event::DInputEventGenerator(10, notifications_manager->get_io_context()));
+			di_event_generator->SetDigitalInputsList(server_configs->digital_inputs_);
 			notifications_manager->add_generator(di_event_generator);
 
 			notifications_manager->run();

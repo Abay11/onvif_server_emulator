@@ -14,21 +14,34 @@ namespace osrv
 		{
 		}
 
+		void DInputEventGenerator::SetDigitalInputsList(const DigitalInputsList& di_list)
+		{
+			di_list_ = &di_list;
+		}
+
 		void DInputEventGenerator::generate_event()
 		{
-			NotificationMessage nm;
-			nm.topic = "tns1:Device/Trigger/DigitalInput";
-			nm.utc_time = utility::datetime::system_utc_datetime();
-			nm.property_operation = "Changed";
-			nm.source_name = "InputToken";
-			nm.source_value = "DIGIT_INPUT_0";
-			nm.data_name = "LogicalState";
+			if (!di_list_)
+				return;
 
-			// each time invert state
-			state != state;
-			nm.data_value = state ? "true" : "false";
+			for (const auto& di : *di_list_)
+			{
+				if (!di->IsEnabled())
+					continue;
 
-			event_signal_(nm);
+				NotificationMessage nm;
+				nm.topic = "tns1:Device/Trigger/DigitalInput";
+				nm.utc_time = utility::datetime::system_utc_datetime();
+				nm.property_operation = "Changed";
+				nm.source_name = "InputToken";
+				nm.source_value = di->GetToken();
+				nm.data_name = "LogicalState";
+
+				// each time invert state
+				nm.data_value = di->InvertState() ? "true" : "false";
+
+				event_signal_(nm);
+			}
 		}
 
 	}

@@ -163,11 +163,13 @@ DigitalInputsList read_digital_inputs(const boost::property_tree::ptree& configs
 	std::vector<std::shared_ptr<IDigitalInput>> result;
 	for (const auto& t : configs_node)
 	{
-		auto di = std::make_shared<SimpleDigitalInputImpl>(SimpleDigitalInputImpl(t.second.get<std::string>("Token")));
+		auto di = std::make_shared<SimpleDigitalInputImpl>(
+			SimpleDigitalInputImpl(t.second.get<std::string>("Token"),
+				t.second.get<bool>("InitialState")));
 
 		if (t.second.get<bool>("GenerateEvent"))
 		{
-			di->Enable();
+			di->Enable();			
 		}
 		else
 		{

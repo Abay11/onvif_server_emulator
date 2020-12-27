@@ -1,5 +1,7 @@
 #pragma once
 
+#include "../onvif_services/physical_components/IDigitalInput.h"
+
 #include <functional>
 
 #include <boost/signals2.hpp>
@@ -81,11 +83,16 @@ namespace osrv
 		public:
 			DInputEventGenerator(int /*interval*/, boost::asio::io_context& /*io_context*/);
 
+			// If the member DigitalInputsList is not initialized, events will not be generated
+			void SetDigitalInputsList(const DigitalInputsList& /*di_list*/);
+
 		protected:
 			void generate_event() override;
 
 		private:
 			bool state = false;
+			const DigitalInputsList* di_list_ = nullptr;
+
 		};
 	}
 }
