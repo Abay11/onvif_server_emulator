@@ -134,20 +134,21 @@ namespace osrv
 				msgs.pop();
 
 				pt::ptree msg_node;
-				msg_node.add("wsnt:SubscriptionReference.wsa:Address", "http://192.168.43.120:8080/" + subscription_ref);
+				// TODO: delete all code related to these parameters, therefore they are not needed is this logic
+				//msg_node.add("wsnt:SubscriptionReference.wsa:Address", "http://192.168.43.120:8080/" + subscription_ref);	// <--- these  two are really
+				//msg_node.add("wsnt:ProducerReference.wsa:Address", "http://192.168.43.120:8080/onvif/event_service");		// <--- required??? - udp: NOO
+
 				msg_node.add("wsnt:Topic", msg.topic);
-				msg_node.add("wsnt:Topic.<xmlattr>.Dialect", "http://docs.oasis-open.org/wsn/t-1/TopicExpression/Concrete");
-				
-				msg_node.add("wsnt:ProducerReference.wsa:Address", "http://192.168.43.120:8080/onvif/event_service");
+				msg_node.add("wsnt:Topic.<xmlattr>.Dialect", "http://www.onvif.org/ver10/tev/topicExpression/ConcreteSet");
 				
 				msg_node.add("wsnt:Message.tt:Message.<xmlattr>.PropertyOperation", msg.property_operation);
 				msg_node.add("wsnt:Message.tt:Message.<xmlattr>.UtcTime", msg.utc_time);
 
-				msg_node.add("wsnt:Message.tt:Message.tt:Source.SimpleItem.<xmlattr>.Value", msg.source_value);
-				msg_node.add("wsnt:Message.tt:Message.tt:Source.SimpleItem.<xmlattr>.Name", msg.source_name);
+				msg_node.add("wsnt:Message.tt:Message.tt:Source.tt:SimpleItem.<xmlattr>.Value", msg.source_value);
+				msg_node.add("wsnt:Message.tt:Message.tt:Source.tt:SimpleItem.<xmlattr>.Name", msg.source_name);
 				
-				msg_node.add("wsnt:Message.tt:Message.tt:Data.SimpleItem.<xmlattr>.Value", msg.data_value);
-				msg_node.add("wsnt:Message.tt:Message.tt:Data.SimpleItem.<xmlattr>.Name", msg.data_name);
+				msg_node.add("wsnt:Message.tt:Message.tt:Data.tt:SimpleItem.<xmlattr>.Value", msg.data_value);
+				msg_node.add("wsnt:Message.tt:Message.tt:Data.tt:SimpleItem.<xmlattr>.Name", msg.data_name);
 								
 				result.add_child("wsnt:NotificationMessage", msg_node);
 			}
