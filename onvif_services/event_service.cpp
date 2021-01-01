@@ -88,18 +88,17 @@ namespace osrv
 			std::shared_ptr<HttpServer::Request> request)
 		{
 			//osrv::auth::SECURITY_LEVELS::READ_MEDIA
-			log_->Debug("Handling PullPoint request: " + request->method + " " + request->path);
-
 			auto request_tree = exns::to_ptree(request->content.string());
-
-			//auto parsed_request = parse_pullmessages(request->content.string());
 
 			auto header_action = exns::find_hierarchy("Envelope.Header.Action", request_tree);
 			auto header_message_id = exns::find_hierarchy("Envelope.Header.MessageID", request_tree);
 			auto header_to = exns::find_hierarchy("Envelope.Header.To", request_tree);
+			
+			log_->Debug("Handling PullPoint/" + header_action + ". Subscription: " + request->path);
 
 			const static std::string ACTION_PULLMESSAGES = "http://www.onvif.org/ver10/events/wsdl/PullPointSubscription/PullMessagesRequest";
 			const static std::string ACTION_RENEWREQUEST = "http://docs.oasis-open.org/wsn/bw-2/SubscriptionManager/RenewRequest";
+			const static std::string ACTION_SETSYNCHRONIZATIONPOINT = "http://www.onvif.org/ver10/events/wsdl/PullPointSubscription/SetSynchronizationPointRequest";
 
 			if (header_action == ACTION_PULLMESSAGES)
 			{
@@ -118,8 +117,34 @@ namespace osrv
 			{
 				// it's not need now
 				// auto termination_time = exns::find_hierarchy("Envelope.Body.PullMessages.TerminationTime", request_tree);
-				
 				notifications_manager->Renew(response, header_to, header_message_id);
+			}
+			else if (header_action == ACTION_SETSYNCHRONIZATIONPOINT)
+			{
+				try {
+					notifications_manager->SetSynchronizationPoint(header_to);
+
+					namespace pt = boost::property_tree;
+					auto envelope_tree = utility::soap::getEnvelopeTree(XML_NAMESPACES);
+					envelope_tree.add("s:Header.wsa:MessageID", header_message_id);
+					envelope_tree.add("s:Header.wsa:To", "http://www.w3.org/2005/08/addressing/anonymous");
+					envelope_tree.add("s:Header.wsa:Action", "http://www.onvif.org/ver10/events/wsdl/PullPointSubscription/SetSynchronizationPointResponse");
+
+					envelope_tree.add("s:Body.tet:SetSynchronizationPointResponse", "");
+
+					pt::ptree root_tree;
+					root_tree.put_child("s:Envelope", envelope_tree);
+
+					std::ostringstream os;
+					pt::write_xml(os, root_tree);
+
+					utility::http::fillResponseWithHeaders(*response, os.str());
+				}
+				catch (const std::exception& e)
+				{
+					utility::http::fillResponseWithHeaders(*response,
+						e.what(), utility::http::ClientErrorDefaultWriter);
+				}
 			}
 			else
 			{
@@ -280,11 +305,11 @@ namespace osrv
 			// TODO: reading events generating interval from configs
 			// add event generators
 			auto di_event_generator = std::shared_ptr<osrv::event::DInputEventGenerator>(
-				new event::DInputEventGenerator(10, notifications_manager->get_io_context()));
+				new event::DInputEventGenerator(10, notifications_manager->GetIoContext()));
 			di_event_generator->SetDigitalInputsList(server_configs->digital_inputs_);
-			notifications_manager->add_generator(di_event_generator);
+			notifications_manager->AddGenerator(di_event_generator);
 
-			notifications_manager->run();
+			notifications_manager->Run();
 
 			//event service handlers
 			handlers.emplace_back(new GetEventPropertiesHandler{});

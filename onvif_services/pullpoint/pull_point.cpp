@@ -17,6 +17,95 @@ namespace osrv
 
 	namespace event {
 
+		void PullPoint::PullMessages(pull_messages_handler_t handler, std::shared_ptr<HttpServer::Response> response)
+		{
+			is_client_waiting_ = true;
+
+			handler_ = handler;
+			response_writer_ = response;
+
+			if (!events_.empty())
+			{
+				// Response to a subcriber immediately
+				response_to_pullmessages();
+			}
+
+			// Do charge the timeout timer
+			timeout_timer_.cancel();
+			timeout_timer_.expires_after(std::chrono::seconds(timeout_interval_));
+			timeout_timer_.async_wait([handler, this](const boost::system::error_code& error) {
+				if (error)
+					return;
+
+				response_to_pullmessages();
+				});
+		}
+
+		void PullPoint::Notify(NotificationMessage&& event)
+		{
+			events_.push_back(std::move(event));
+
+			response_to_pullmessages();
+		}
+		
+		void PullPoint::response_to_pullmessages()
+		{
+			if (!is_client_waiting_)
+				return;
+
+			// Do serialize all stored events
+
+			// Do copy only less then specified in a PullMessages messages limit
+			// FIX: in current implementation all events is copied
+			std::deque<NotificationMessage> copied_events;
+			copied_events.swap(events_);
+			handler_(subscription_ref_, std::move(copied_events), response_writer_);
+			response_writer_.reset(); // it's required to reset writer ptr, otherwise response will not be written in time
+			is_client_waiting_ = false;
+		}
+		
+		void PullPoint::SetSynchronizationPoint()
+		{
+
+			// I think we should clean already saved NotificationMessages
+			events_.clear();
+
+			for (const auto eg : connected_generators_)
+			{
+				auto gen_ev = eg->GenerateSynchronizationEvent();
+				events_.insert(events_.end(), gen_ev.begin(), gen_ev.end());
+			}
+		}
+		
+		std::shared_ptr<PullPoint> NotificationsManager::CreatePullPoint()
+		{
+			// When register a new PullPoint
+			// depending on subcription filter in a request
+			// need to connect a PullPoint instance only with appropriate event generators
+			// FIX: the current implementation connects PullPoint instances with all generators
+
+			// FIX: current implementation handles only 1 subscriber, if some pullpoint did not be renewed,
+			// it should be deleted by timeout
+			auto test_subscription_reference = "onvif/event_service/s0";
+			auto pp = std::shared_ptr<PullPoint>(new PullPoint(test_subscription_reference, io_context_, *logger_));
+			pullpoints_.push_back(pp);
+			for (auto& eg : event_generators_)
+			{
+				// It's may increase waiting time for already connected clients
+				// and now it properly works only for 1 subscriber
+				// but it's help to notifiying that one exactly in specified time interval
+				eg->Stop();
+				eg->Run();
+
+				eg->Connect([pp, this](NotificationMessage event_description) {
+						pp->Notify(std::move(event_description));
+					});
+				pp->AddGeneratorPtr(eg.get());
+			}
+
+			return pp;
+		}
+		
 		void NotificationsManager::PullMessages(std::shared_ptr<HttpServer::Response> response,
 			const std::string& subscription_reference, const std::string& msg_id, int timeout, int msg_limit)
 		{
@@ -30,7 +119,7 @@ namespace osrv
 
 			if (pp_it != pullpoints_.end())
 			{
-				(*pp_it)->PullMessages([msg_id, this](const std::string& subscr_ref, std::queue<NotificationMessage> events,
+				(*pp_it)->PullMessages([msg_id, this](const std::string& subscr_ref, std::deque<NotificationMessage> events,
 						std::shared_ptr<HttpServer::Response> response) {
 						do_pullmessages_response(subscr_ref, msg_id, std::move(events), response);
 					}, response);
@@ -41,6 +130,21 @@ namespace osrv
 				logger_->Error("Not found subscription reference: " + subscription_reference);
 				return;
 			}
+		}
+
+		void NotificationsManager::SetSynchronizationPoint(const std::string& subscr_ref)
+		{
+			auto pp_it = std::find_if(pullpoints_.cbegin(), pullpoints_.cend(),
+				[subscr_ref](std::shared_ptr<PullPoint> pp) {
+					return compare_subscription_references(subscr_ref, pp->GetSubscriptionReference());
+				});
+
+			if (pp_it == pullpoints_.end())
+			{
+				throw std::runtime_error("Invalid subscription reference");
+			}
+
+			(*pp_it)->SetSynchronizationPoint();
 		}
 
 		void NotificationsManager::Renew(std::shared_ptr<HttpServer::Response> response, const std::string& header_to, const std::string& header_msg_id)
@@ -74,9 +178,27 @@ namespace osrv
 
 			utility::http::fillResponseWithHeaders(*response, os.str());
 		}
+		
+		void NotificationsManager::Run()
+		{
+			for (auto& eg : event_generators_)
+			{
+				eg->Run();
+			}
+
+			io_work_ = std::unique_ptr<work_t>(new work_t(io_context_));
+			
+			worker_thread_ = std::unique_ptr<std::thread>(new std::thread(
+				[this]() {
+					io_context_.run();
+				}
+			));
+
+			logger_->Debug("NotificationsManager is run successfully");
+		}
 
 		void NotificationsManager::do_pullmessages_response(const std::string& subscr_ref, const std::string& msg_id,
-			std::queue<NotificationMessage>&& events, std::shared_ptr<HttpServer::Response> response)
+			std::deque<NotificationMessage>&& events, std::shared_ptr<HttpServer::Response> response)
 		{
 			logger_->Debug("Sending PullPoint response with msg id: " + subscr_ref);
 
@@ -122,7 +244,7 @@ namespace osrv
 				short_ref.begin(), short_ref.end()) != full_ref.end();
 		}
 
-		boost::property_tree::ptree serialize_notification_messages(std::queue<NotificationMessage>& msgs,
+		boost::property_tree::ptree serialize_notification_messages(std::deque<NotificationMessage>& msgs,
 			const std::string& subscription_ref)
 		{
 			namespace pt = boost::property_tree;
@@ -131,7 +253,7 @@ namespace osrv
 			while(!msgs.empty())
 			{
 				auto msg = msgs.front();
-				msgs.pop();
+				msgs.pop_front();
 
 				pt::ptree msg_node;
 				// TODO: delete all code related to these parameters, therefore they are not needed is this logic

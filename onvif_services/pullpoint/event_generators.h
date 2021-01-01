@@ -3,6 +3,7 @@
 #include "../onvif_services/physical_components/IDigitalInput.h"
 
 #include <functional>
+#include <deque>
 
 #include <boost/signals2.hpp>
 #include <boost/asio/io_context.hpp>
@@ -43,6 +44,9 @@ namespace osrv
 			{
 				event_signal_.connect(f);
 			}
+
+			// returns a NotificationMessage with 'PropertyOperation' equals "Initialized"
+			virtual std::deque<NotificationMessage> GenerateSynchronizationEvent() const = 0;
 
 		protected:
 			// This method is should be overrided by implementors.
@@ -85,6 +89,9 @@ namespace osrv
 
 			// If the member DigitalInputsList is not initialized, events will not be generated
 			void SetDigitalInputsList(const DigitalInputsList& /*di_list*/);
+
+			// Inherited via IEventGenerator
+			std::deque<NotificationMessage> GenerateSynchronizationEvent() const override;
 
 		protected:
 			void generate_event() override;

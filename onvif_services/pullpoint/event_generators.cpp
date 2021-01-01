@@ -19,6 +19,29 @@ namespace osrv
 			di_list_ = &di_list;
 		}
 
+		std::deque<NotificationMessage> DInputEventGenerator::GenerateSynchronizationEvent() const
+		{
+			if (!di_list_)
+				return {};
+
+			std::deque<NotificationMessage> result;
+			for (const auto& di : *di_list_)
+			{
+				NotificationMessage nm;
+				nm.topic = "tns1:Device/Trigger/DigitalInput";
+				nm.utc_time = utility::datetime::system_utc_datetime();
+				nm.property_operation = "Initialized";
+				nm.source_name = "InputToken";
+				nm.source_value = di->GetToken();
+				nm.data_name = "LogicalState";
+				nm.data_value = di->GetState() ? "true" : "false";
+
+				result.push_back(nm);
+			}
+
+			return result;
+		}
+
 		void DInputEventGenerator::generate_event()
 		{
 			if (!di_list_)

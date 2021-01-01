@@ -4,7 +4,7 @@
 #include "../utility/DateTime.hpp"
 #include "event_generators.h"
 
-#include <queue>
+#include <deque>
 #include <string>
 #include <thread>
 #include <memory>
@@ -39,7 +39,7 @@ namespace osrv
 		public:
 
 			using pull_messages_handler_t = std::function<void(const std::string& subscription_reference,
-				std::queue<NotificationMessage>&& events,
+				std::deque<NotificationMessage>&& events,
 				std::shared_ptr<HttpServer::Response>)>;
 
 			PullPoint(const std::string& subscription_reference, boost::asio::io_context& io_context, const ILogger& logger)
@@ -53,44 +53,27 @@ namespace osrv
 				current_time_ = boost::posix_time::microsec_clock::universal_time();
 			}
 
+			// NOTE: if this action is not done during initialization,
+			// SetSynchronizationPoint() will return empty list
+			void AddGeneratorPtr(const IEventGenerator* eg)
+			{
+				if(eg)
+					connected_generators_.push_back(eg);
+			}
+
 			std::string GetSubscriptionReference() const
 			{
 				return subscription_ref_;
 			}
 
 			// This method is called when a subscriber want to pull events
-			void PullMessages(pull_messages_handler_t handler, std::shared_ptr<HttpServer::Response> response)
-			{
-				is_client_waiting_ = true;
-
-				handler_ = handler;
-				response_writer_ = response;
-
-				if (!events_.empty())
-				{
-					// Response to a subcriber immediately
-					response_to_pullmessages();
-				}
-
-				// Do charge the timeout timer
-				timeout_timer_.cancel();
-				timeout_timer_.expires_after(std::chrono::seconds(timeout_interval_));
-				timeout_timer_.async_wait([handler,this](const boost::system::error_code& error) {
-						if (error)
-							return;
-
-						response_to_pullmessages();
-					});
-			}
+			void PullMessages(pull_messages_handler_t handler, std::shared_ptr<HttpServer::Response> response);
 
 			// This is method by which event generators should pass events,
 			// a new event should be stored to the queue
-			void Notify(NotificationMessage&& event)
-			{
-				events_.push(std::move(event));
+			void Notify(NotificationMessage&& event);
 
-				response_to_pullmessages();
-			}
+			void SetSynchronizationPoint();
 
 			std::string GetLastRenew()
 			{
@@ -112,21 +95,7 @@ namespace osrv
 			// 1. when PullMessages requested and the event's queue is not empty (response immediately)
 			// 2. when a new event is generated
 			// 3. by timeout timer, if there are no events were generated (response with an empty message)
-			void response_to_pullmessages()
-			{
-				if (!is_client_waiting_)
-					return;
-
-				// Do serialize all stored events
-
-				// Do copy only less then specified in a PullMessages messages limit
-				// FIX: in current implementation all events is copied
-				std::queue<NotificationMessage> copied_events;
-				copied_events.swap(events_);
-				handler_(subscription_ref_, std::move(copied_events), response_writer_);
-				response_writer_.reset(); // it's required to reset writer ptr, otherwise response will not be written in time
-				is_client_waiting_ = false;
-			}
+			void response_to_pullmessages();
 
 		private:
 			const ILogger* logger_;
@@ -140,12 +109,15 @@ namespace osrv
 
 			int max_messages_;
 
-			std::queue<NotificationMessage> events_;
+			std::deque<NotificationMessage> events_;
 
 			pull_messages_handler_t handler_;
 			std::shared_ptr<HttpServer::Response> response_writer_;
 
 			bool is_client_waiting_;
+
+			// supposed to used only to get SynchronizationPoint
+			std::vector<const IEventGenerator*> connected_generators_;
 		};
 
 
@@ -165,71 +137,33 @@ namespace osrv
 			// It's required to generate unique link for each subscriber 
 			// Also need to schedule a subscription expiration timeout - and in that case delete subscription
 			// Returns the created subscription's reference
-			std::shared_ptr<PullPoint> CreatePullPoint()
-			{
-				// When register a new PullPoint
-				// depending on subcription filter in a request
-				// need to connect a PullPoint instance only with appropriate event generators
-				// FIX: the current implementation connects PullPoint instances with all generators
-
-				// FIX: current implementation handles only 1 subscriber, if some pullpoint did not be renewed,
-				// it should be deleted by timeout
-				auto test_subscription_reference = "onvif/event_service/s0";
-				auto pp = std::shared_ptr<PullPoint>(new PullPoint(test_subscription_reference, io_context_, *logger_));
-				pullpoints_.push_back(pp);
-				for (auto& eg : event_generators_)
-				{
-					// It's may increase waiting time for already connected clients
-					// and now it properly works only for 1 subscriber
-					// but it's help to notifiying that one exactly in specified time interval
-					eg->Stop();
-					eg->Run();
-
-					eg->Connect([pp, this](NotificationMessage event_description) {
-							pp->Notify(std::move(event_description));
-						});
-				}
-
-				return pp;
-			}
+			std::shared_ptr<PullPoint> CreatePullPoint();
 
 			// If there are messages for specified subscriber - return them immediately
 			// Otherwise wait until timeout or any events will be generated 
 			void PullMessages(std::shared_ptr<HttpServer::Response> /*response*/,
 				const std::string& /*subscription_reference*/, const std::string& /*msg_id*/, int /*timeout*/, int /*msg_limit*/);
 
+			void SetSynchronizationPoint(const std::string& /*subscr_ref*/);
+
 			// Delete PullPoint and cancel all related timers
 			// Upd.: It seems need to delete all existed PullPoint instances, need to clarify how it's required by the standard
-			void Unsubscribe(const std::string& subscription_reference)
+			void Unsubscribe(const std::string& /*subscription_reference*/)
 			{
 			}
 
-			void Renew(std::shared_ptr<HttpServer::Response> response, const std::string& header_to, const std::string& header_msg_id);
+			void Renew(std::shared_ptr<HttpServer::Response> /*response*/,
+				const std::string& /*header_to*/,
+				const std::string& /*header_msg_id*/);
 
-			void run()
-			{
-				for (auto& eg : event_generators_)
-				{
-					eg->Run();
-				}
+			void Run();
 
-				io_work_ = std::unique_ptr<work_t>(new work_t(io_context_));
-				
-				worker_thread_ = std::unique_ptr<std::thread>(new std::thread(
-					[this]() {
-						io_context_.run();
-					}
-				));
-
-				logger_->Debug("NotificationsManager is run successfully");
-			}
-
-			void add_generator(std::shared_ptr<IEventGenerator> eg)
+			void AddGenerator(std::shared_ptr<IEventGenerator> eg)
 			{
 				event_generators_.push_back(eg);
 			}
 
-			boost::asio::io_context& get_io_context()
+			boost::asio::io_context& GetIoContext()
 			{
 				return io_context_;
 			}
@@ -238,7 +172,7 @@ namespace osrv
 
 		private:
 			void do_pullmessages_response(const std::string& /*ref*/, const std::string& /*msg_id*/,
-				std::queue<NotificationMessage>&& /*events*/, std::shared_ptr<HttpServer::Response> /*response*/);
+				std::deque<NotificationMessage>&& /*events*/, std::shared_ptr<HttpServer::Response> /*response*/);
 
 		private:
 			const ILogger* logger_;
@@ -272,7 +206,7 @@ namespace osrv
 		bool compare_subscription_references(const std::string& /*ref_with_address_prefix*/,
 			const std::string& /*reference_path*/);
 
-		boost::property_tree::ptree serialize_notification_messages(std::queue<NotificationMessage>& /*messages*/,
+		boost::property_tree::ptree serialize_notification_messages(std::deque<NotificationMessage>& /*messages*/,
 			const std::string& /*subscription_ref*/);
 	}
 
