@@ -97,10 +97,10 @@ namespace osrv
 				eg->Stop();
 				eg->Run();
 
-				eg->Connect([pp, this](NotificationMessage event_description) {
+				auto signal_connection = eg->Connect([pp, this](NotificationMessage event_description) {
 						pp->Notify(std::move(event_description));
 					});
-				pp->AddGeneratorPtr(eg.get());
+				pp->AddGenerator(eg.get(), signal_connection);
 			}
 
 			return pp;
@@ -109,13 +109,7 @@ namespace osrv
 		void NotificationsManager::PullMessages(std::shared_ptr<HttpServer::Response> response,
 			const std::string& subscription_reference, const std::string& msg_id, int timeout, int msg_limit)
 		{
-			auto pp_it = std::find_if(pullpoints_.begin(), pullpoints_.end(),
-				[subscription_reference](std::shared_ptr<PullPoint> pp) {
-
-					return compare_subscription_references(subscription_reference,
-						pp->GetSubscriptionReference());
-
-				});
+			auto pp_it = find_pullpoint(pullpoints_, subscription_reference);
 
 			if (pp_it != pullpoints_.end())
 			{
@@ -134,10 +128,7 @@ namespace osrv
 
 		void NotificationsManager::SetSynchronizationPoint(const std::string& subscr_ref)
 		{
-			auto pp_it = std::find_if(pullpoints_.cbegin(), pullpoints_.cend(),
-				[subscr_ref](std::shared_ptr<PullPoint> pp) {
-					return compare_subscription_references(subscr_ref, pp->GetSubscriptionReference());
-				});
+			auto pp_it = find_pullpoint(pullpoints_, subscr_ref);
 
 			if (pp_it == pullpoints_.end())
 			{
@@ -145,6 +136,19 @@ namespace osrv
 			}
 
 			(*pp_it)->SetSynchronizationPoint();
+		}
+
+		void NotificationsManager::Unsubscribe(const std::string& subscription_reference)
+		{
+			auto pp_it = find_pullpoint(pullpoints_, subscription_reference);
+			if (pp_it != pullpoints_.end())
+			{
+				(*pp_it)->DisconnectFromGenerators();
+			}
+			else
+			{
+				// TODO: Probably it should be throwed an exception
+			}
 		}
 
 		void NotificationsManager::Renew(std::shared_ptr<HttpServer::Response> response, const std::string& header_to, const std::string& header_msg_id)
@@ -286,6 +290,17 @@ namespace osrv
 				t);
 
 			return result;
+		}
+
+		PullPoints_t::const_iterator find_pullpoint(const PullPoints_t& pullpoints, const std::string& subscription_reference)
+		{
+			return std::find_if(pullpoints.begin(), pullpoints.end(),
+				[subscription_reference](PullPoints_t::value_type pp) {
+
+					return compare_subscription_references(subscription_reference,
+						pp->GetSubscriptionReference());
+
+				});
 		}
 
 	}

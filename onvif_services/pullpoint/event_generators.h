@@ -40,9 +40,9 @@ namespace osrv
 			}
 
 			//This will be connected
-			void Connect(std::function<void(NotificationMessage)> f)
+			boost::signals2::connection Connect(std::function<void(NotificationMessage)> f)
 			{
-				event_signal_.connect(f);
+				return event_signal_.connect(f);
 			}
 
 			// returns a NotificationMessage with 'PropertyOperation' equals "Initialized"

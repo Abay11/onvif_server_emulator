@@ -53,12 +53,24 @@ namespace osrv
 				current_time_ = boost::posix_time::microsec_clock::universal_time();
 			}
 
+			// Link a connected generator and set a related connection
 			// NOTE: if this action is not done during initialization,
 			// SetSynchronizationPoint() will return empty list
-			void AddGeneratorPtr(const IEventGenerator* eg)
+			void AddGenerator(const IEventGenerator* eg, boost::signals2::connection signal_connection)
 			{
-				if(eg)
+				if (eg)
+				{
 					connected_generators_.push_back(eg);
+					signal_connections_.push_back(signal_connection);
+				}
+			}
+
+			void DisconnectFromGenerators()
+			{
+				for (const auto& s : signal_connections_)
+				{
+					s.disconnect();
+				}
 			}
 
 			std::string GetSubscriptionReference() const
@@ -118,8 +130,9 @@ namespace osrv
 
 			// supposed to used only to get SynchronizationPoint
 			std::vector<const IEventGenerator*> connected_generators_;
+			std::vector<boost::signals2::connection> signal_connections_;
 		};
-
+		using PullPoints_t = std::vector<std::shared_ptr<PullPoint>>;
 
 		// NotificationsManager class links clients, PullPoint instances and event generators.
 		// Logic of their cooperation work is implemented in this class.
@@ -147,10 +160,7 @@ namespace osrv
 			void SetSynchronizationPoint(const std::string& /*subscr_ref*/);
 
 			// Delete PullPoint and cancel all related timers
-			// Upd.: It seems need to delete all existed PullPoint instances, need to clarify how it's required by the standard
-			void Unsubscribe(const std::string& /*subscription_reference*/)
-			{
-			}
+			void Unsubscribe(const std::string& /*subscription_reference*/);
 
 			void Renew(std::shared_ptr<HttpServer::Response> /*response*/,
 				const std::string& /*header_to*/,
@@ -208,6 +218,9 @@ namespace osrv
 
 		boost::property_tree::ptree serialize_notification_messages(std::deque<NotificationMessage>& /*messages*/,
 			const std::string& /*subscription_ref*/);
+
+		PullPoints_t::const_iterator find_pullpoint(const PullPoints_t& /*pullpoints*/,
+			const std::string& /*subscription_reference*/);
 	}
 
 }

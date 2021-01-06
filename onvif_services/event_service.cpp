@@ -99,6 +99,8 @@ namespace osrv
 			const static std::string ACTION_PULLMESSAGES = "http://www.onvif.org/ver10/events/wsdl/PullPointSubscription/PullMessagesRequest";
 			const static std::string ACTION_RENEWREQUEST = "http://docs.oasis-open.org/wsn/bw-2/SubscriptionManager/RenewRequest";
 			const static std::string ACTION_SETSYNCHRONIZATIONPOINT = "http://www.onvif.org/ver10/events/wsdl/PullPointSubscription/SetSynchronizationPointRequest";
+			const static std::string ACTION_UNSUBSCRIBE = "http://docs.oasis-open.org/wsn/bw-2/SubscriptionManager/UnsubscribeRequest";
+		
 
 			if (header_action == ACTION_PULLMESSAGES)
 			{
@@ -145,6 +147,26 @@ namespace osrv
 					utility::http::fillResponseWithHeaders(*response,
 						e.what(), utility::http::ClientErrorDefaultWriter);
 				}
+			}
+			else if(header_action == ACTION_UNSUBSCRIBE)
+			{
+				notifications_manager->Unsubscribe(header_to);
+
+				namespace pt = boost::property_tree;
+				auto envelope_tree = utility::soap::getEnvelopeTree(XML_NAMESPACES);
+				envelope_tree.add("s:Header.wsa:MessageID", header_message_id);
+				envelope_tree.add("s:Header.wsa:To", "http://www.w3.org/2005/08/addressing/anonymous");
+				envelope_tree.add("s:Header.wsa:Action", "http://docs.oasis-open.org/wsn/bw-2/SubscriptionManager/UnsubscribeResponse");
+
+				envelope_tree.add("s:Body.wsnt:UnsubscribeResponse", "");
+
+				pt::ptree root_tree;
+				root_tree.put_child("s:Envelope", envelope_tree);
+
+				std::ostringstream os;
+				pt::write_xml(os, root_tree);
+
+				utility::http::fillResponseWithHeaders(*response, os.str());
 			}
 			else
 			{
