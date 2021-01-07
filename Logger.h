@@ -37,8 +37,8 @@ public:
 			case LVL_ERR: return "ERROR";
 			case LVL_WARN: return "WARN";
 			case LVL_INFO: return "INFO";
-			case LVL_DEBUG: return "DEBUG";
 			case LVL_TRACE: return "TRACE";
+			default: LVL_DEBUG: return "DEBUG";
 		}
 	}
 

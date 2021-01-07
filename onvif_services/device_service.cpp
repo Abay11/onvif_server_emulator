@@ -33,14 +33,14 @@ static pt::ptree CONFIGS_TREE;
 static osrv::StringsMap XML_NAMESPACES;
 
 static std::string CONFIGS_PATH; //will be init with the service initialization
-static const std::string DEVICE_CONFIGS_FILE = "device.config";
-
 static std::string SERVER_ADDRESS; // will be initiated in @init_service()
 
 namespace osrv
 {
 	namespace device
 	{
+		const std::string CONFIGS_FILE = "device.config";
+
 		//TODO:: Need release
 		static std::vector<utility::http::HandlerSP> handlers;
 
@@ -353,7 +353,7 @@ namespace osrv
 			CONFIGS_PATH = configs_path;
 
 			//getting service's configs
-			pt::read_json(configs_path + DEVICE_CONFIGS_FILE, CONFIGS_TREE);
+			pt::read_json(configs_path + CONFIGS_FILE, CONFIGS_TREE);
 
 			auto namespaces_tree = CONFIGS_TREE.get_child("Namespaces");
 			for (const auto& n : namespaces_tree)

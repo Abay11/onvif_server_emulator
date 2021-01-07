@@ -6,6 +6,7 @@
 #include "../utility/HttpHelper.h"
 #include "../utility/SoapHelper.h"
 #include "pullpoint/pull_point.h"
+#include "device_service.h"
 
 #include "../Simple-Web-Server/server_http.hpp"
 
@@ -49,7 +50,7 @@ namespace osrv
 				osrv::auth::SECURITY_LEVELS::READ_MEDIA)
 			{
 			}
-
+	
 			OVERLOAD_REQUEST_HANDLER
 			{
 				//TODO: Handler filters
@@ -324,10 +325,15 @@ namespace osrv
 			notifications_manager = std::unique_ptr<osrv::event::NotificationsManager>(
 				new osrv::event::NotificationsManager(logger, XML_NAMESPACES));
 
+			// TODO: this config file is also reading in device_service, find a way using that instance
+			pt::ptree DEVICE_CONFIGS_TREE;
+			pt::read_json(configs_path + device::CONFIGS_FILE, DEVICE_CONFIGS_TREE);
+
 			// TODO: reading events generating interval from configs
 			// add event generators
 			auto di_event_generator = std::shared_ptr<osrv::event::DInputEventGenerator>(
-				new event::DInputEventGenerator(10, notifications_manager->GetIoContext(), *log_));
+				new event::DInputEventGenerator(10, DEVICE_CONFIGS_TREE.get<std::string>("DigitalInputsTopic"),
+					notifications_manager->GetIoContext(), *log_));
 			di_event_generator->SetDigitalInputsList(server_configs->digital_inputs_);
 			notifications_manager->AddGenerator(di_event_generator);
 

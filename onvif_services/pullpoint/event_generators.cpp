@@ -9,8 +9,8 @@ namespace osrv
 	namespace event
 	{
 
-		DInputEventGenerator::DInputEventGenerator(int interval, boost::asio::io_context& io_context, const ILogger& logger_)
-			: IEventGenerator(interval, io_context, logger_)
+		DInputEventGenerator::DInputEventGenerator(int interval, const std::string& topic, boost::asio::io_context& io_context, const ILogger& logger_)
+			: IEventGenerator(interval, topic, io_context, logger_)
 		{
 		}
 
@@ -30,7 +30,7 @@ namespace osrv
 			for (const auto& di : *di_list_)
 			{
 				NotificationMessage nm;
-				nm.topic = "tns1:Device/Trigger/DigitalInput";
+				nm.topic = notifications_topic_;
 				nm.utc_time = utility::datetime::system_utc_datetime();
 				nm.property_operation = "Initialized";
 				nm.source_name = "InputToken";
@@ -57,7 +57,7 @@ namespace osrv
 					continue;
 
 				NotificationMessage nm;
-				nm.topic = "tns1:Device/Trigger/DigitalInput";
+				nm.topic = notifications_topic_;
 				nm.utc_time = utility::datetime::system_utc_datetime();
 				nm.property_operation = "Changed";
 				nm.source_name = "InputToken";

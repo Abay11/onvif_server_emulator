@@ -19,9 +19,10 @@ namespace osrv
 		class IEventGenerator
 		{
 		public:
-			IEventGenerator(int interval, boost::asio::io_context& io_context, const ILogger& logger)
+			IEventGenerator(int interval, const std::string& topic, boost::asio::io_context& io_context, const ILogger& logger)
 				:
 				event_interval_(interval)
+				,notifications_topic_(topic)
 				,io_context_(io_context)
 				,alarm_timer_(io_context_)
 				,logger_(logger)
@@ -79,6 +80,7 @@ namespace osrv
 
 		protected:
 			const int event_interval_;
+			const std::string notifications_topic_;
 
 			boost::asio::io_context& io_context_;
 			boost::asio::steady_timer alarm_timer_;
@@ -89,7 +91,8 @@ namespace osrv
 		class DInputEventGenerator : public IEventGenerator
 		{
 		public:
-			DInputEventGenerator(int /*interval*/, boost::asio::io_context& /*io_context*/, const ILogger& /*logger_*/);
+			DInputEventGenerator(int /*interval*/, const std::string& /*topic*/,
+				boost::asio::io_context& /*io_context*/, const ILogger& /*logger_*/);
 
 			// If the member DigitalInputsList is not initialized, events will not be generated
 			void SetDigitalInputsList(const DigitalInputsList& /*di_list*/);
@@ -103,7 +106,6 @@ namespace osrv
 		private:
 			bool state = false;
 			const DigitalInputsList* di_list_ = nullptr;
-
 		};
 	}
 }
