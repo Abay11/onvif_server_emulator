@@ -34,10 +34,10 @@ namespace osrv
 			timeout_timer_.cancel();
 			timeout_timer_.expires_after(std::chrono::seconds(timeout_interval_));
 			timeout_timer_.async_wait([handler, this](const boost::system::error_code& error) {
-				if (error)
-					return;
+					if (error)
+						return;
 
-				response_to_pullmessages();
+					response_to_pullmessages();
 				});
 		}
 
@@ -144,6 +144,7 @@ namespace osrv
 			if (pp_it != pullpoints_.end())
 			{
 				(*pp_it)->DisconnectFromGenerators();
+				pullpoints_.erase(pp_it);
 			}
 			else
 			{

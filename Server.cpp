@@ -53,6 +53,7 @@ namespace osrv
 			if (!log_lvl.empty())
 				logger_.SetLogLevel(ILogger::to_lvl(log_lvl));
 		}
+		logger_.Info("Logging level: " + logger_.GetLogLevel());
 
 		server_configs_ = read_server_configs(configs_dir + COMMON_CONFIGS_NAME);
 

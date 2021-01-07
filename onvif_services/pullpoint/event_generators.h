@@ -1,5 +1,6 @@
 #pragma once
 
+#include "../Logger.h"
 #include "../onvif_services/physical_components/IDigitalInput.h"
 
 #include <functional>
@@ -18,11 +19,12 @@ namespace osrv
 		class IEventGenerator
 		{
 		public:
-			IEventGenerator(int interval, boost::asio::io_context& io_context)
+			IEventGenerator(int interval, boost::asio::io_context& io_context, const ILogger& logger)
 				:
 				event_interval_(interval)
 				,io_context_(io_context)
 				,alarm_timer_(io_context_)
+				,logger_(logger)
 			{
 			}
 
@@ -80,12 +82,14 @@ namespace osrv
 
 			boost::asio::io_context& io_context_;
 			boost::asio::steady_timer alarm_timer_;
+
+			const ILogger& logger_;
 		};
 
 		class DInputEventGenerator : public IEventGenerator
 		{
 		public:
-			DInputEventGenerator(int /*interval*/, boost::asio::io_context& /*io_context*/);
+			DInputEventGenerator(int /*interval*/, boost::asio::io_context& /*io_context*/, const ILogger& /*logger_*/);
 
 			// If the member DigitalInputsList is not initialized, events will not be generated
 			void SetDigitalInputsList(const DigitalInputsList& /*di_list*/);

@@ -53,6 +53,11 @@ namespace osrv
 				current_time_ = boost::posix_time::microsec_clock::universal_time();
 			}
 
+			~PullPoint()
+			{
+				logger_->Debug("Destroying PullPoint: " + subscription_ref_);
+			}
+
 			// Link a connected generator and set a related connection
 			// NOTE: if this action is not done during initialization,
 			// SetSynchronizationPoint() will return empty list

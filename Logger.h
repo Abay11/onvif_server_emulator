@@ -30,6 +30,18 @@ public:
 		m_logging_level_ = l;
 	}
 
+	std::string GetLogLevel()
+	{
+		switch (m_logging_level_)
+		{
+			case LVL_ERR: return "ERROR";
+			case LVL_WARN: return "WARN";
+			case LVL_INFO: return "INFO";
+			case LVL_DEBUG: return "DEBUG";
+			case LVL_TRACE: return "TRACE";
+		}
+	}
+
 	static int to_lvl(const std::string& lvl_str)
 	{
 		if (lvl_str == "ERROR")
@@ -54,3 +66,6 @@ public:
 protected:
 	int m_logging_level_;
 };
+
+
+#define TRACE_LOG(ILogger_instance) ILogger_instance.Trace(__FUNCTION__)

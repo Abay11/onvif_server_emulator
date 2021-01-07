@@ -9,8 +9,8 @@ namespace osrv
 	namespace event
 	{
 
-		DInputEventGenerator::DInputEventGenerator(int interval, boost::asio::io_context& io_context)
-			: IEventGenerator(interval, io_context)
+		DInputEventGenerator::DInputEventGenerator(int interval, boost::asio::io_context& io_context, const ILogger& logger_)
+			: IEventGenerator(interval, io_context, logger_)
 		{
 		}
 
@@ -21,6 +21,8 @@ namespace osrv
 
 		std::deque<NotificationMessage> DInputEventGenerator::GenerateSynchronizationEvent() const
 		{
+			TRACE_LOG(logger_);
+
 			if (!di_list_)
 				return {};
 
@@ -44,6 +46,8 @@ namespace osrv
 
 		void DInputEventGenerator::generate_event()
 		{
+			TRACE_LOG(logger_);
+
 			if (!di_list_)
 				return;
 
