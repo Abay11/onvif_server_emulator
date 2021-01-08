@@ -2,7 +2,10 @@
 
 #include "../Types.inl"
 
+#include <boost/property_tree/ptree_fwd.hpp>
+
 class ILogger;
+
 
 namespace osrv
 {
@@ -14,5 +17,8 @@ namespace osrv
 
 		void init_service(HttpServer& srv, osrv::ServerConfigs& /*configs*/,
 			const std::string& /*configs_path*/, ILogger& /*logger*/);
+
+		// NOTE: this may not be safe, if this service was not initialized before invocation
+		const boost::property_tree::ptree& get_configs_tree_instance();
 	}
 }

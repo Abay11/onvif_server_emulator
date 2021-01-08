@@ -23,11 +23,22 @@ Each ONVIF service is implemented as a separate instance. Each service may have 
 
 ## Device service configs
 
-#### GetServices
+"DigitalInputs" - represent an array, with which amount of emulated digital input may be registered. For each component may be specified token, initial state and whether it should simulated events or not.
+
+"DigitalInputsTopic" - specifies DI events' topic. Expected a three-tired value, i.e. the value should contains exactly three values which are separated by slashes.
+
+
+#### GetServices method
 
 "Enabled" - boolean value. Can be used to do not include specific service in the response list. If this flag is absent, default value will be true. For example, it will be usefull to enabling/disabling Media2 service.
 
+
+
+
+
 ## Event service configs
+
+"ReadResponseFromFile" - boolean value, specifies whether GetEventProperties response should be read from a file or not.
 
 #### PullPoint
 

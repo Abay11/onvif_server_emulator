@@ -13,6 +13,7 @@
 #include <boost/property_tree/xml_parser.hpp>
 #include <boost/property_tree/json_parser.hpp>
 #include <boost/property_tree/ptree.hpp>
+#include <boost/algorithm/string/split.hpp>
 
 #include <map>
 
@@ -204,8 +205,55 @@ namespace osrv
 				}
 				else
 				{
-					//TODO
-					throw std::runtime_error("Not implemented yet");
+					auto request_tree = exns::to_ptree(request->content.string());
+
+					namespace pt = boost::property_tree;					
+					auto envelope_tree = utility::soap::getEnvelopeTree(XML_NAMESPACES);
+					if(auto msg_id = exns::find_hierarchy("Envelope.Header.MessageID", request_tree); !msg_id.empty())
+						envelope_tree.add("s:Header.wsa:MessageID", msg_id);
+					envelope_tree.add("s:Header.wsa:To", "http://www.w3.org/2005/08/addressing/anonymous");
+					envelope_tree.add("s:Header.wsa:Action", "http://www.onvif.org/ver10/events/wsdl/EventPortType/GetEventPropertiesResponse");
+
+					pt::ptree response_tree;
+					response_tree.add("tet:TopicNamespaceLocation", "http://www.onvif.org/onvif/ver10/topics/topicns.xml");
+					response_tree.add("wsnt:FixedTopicSet", "http://www.onvif.org/onvif/ver10/topics/topicns.xml");
+					
+					response_tree.add("wstop:TopicSet.<xmlattr>.xmlns", "");
+					
+					{	//DI properties
+						auto di_topic = device::get_configs_tree_instance().get<std::string>("DigitalInputsTopic");
+						std::vector<std::string> tokens(3);
+						boost::split(tokens, di_topic, [](char c) { return c == '/'; });
+						if (tokens.size() != 3)
+							throw std::runtime_error("DI topic have unexpected format!"); // This mandatory condition and described in README.txt
+
+						std::string first_token = "wstop:TopicSet." + tokens[0];
+						std::string second_token = first_token + "." + tokens[1];
+						std::string third_token = second_token + "." + tokens[2];
+						response_tree.add(first_token + ".<xmlattr>.wstop:topic", "true");
+						response_tree.add(second_token + ".<xmlattr>.wstop:topic", "true");
+						response_tree.add(third_token + ".<xmlattr>.wstop:topic", "true");
+						response_tree.add(third_token + ".tt:MessageDescription.<xmlattr>.IsProperty", "true");
+
+						response_tree.add(third_token + ".tt:MessageDescription.tt:Source.tt:SimpleItemDescription.<xmlattr>.Name",
+							"InputToken");
+						response_tree.add(third_token + ".tt:MessageDescription.tt:Source.tt:SimpleItemDescription.<xmlattr>.Type",
+							"tt:ReferenceToken");
+
+						response_tree.add(third_token + ".tt:MessageDescription.tt:Data.tt:SimpleItemDescription.<xmlattr>.Name",
+							"LogicalState");
+						response_tree.add(third_token + ".tt:MessageDescription.tt:Data.tt:SimpleItemDescription.<xmlattr>.Type",
+							"xs:boolean");
+					}
+
+					envelope_tree.add_child("tet:GetEventPropertiesResponse", response_tree);
+
+					pt::ptree root_tree;
+					root_tree.put_child("s:Envelope", envelope_tree);
+
+					std::ostringstream os;
+					pt::write_xml(os, root_tree);
+					response_body = os.str();
 				}
 
 				utility::http::fillResponseWithHeaders(*response, response_body);
@@ -325,14 +373,10 @@ namespace osrv
 			notifications_manager = std::unique_ptr<osrv::event::NotificationsManager>(
 				new osrv::event::NotificationsManager(logger, XML_NAMESPACES));
 
-			// TODO: this config file is also reading in device_service, find a way using that instance
-			pt::ptree DEVICE_CONFIGS_TREE;
-			pt::read_json(configs_path + device::CONFIGS_FILE, DEVICE_CONFIGS_TREE);
-
 			// TODO: reading events generating interval from configs
 			// add event generators
 			auto di_event_generator = std::shared_ptr<osrv::event::DInputEventGenerator>(
-				new event::DInputEventGenerator(10, DEVICE_CONFIGS_TREE.get<std::string>("DigitalInputsTopic"),
+				new event::DInputEventGenerator(10, device::get_configs_tree_instance().get<std::string>("DigitalInputsTopic"),
 					notifications_manager->GetIoContext(), *log_));
 			di_event_generator->SetDigitalInputsList(server_configs->digital_inputs_);
 			notifications_manager->AddGenerator(di_event_generator);

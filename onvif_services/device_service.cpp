@@ -380,5 +380,10 @@ namespace osrv
 			logger_->Info("ONVIF Device service is working on " + SERVER_ADDRESS + "onvif/device_service");
 		}
 
-	}
+		const boost::property_tree::ptree& get_configs_tree_instance()
+		{
+			return CONFIGS_TREE;
+		}
+
+	} //device ns
 }
