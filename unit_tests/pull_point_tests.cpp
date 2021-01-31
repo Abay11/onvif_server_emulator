@@ -112,7 +112,7 @@ BOOST_AUTO_TEST_CASE(serialize_notification_messages_func)
 
 	using namespace osrv::event;
 
-	std::queue<NotificationMessage> msgs;
+	std::deque<NotificationMessage> msgs;
 	boost::property_tree::ptree res = serialize_notification_messages(msgs, {});
 
 	auto ctime = exns::find_hierarchy("CurrentTime", res);

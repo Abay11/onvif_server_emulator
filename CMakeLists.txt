@@ -61,6 +61,8 @@ FILE (GLOB UTILITY_SRC
 	"utility/HttpDigestHelper.h"
 	"utility/HttpDigestHelper.cpp"
 	"utility/DateTime.hpp"
+	"utility/EventService.h"
+	"utility/EventService.cpp"
 )
 
 source_group("OnvifServices" FILES ${SERVICES_SRC})

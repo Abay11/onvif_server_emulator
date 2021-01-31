@@ -8,12 +8,13 @@
 #include "pullpoint/pull_point.h"
 #include "device_service.h"
 
+#include "../utility/EventService.h"
+
 #include "../Simple-Web-Server/server_http.hpp"
 
 #include <boost/property_tree/xml_parser.hpp>
 #include <boost/property_tree/json_parser.hpp>
 #include <boost/property_tree/ptree.hpp>
-#include <boost/algorithm/string/split.hpp>
 
 #include <map>
 
@@ -221,29 +222,13 @@ namespace osrv
 					response_tree.add("wstop:TopicSet.<xmlattr>.xmlns", "");
 					
 					{	//DI properties
-						auto di_topic = device::get_configs_tree_instance().get<std::string>("DigitalInputsTopic");
-						std::vector<std::string> tokens(3);
-						boost::split(tokens, di_topic, [](char c) { return c == '/'; });
-						if (tokens.size() != 3)
-							throw std::runtime_error("DI topic have unexpected format!"); // This mandatory condition and described in README.txt
 
-						std::string first_token = "wstop:TopicSet." + tokens[0];
-						std::string second_token = first_token + "." + tokens[1];
-						std::string third_token = second_token + "." + tokens[2];
-						response_tree.add(first_token + ".<xmlattr>.wstop:topic", "true");
-						response_tree.add(second_token + ".<xmlattr>.wstop:topic", "true");
-						response_tree.add(third_token + ".<xmlattr>.wstop:topic", "true");
-						response_tree.add(third_token + ".tt:MessageDescription.<xmlattr>.IsProperty", "true");
+						StringPairsList_t source_props = { {"InputToken", "tt:ReferenceToken"} };
+						StringPairsList_t data_props = { {"LogicalState", "xs:boolean"} };
+						EventPropertiesSerializer serializer(EVENT_CONFIGS_TREE.get<std::string>("DigitalInputsTopic"),
+							source_props, data_props);
 
-						response_tree.add(third_token + ".tt:MessageDescription.tt:Source.tt:SimpleItemDescription.<xmlattr>.Name",
-							"InputToken");
-						response_tree.add(third_token + ".tt:MessageDescription.tt:Source.tt:SimpleItemDescription.<xmlattr>.Type",
-							"tt:ReferenceToken");
-
-						response_tree.add(third_token + ".tt:MessageDescription.tt:Data.tt:SimpleItemDescription.<xmlattr>.Name",
-							"LogicalState");
-						response_tree.add(third_token + ".tt:MessageDescription.tt:Data.tt:SimpleItemDescription.<xmlattr>.Type",
-							"xs:boolean");
+						response_tree.add_child("wstop:TopicSet", serializer.ptree());
 					}
 
 					envelope_tree.add_child("tet:GetEventPropertiesResponse", response_tree);
@@ -396,7 +381,8 @@ namespace osrv
 			//NOTE: this path pattern should be match the one generated
 			//in the NotificationsManager for a new subscription
 			srv.resource["/onvif/event_service/s([0-9]+)"]["POST"] = PullPointPortDefaultHandler;
-		}
 
-	}
-}
+		} //init service
+
+	} // event
+} // osrv

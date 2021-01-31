@@ -4,6 +4,7 @@
 #include "../onvif_services/physical_components/IDigitalInput.h"
 
 #include <boost\property_tree\ptree.hpp>
+#include <boost\property_tree\json_parser.hpp>
 
 namespace pt = boost::property_tree;
 BOOST_AUTO_TEST_CASE(read_server_configs_func)
@@ -47,42 +48,33 @@ BOOST_AUTO_TEST_CASE(read_server_configs_func)
 
 BOOST_AUTO_TEST_CASE(read_digital_inputs_func)
 {
-
-	/*
-	* Example of DigitalInputs structure
-
-		"DigitalInputs":
-		[
+	const std::string config_example =
+		R"(
 			{
-				"Token":"digital_input0",
-					"GenerateEvent" : true
+				"DigitalInputs":
+				[
+					{
+						"Token": "digital_input0",
+						"GenerateEvent": true,
+						"InitialState":true
+					},
+					{
+						"Token": "digital_input1",
+						"GenerateEvent": false,
+						"InitialState":false
+					}
+				]
 			}
-		]
-	*
-	*/
-
-
+		)";
+	std::stringstream ss(config_example);
 	pt::ptree configs_node;
-	pt::ptree di_config_0;
-	di_config_0.add("Token", "digital_input0");
-	di_config_0.add("GenerateEvent", true);
-	configs_node.add_child("", di_config_0);
-	
-	pt::ptree di_config_1;
-	di_config_1.add("Token", "digital_input1");
-	di_config_1.add("GenerateEvent", false);
-	configs_node.add_child("", di_config_1);
-	
-	BOOST_TEST(2 == configs_node.size());
+	pt::json_parser::read_json(ss, configs_node);
 
-	auto result = osrv::read_digital_inputs(configs_node);
-
+	auto result = osrv::read_digital_inputs(configs_node.get_child("DigitalInputs"));
 	BOOST_TEST(2 == result.size());
-
 	auto di0 = result[0];
 	BOOST_TEST("digital_input0" == di0->GetToken());
 	BOOST_TEST(true == di0->IsEnabled());
-	
 	auto di1 = result[1];
 	BOOST_TEST("digital_input1" == di1->GetToken());
 	BOOST_TEST(false == di1->IsEnabled());

@@ -19,6 +19,7 @@ add_executable(test_executable
 	pull_point_tests.cpp
 	xmlparser_tests.cpp
 	discovery_tests.cpp
+	event_service_tests.cpp
 )
 
 # indicates the include paths
