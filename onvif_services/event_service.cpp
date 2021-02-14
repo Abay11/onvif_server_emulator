@@ -219,16 +219,39 @@ namespace osrv
 					response_tree.add("tet:TopicNamespaceLocation", "http://www.onvif.org/onvif/ver10/topics/topicns.xml");
 					response_tree.add("wsnt:FixedTopicSet", "http://www.onvif.org/onvif/ver10/topics/topicns.xml");
 					
+					//pt::ptree topicset_node;
+					//topicset_node.add("<xmlattr>.xmlns", "");
 					response_tree.add("wstop:TopicSet.<xmlattr>.xmlns", "");
 					
-					{	//DI properties
+					{ // DI properties
 
-						StringPairsList_t source_props = { {"InputToken", "tt:ReferenceToken"} };
-						StringPairsList_t data_props = { {"LogicalState", "xs:boolean"} };
-						EventPropertiesSerializer serializer(EVENT_CONFIGS_TREE.get<std::string>("DigitalInputsTopic"),
-							source_props, data_props);
+						//StringPairsList_t source_props = { {"InputToken", "tt:ReferenceToken"} };
+						//StringPairsList_t data_props = { {"LogicalState", "xs:boolean"} };
+						//EventPropertiesSerializer serializer(EVENT_CONFIGS_TREE.get<std::string>("DigitalInputsTopic"),
+						//	source_props, data_props);
 
-						response_tree.add_child("wstop:TopicSet", serializer.ptree());
+						//response_tree.add_child("wstop:TopicSet", serializer.ptree());
+						//topicset_node.add_child(".", serializer.ptree());
+
+						//pt::ptree node;
+						//node.add("ImagingService", "SomeImagingProperty");
+						//response_tree.put_child("wstop:TopicSet.VideoSource", node);
+						//pt::ptree node2;
+						//node.add("ImagingService2", "SomeImagingProperty2");
+						//response_tree.put_child("wstop:TopicSet.VideoSource", node);
+					}
+
+					{ // Motion alarm
+						/*StringPairsList_t source_props = { {"Source", "tt:ReferenceToken"} };
+						StringPairsList_t data_props = { {"State", "xs:boolean"} };
+						EventPropertiesSerializer serializer(EVENT_CONFIGS_TREE.get<std::string>("MotionAlarmTopic"),
+							source_props, data_props);*/
+
+						//response_tree.put_child("wstop:TopicSet", serializer.ptree());
+						//topicset_node.add_child(".", serializer.ptree());
+						pt::ptree node;
+						node.add("DI", "SomeDIProperty");
+						response_tree.add_child("wstop:TopicSet.Device", node);
 					}
 
 					envelope_tree.add_child("tet:GetEventPropertiesResponse", response_tree);
