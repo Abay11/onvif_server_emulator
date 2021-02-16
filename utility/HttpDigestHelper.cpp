@@ -4,8 +4,6 @@
 
 #include <regex>
 
-#include <cryptopp/md5.h>
-
 namespace utility
 {
 	namespace digest

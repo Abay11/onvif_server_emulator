@@ -30,6 +30,7 @@ static osrv::StringsMap XML_NAMESPACES;
 static const std::string GetAnalyticsConfigurations = "GetAnalyticsConfigurations";
 static const std::string GetAudioDecoderConfigurations = "GetAudioDecoderConfigurations";
 static const std::string GetProfiles = "GetProfiles";
+static const std::string GetVideoEncoderConfigurations = "GetVideoEncoderConfigurations";
 static const std::string GetVideoSourceConfigurations = "GetVideoSourceConfigurations";
 static const std::string GetStreamUri = "GetStreamUri";
 
@@ -143,6 +144,35 @@ namespace osrv
 
 				pt::ptree root_tree;
 				root_tree.put_child("s:Envelope", envelope_tree);
+
+				std::ostringstream os;
+				pt::write_xml(os, root_tree);
+
+				utility::http::fillResponseWithHeaders(*response, os.str());
+			}
+		};
+
+		struct GetVideoEncoderConfigurationsHandler : public utility::http::RequestHandlerBase
+		{
+			GetVideoEncoderConfigurationsHandler() : utility::http::RequestHandlerBase(GetVideoEncoderConfigurations, osrv::auth::SECURITY_LEVELS::READ_MEDIA)
+			{
+			}
+
+			OVERLOAD_REQUEST_HANDLER
+			{
+				const auto ve_config_list = PROFILES_CONFIGS_TREE.get_child("VideoEncoderConfigurations2");
+				pt::ptree ve_configs_node;
+				for (const auto& ve_config : ve_config_list)
+				{
+					pt::ptree videoencoder_configuration;
+					osrv::media2::util::fill_video_encoder(ve_config.second, videoencoder_configuration);
+					ve_configs_node.add_child("tr2:Configurations", videoencoder_configuration);
+				}
+
+				auto env_tree = utility::soap::getEnvelopeTree(XML_NAMESPACES);
+				env_tree.put_child("s:Body.tr2:GetVideoEncoderConfigurationsResponse", ve_configs_node);
+				pt::ptree root_tree;
+				root_tree.put_child("s:Envelope", env_tree);
 
 				std::ostringstream os;
 				pt::write_xml(os, root_tree);
@@ -346,6 +376,7 @@ namespace osrv
 			handlers.emplace_back(new GetAnalyticsConfigurationsHandler());
 			handlers.emplace_back(new GetAudioDecoderConfigurationsHandler());
 			handlers.emplace_back(new GetProfilesHandler());
+			handlers.emplace_back(new GetVideoEncoderConfigurationsHandler());
 			handlers.emplace_back(new GetVideoSourceConfigurationsHandler());
 			handlers.emplace_back(new GetStreamUriHandler());
 
