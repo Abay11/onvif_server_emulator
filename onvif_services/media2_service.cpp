@@ -31,6 +31,7 @@ static const std::string GetAnalyticsConfigurations = "GetAnalyticsConfiguration
 static const std::string GetAudioDecoderConfigurations = "GetAudioDecoderConfigurations";
 static const std::string GetProfiles = "GetProfiles";
 static const std::string GetVideoEncoderConfigurations = "GetVideoEncoderConfigurations";
+static const std::string GetVideoEncoderConfigurationOptions = "GetVideoEncoderConfigurationOptions";
 static const std::string GetVideoSourceConfigurations = "GetVideoSourceConfigurations";
 static const std::string GetStreamUri = "GetStreamUri";
 
@@ -171,6 +172,122 @@ namespace osrv
 
 				auto env_tree = utility::soap::getEnvelopeTree(XML_NAMESPACES);
 				env_tree.put_child("s:Body.tr2:GetVideoEncoderConfigurationsResponse", ve_configs_node);
+				pt::ptree root_tree;
+				root_tree.put_child("s:Envelope", env_tree);
+
+				std::ostringstream os;
+				pt::write_xml(os, root_tree);
+
+				utility::http::fillResponseWithHeaders(*response, os.str());
+			}
+		};
+
+		struct GetVideoEncoderConfigurationOptionsHandler : public utility::http::RequestHandlerBase
+		{
+			GetVideoEncoderConfigurationOptionsHandler() : utility::http::RequestHandlerBase(GetVideoEncoderConfigurationOptions, osrv::auth::SECURITY_LEVELS::READ_MEDIA)
+			{
+			}
+
+			OVERLOAD_REQUEST_HANDLER
+			{
+
+
+				// a request may contain specific config token or profile token,
+				// but for now, I no see reason somehow filter and process that additional conditions
+				// so just return "as is" from config files all encoding options
+
+				//// extract requested encoder configuration token 
+				//std::string configuration_token;
+				//std::string profile_token;
+				//{
+				//	auto request_str = request->content.string();
+				//	std::istringstream is(request_str);	
+				//	pt::ptree xml_tree;
+				//	pt::xml_parser::read_xml(is, xml_tree);
+				//	configuration_token = exns::find_hierarchy("Envelope.Body.GetVideoEncoderConfigurationOptions.ConfigurationToken", xml_tree);
+				//	profile_token = exns::find_hierarchy("Envelope.Body.GetVideoEncoderConfigurationOptions.ProfileToken", xml_tree);
+				//}
+
+				//if (!profile_token.empty())
+				//{
+				//	const auto profiles_configs_list = PROFILES_CONFIGS_TREE.get_child("MediaProfiles");
+
+				//	auto req_profile_config = std::find_if(profiles_configs_list.begin(), profiles_configs_list.end(),
+				//		[profile_token](const pt::ptree::value_type& it)
+				//		{
+				//			return it.second.get<std::string>("token") == profile_token;
+				//		});
+
+				//	if (req_profile_config == profiles_configs_list.end())
+				//	{
+				//		throw std::runtime_error("Client error: Not found requeried profile token!");
+				//	}
+				//}
+
+
+
+				const auto enc_config_options_list = PROFILES_CONFIGS_TREE.get_child("GetVideoEncoderConfigurationOptions2");
+
+				pt::ptree response_node;
+				for (const auto& ec : enc_config_options_list)
+				{
+					pt::ptree option_node;
+
+					{ //GOV length
+						option_node.add("<xmlattr>.GovLengthRange", ec.second.get<std::string>("GovLengthRange"));
+					}
+
+					{ //FrameRatesSupported 
+
+						std::vector<float> framerates;
+						auto fps_list = ec.second.get_child("FrameRatesSupported");
+						for (auto n : fps_list)
+						{
+							framerates.push_back(n.second.get_value<float>());
+						}
+						option_node.add("<xmlattr>.FrameRatesSupported", util::to_value_list(framerates));
+					}
+
+					{ //ProfilesSupported 
+
+						std::vector<std::string> profiles;
+						auto fps_list = ec.second.get_child("ProfilesSupported");
+						for (auto n : fps_list)
+						{
+							profiles.push_back(n.second.get_value<std::string>());
+						}
+						option_node.add("<xmlattr>.ProfilesSupported", util::to_value_list(profiles));
+					}
+					
+					option_node.add("<xmlattr>.ConstantBitRateSupported", ec.second.get<bool>("ConstantBitRateSupported"));
+
+					option_node.add("<xmlattr>.GuaranteedFrameRateSupported", ec.second.get<bool>("GuaranteedFrameRateSupported"));
+
+
+					option_node.add("tt:Encoding ", ec.second.get<std::string>("Encoding"));
+					
+					option_node.add("tt:QualityRange.Min", ec.second.get<float>("QualityRange.Min"));
+					option_node.add("tt:QualityRange.Max", ec.second.get<float>("QualityRange.Max"));
+
+					option_node.add("tt:ResolutionsAvailable.Width", ec.second.get<float>("ResolutionsAvailable.Width"));
+					option_node.add("tt:ResolutionsAvailable.Height", ec.second.get<float>("ResolutionsAvailable.Height"));
+
+					{ //BitrateRange 
+						std::vector<int> bitrates;
+						auto bitrates_list = ec.second.get_child("BitrateRange");
+						for (auto n : bitrates_list)
+						{
+							bitrates.push_back(n.second.get_value<int>());
+						}
+						option_node.add("tt:BitrateRange", util::to_value_list(bitrates));
+
+					}
+
+					response_node.add_child("tr2:Options", option_node);
+				}
+
+				auto env_tree = utility::soap::getEnvelopeTree(XML_NAMESPACES);
+				env_tree.put_child("s:Body.tr2:GetVideoEncoderConfigurationOptionsResponse", response_node);
 				pt::ptree root_tree;
 				root_tree.put_child("s:Envelope", env_tree);
 
@@ -377,6 +494,7 @@ namespace osrv
 			handlers.emplace_back(new GetAudioDecoderConfigurationsHandler());
 			handlers.emplace_back(new GetProfilesHandler());
 			handlers.emplace_back(new GetVideoEncoderConfigurationsHandler());
+			handlers.emplace_back(new GetVideoEncoderConfigurationOptionsHandler());
 			handlers.emplace_back(new GetVideoSourceConfigurationsHandler());
 			handlers.emplace_back(new GetStreamUriHandler());
 
