@@ -16,14 +16,16 @@ BOOST_AUTO_TEST_CASE(EventPropertiesSerializerTest1)
 	BOOST_TEST("tns1:Device.Trigger" == serializer.Path());
 }
 
-BOOST_AUTO_TEST_CASE(TopicTokenizatorTest2)
+BOOST_AUTO_TEST_CASE(EventPropertiesSerializerTest2)
 {
-	//TopicTokenizator tokenizator{ "DigitalInput" };
-	//BOOST_TEST("DigitalInput", tokenizator.Name());
-	//BOOST_TEST("", tokenizator.NodeParent());
+	StringPairsList_t source_props = {{"InputToken", "tt:ReferenceToken"}};
+	StringPairsList_t data_props = {{"LogicalState", "xs:boolean"}};
+	EventPropertiesSerializer serializer{ "DigitalInput", source_props, data_props };
+	BOOST_TEST("DigitalInput" == serializer.Name());
+	BOOST_TEST("" == serializer.Path());
 }
 
-BOOST_AUTO_TEST_CASE(EventPropertiesSerializerTest)
+BOOST_AUTO_TEST_CASE(EventPropertiesSerializerTest3)
 {
 	StringPairsList_t source_props = {{"InputToken", "tt:ReferenceToken"}};
 	StringPairsList_t data_props = {{"LogicalState", "xs:boolean"}};
@@ -32,16 +34,15 @@ BOOST_AUTO_TEST_CASE(EventPropertiesSerializerTest)
 		source_props,
 		data_props);
 
-
 	auto res_tree = serializer.Ptree();
 
-	BOOST_TEST("InputToken",
+	BOOST_TEST("InputToken" ==
 		res_tree.get<std::string>("DigitalInput.tt:MessageDescription.tt:Source.tt:SimpleItemDescription.<xmlattr>.Name"));
-	BOOST_TEST("tt:ReferenceToken",
+	BOOST_TEST("tt:ReferenceToken" ==
 		res_tree.get<std::string>("DigitalInput.tt:MessageDescription.tt:Source.tt:SimpleItemDescription.<xmlattr>.Type"));
 
-	BOOST_TEST("LogicalState",
+	BOOST_TEST("LogicalState" ==
 		res_tree.get<std::string>("DigitalInput.tt:MessageDescription.tt:Data.tt:SimpleItemDescription.<xmlattr>.Name"));
-	BOOST_TEST("xs:bollean",
+	BOOST_TEST("xs:boolean" ==
 		res_tree.get<std::string>("DigitalInput.tt:MessageDescription.tt:Data.tt:SimpleItemDescription.<xmlattr>.Type"));
 }
