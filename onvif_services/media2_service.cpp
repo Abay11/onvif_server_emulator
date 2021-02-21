@@ -33,6 +33,7 @@ static const std::string GetProfiles = "GetProfiles";
 static const std::string GetVideoEncoderConfigurations = "GetVideoEncoderConfigurations";
 static const std::string GetVideoEncoderConfigurationOptions = "GetVideoEncoderConfigurationOptions";
 static const std::string GetVideoSourceConfigurations = "GetVideoSourceConfigurations";
+static const std::string GetVideoSourceConfigurationOptions = "GetVideoSourceConfigurationOptions";
 static const std::string GetStreamUri = "GetStreamUri";
 
 namespace osrv
@@ -226,7 +227,7 @@ namespace osrv
 
 
 
-				const auto enc_config_options_list = PROFILES_CONFIGS_TREE.get_child("GetVideoEncoderConfigurationOptions2");
+				const auto enc_config_options_list = PROFILES_CONFIGS_TREE.get_child("VideoEncoderConfigurationOptions2");
 
 				pt::ptree response_node;
 				for (const auto& ec : enc_config_options_list)
@@ -326,6 +327,60 @@ namespace osrv
 			}
 		};
 		
+		struct GetVideoSourceConfigurationOptionsHandler : public utility::http::RequestHandlerBase
+		{
+			GetVideoSourceConfigurationOptionsHandler() : utility::http::RequestHandlerBase(GetVideoSourceConfigurationOptions, osrv::auth::SECURITY_LEVELS::READ_MEDIA)
+			{
+			}
+
+			OVERLOAD_REQUEST_HANDLER
+			{
+				// TODO:
+				// Here we should parse request and generate a response depends on required profile token and videosource
+				// configuration token, but for now it's ignored
+
+				auto vs_config_list = PROFILES_CONFIGS_TREE.get_child("VideoSourceConfigurations");
+				pt::ptree options_node;
+				for (const auto& vs_config : vs_config_list)
+				{
+					pt::ptree option;
+					option.add("<xmlattr>.MaximumNumberOfProfiles", vs_config.second.get<int>("Options.MaximumNumberOfProfiles"));
+
+					option.add("tt:BoundsRange.tt:XRange.tt:Min",
+						vs_config.second.get<int>("Options.BoundsRange.XRange.Min"));
+					option.add("tt:BoundsRange.tt:XRange.tt:Max",
+						vs_config.second.get<int>("Options.BoundsRange.XRange.Max"));
+
+					option.add("tt:BoundsRange.tt:YRange.tt:Min",
+						vs_config.second.get<int>("Options.BoundsRange.YRange.Min"));
+					option.add("tt:BoundsRange.tt:YRange.tt:Max",
+						vs_config.second.get<int>("Options.BoundsRange.YRange.Max"));
+
+					option.add("tt:BoundsRange.tt:WidthRange.tt:Min",
+						vs_config.second.get<int>("Options.BoundsRange.WidthRange.Min"));
+					option.add("tt:BoundsRange.tt:WidthRange.tt:Max",
+						vs_config.second.get<int>("Options.BoundsRange.WidthRange.Max"));
+
+					option.add("tt:BoundsRange.tt:HeightRange.tt:Min",
+						vs_config.second.get<int>("Options.BoundsRange.HeightRange.Min"));
+					option.add("tt:BoundsRange.tt:HeightRange.tt:Max",
+						vs_config.second.get<int>("Options.BoundsRange.HeightRange.Max"));
+
+					options_node.put_child("tr2:Options", option);
+				}
+
+				auto env_tree = utility::soap::getEnvelopeTree(XML_NAMESPACES);
+				env_tree.put_child("s:Body.tr2:GetVideoSourceConfigurationOptionsResponse", options_node);
+				pt::ptree root_tree;
+				root_tree.put_child("s:Envelope", env_tree);
+
+				std::ostringstream os;
+				pt::write_xml(os, root_tree);
+
+				utility::http::fillResponseWithHeaders(*response, os.str());
+			}
+		};
+
 		struct GetStreamUriHandler : public utility::http::RequestHandlerBase
 		{
 			GetStreamUriHandler() : utility::http::RequestHandlerBase(GetStreamUri,
@@ -496,6 +551,7 @@ namespace osrv
 			handlers.emplace_back(new GetVideoEncoderConfigurationsHandler());
 			handlers.emplace_back(new GetVideoEncoderConfigurationOptionsHandler());
 			handlers.emplace_back(new GetVideoSourceConfigurationsHandler());
+			handlers.emplace_back(new GetVideoSourceConfigurationOptionsHandler());
 			handlers.emplace_back(new GetStreamUriHandler());
 
             srv.resource["/onvif/media2_service"]["POST"] = Media2ServiceHandler;
