@@ -8,11 +8,13 @@
 
 #include "utility/AuthHelper.h"
 
-#include "Simple-Web-Server\server_http.hpp"
+#include "Simple-Web-Server/server_http.hpp"
+
+#include <boost/property_tree/json_parser.hpp>
+
+#include <boost/asio/io_context.hpp>
 
 #include <string>
-
-#include <boost\property_tree\json_parser.hpp>
 
 static const std::string COMMON_CONFIGS_NAME = "common.config";
 
@@ -74,11 +76,42 @@ namespace osrv
 		discovery::init_service(configs_dir, log);
 
 		rtspServer_ = new rtsp::Server(&log, server_configs_);
+
+		if (auto delay = server_configs_.network_delay_simulation_; delay > 0)
+		{
+			logger_.Info("Network delay simulation is enabled. Equals (ms): " + std::to_string(delay));
+		}
+
+		io_context_ = std::make_shared<boost::asio::io_context>();
+		io_context_work_ = std::make_shared<boost::asio::io_context::work>(*io_context_);
+		io_context_thread_ = std::make_shared<std::thread>(
+			[this]()
+			{
+				logger_.Debug("Async IO Context's thread is running...");
+				io_context_->run();
+			}
+		);
+
+		server_configs_.io_context_ = io_context_;
 	}
 
 	Server::~Server()
 	{
 		discovery::stop();
+
+		io_context_work_.reset();
+		try
+		{
+			if (io_context_thread_->joinable())
+			{
+				io_context_thread_->join();
+				logger_.Debug("Async IO Context's thread is joined.");
+			}
+		}
+		catch (const std::exception&)
+		{
+		}
+
 		delete rtspServer_;
 	}
 
@@ -154,6 +187,8 @@ ServerConfigs read_server_configs(const std::string& config_path)
 				osrv::auth::str_to_usertype(user.second.get<std::string>(auth::UserAccount::TYPE))
 			});
 	}
+
+	read_configs.network_delay_simulation_ = configs_tree.get<unsigned short>("networkDelaySimulation.milliseconds");
 
 	return read_configs;
 }

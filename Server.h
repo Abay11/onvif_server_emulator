@@ -13,6 +13,12 @@ namespace {
 	const unsigned short MASTER_PORT = 8080;
 }
 
+namespace boost::asio
+{
+	class io_context;
+	class io_context;
+}
+
 //namespace onvif server
 namespace osrv
 {
@@ -38,6 +44,11 @@ namespace osrv
 		UsersList_t system_users_;
 		AUTH_SCHEME auth_scheme_{};
 		DigestSessionSP digest_session_;
+
+		std::shared_ptr<boost::asio::io_context> io_context_;
+
+		// milliseconds
+		unsigned short network_delay_simulation_ = 0;
 	};
 
 	class Server
@@ -59,6 +70,10 @@ namespace osrv
 		ServerConfigs server_configs_;
 
 		rtsp::Server* rtspServer_;
+
+		std::shared_ptr<boost::asio::io_context> io_context_;
+		std::shared_ptr<boost::asio::io_context::work> io_context_work_;
+		std::shared_ptr<std::thread> io_context_thread_;
 	};
 	
 	ServerConfigs read_server_configs(const std::string& /*config_path*/);
