@@ -696,6 +696,15 @@ void osrv::media::util::fill_soap_videosource_configuration(const pt::ptree& con
 		config_node.get<std::string>("Bounds.height"));
 }
 
+void osrv::media::util::fill_analytics_configuration(pt::ptree& result)
+{
+	result.add("<xmlattr>.token", "analytics_token0");
+	result.add("tt:Name", "Analytics0");
+	result.add("tt:UseCount", 2);
+	result.add("tt:AnalyticsEngineConfgiruation", "");
+	result.add("tt:RuleEngineConfiguration", "");
+}
+
 std::string osrv::media::util::generate_rtsp_url(const ServerConfigs& server_configs, const std::string& profile_stream_url)
 {
 	std::stringstream rtsp_url;

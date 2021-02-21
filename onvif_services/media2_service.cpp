@@ -604,6 +604,13 @@ namespace osrv
 					result.put_child("tr2:Configurations.tr2:VideoEncoder", videoencoder_configuration);
 				}
 
+				{ // Videoanalytics
+					// just fill dummy configs
+
+					pt::ptree analytics_node;
+					osrv::media::util::fill_analytics_configuration(analytics_node);
+					result.put_child("tr2:Analytics", analytics_node);
+				}
 			}
 			
 			void fill_video_encoder(const pt::ptree& config_node, pt::ptree& videoencoder_node)
