@@ -50,6 +50,9 @@ namespace osrv
 		//TODO:: Need release
 		static std::vector<utility::http::HandlerSP> handlers;
 
+		void do_handler_request(std::shared_ptr<HttpServer::Response> response,
+			std::shared_ptr<HttpServer::Request> request);
+
 		struct GetAudioDecoderConfigurationsHandler : public utility::http::RequestHandlerBase
 		{
 			GetAudioDecoderConfigurationsHandler() : utility::http::RequestHandlerBase(GetAudioDecoderConfigurations, osrv::auth::SECURITY_LEVELS::READ_MEDIA)
@@ -450,6 +453,30 @@ namespace osrv
 
 		//DEFAULT HANDLER
 		void MediaServiceHandler(std::shared_ptr<HttpServer::Response> response,
+			std::shared_ptr<HttpServer::Request> request)
+		{
+			if (auto delay = server_configs->network_delay_simulation_; delay > 0)
+			{
+				auto timer = std::make_shared<boost::asio::deadline_timer>(*server_configs->io_context_,
+					boost::posix_time::milliseconds(delay));
+				timer->async_wait(
+					[timer, response, request](const boost::system::error_code& ec)
+					{
+						if (ec)
+							return;
+
+						do_handler_request(response, request);
+					}
+				);
+
+			}
+			else
+			{
+				do_handler_request(response, request);
+			}
+		}
+
+		void do_handler_request(std::shared_ptr<HttpServer::Response> response,
 			std::shared_ptr<HttpServer::Request> request)
 		{
 			//extract requested method

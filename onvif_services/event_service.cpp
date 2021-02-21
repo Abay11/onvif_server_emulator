@@ -42,6 +42,9 @@ namespace osrv
 	{
 		static std::vector<utility::http::HandlerSP> handlers;
 
+		void do_handler_request(std::shared_ptr<HttpServer::Response> response,
+			std::shared_ptr<HttpServer::Request> request);
+
 		//PullPoint handlers
 		struct CreatePullPointSubscriptionHandler : public utility::http::RequestHandlerBase
 		{
@@ -142,6 +145,29 @@ namespace osrv
 		void EventServiceHandler(std::shared_ptr<HttpServer::Response> response,
 			std::shared_ptr<HttpServer::Request> request)
 		{
+			if (auto delay = server_configs->network_delay_simulation_; delay > 0)
+			{
+				auto timer = std::make_shared<boost::asio::deadline_timer>(*server_configs->io_context_,
+					boost::posix_time::milliseconds(delay));
+				timer->async_wait(
+					[timer, response, request](const boost::system::error_code& ec)
+					{
+						if (ec)
+							return;
+
+						do_handler_request(response, request);
+					}
+				);
+			}
+			else
+			{
+				do_handler_request(response, request);
+			}
+		}
+
+		void do_handler_request(std::shared_ptr<HttpServer::Response> response,
+			std::shared_ptr<HttpServer::Request> request)
+		{
 			//extract requested method
 			std::string method;
 			auto content = request->content.string();
@@ -153,7 +179,7 @@ namespace osrv
 				auto* ptr = static_cast<exns::Parser*>(tree);
 				method = static_cast<exns::Parser*>(tree)->___getMethod();
 			}
-			catch (const pt::xml_parser_error& e)
+			catch (const pt::xml_parser_error & e)
 			{
 				log_->Error(e.what());
 			}
@@ -172,7 +198,7 @@ namespace osrv
 				{
 					auto handler_ptr = *handler_it;
 					log_->Debug("Handling EventService request: " + handler_ptr->get_name());
-					
+
 					//extract user credentials
 					osrv::auth::USER_TYPE current_user = osrv::auth::USER_TYPE::ANON;
 					if (server_configs->auth_scheme_ == osrv::AUTH_SCHEME::DIGEST)
@@ -201,7 +227,7 @@ namespace osrv
 
 					(*handler_ptr)(response, request);
 				}
-				catch (const osrv::auth::digest_failed& e)
+				catch (const osrv::auth::digest_failed & e)
 				{
 					log_->Error(e.what());
 
@@ -211,11 +237,11 @@ namespace osrv
 						<< utility::http::HEADER_WWW_AUTHORIZATION << ": " << digest_session->generateDigest().to_string() << "\r\n"
 						<< "\r\n";
 				}
-				catch (const std::exception& e)
+				catch (const std::exception & e)
 				{
 					log_->Error("A server's error occured in DeviceService while processing: " + method
 						+ ". Info: " + e.what());
-				
+
 					*response << "HTTP/1.1 500 Server error\r\nContent-Length: " << 0 << "\r\n\r\n";
 				}
 			}
@@ -224,7 +250,7 @@ namespace osrv
 				log_->Error("Not found an appropriate handler in DeviceService for: " + method);
 				*response << "HTTP/1.1 400 Bad request\r\nContent-Length: " << 0 << "\r\n\r\n";
 			}
-		}
+		};
 
 		void init_service(HttpServer& srv, const osrv::ServerConfigs& server_configs_instance,
 			const std::string& configs_path, ILogger& logger)

@@ -43,6 +43,9 @@ namespace osrv
 	{
 		//TODO:: Need release
 		static std::vector<utility::http::HandlerSP> handlers;
+		
+		void do_handler_request(std::shared_ptr<HttpServer::Response> response,
+			std::shared_ptr<HttpServer::Request> request);
 
 		struct GetCapabilitiesHandler : public utility::http::RequestHandlerBase
 		{
@@ -252,6 +255,30 @@ namespace osrv
 		void DeviceServiceHandler(std::shared_ptr<HttpServer::Response> response,
 			std::shared_ptr<HttpServer::Request> request)
 		{
+			if (auto delay = server_configs->network_delay_simulation_; delay > 0)
+			{
+				auto timer = std::make_shared<boost::asio::deadline_timer>(*server_configs->io_context_,
+					boost::posix_time::milliseconds(delay));
+				timer->async_wait(
+					[timer, response, request](const boost::system::error_code& ec)
+					{
+						if (ec)
+							return;
+
+						do_handler_request(response, request);
+					}
+				);
+
+			}
+			else
+			{
+				do_handler_request(response, request);
+			}
+		}
+
+		void do_handler_request(std::shared_ptr<HttpServer::Response> response,
+			std::shared_ptr<HttpServer::Request> request)
+		{
 			//extract requested method
 			std::string method;
 			auto content = request->content.string();
@@ -334,6 +361,7 @@ namespace osrv
 				logger_->Error("Not found an appropriate handler in DeviceService for: " + method);
 				*response << "HTTP/1.1 400 Bad request\r\nContent-Length: " << 0 << "\r\n\r\n";
 			}
+
 		}
 
 		void init_service(HttpServer& srv, const osrv::ServerConfigs& server_configs_ptr, const std::string& configs_path, ILogger& logger)
