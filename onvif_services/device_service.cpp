@@ -24,6 +24,7 @@ static DigestSessionSP digest_session;
 const std::string GetCapabilities = "GetCapabilities";
 const std::string GetDeviceInformation = "GetDeviceInformation";
 const std::string GetNetworkInterfaces = "GetNetworkInterfaces";
+const std::string GetRelayOutputs = "GetRelayOutputs";
 const std::string GetServices = "GetServices";
 const std::string GetScopes = "GetScopes";
 const std::string GetSystemDateAndTime = "GetSystemDateAndTime";
@@ -148,6 +149,29 @@ namespace osrv
 				utility::soap::jsonNodeToXml(network_interfaces_config, network_interfaces_node, "", NsProcessor());
 
 				envelope_tree.add_child("s:Body.tds:GetNetworkInterfacesResponse", network_interfaces_node);
+
+				pt::ptree root_tree;
+				root_tree.put_child("s:Envelope", envelope_tree);
+
+				std::ostringstream os;
+				pt::write_xml(os, root_tree);
+
+				utility::http::fillResponseWithHeaders(*response, os.str());
+			}
+		};
+
+		struct GetRelayOutputsHandler : public utility::http::RequestHandlerBase
+		{
+			GetRelayOutputsHandler() : utility::http::RequestHandlerBase(GetRelayOutputs, osrv::auth::SECURITY_LEVELS::READ_MEDIA)
+			{
+			}
+
+			OVERLOAD_REQUEST_HANDLER
+			{
+				auto envelope_tree = utility::soap::getEnvelopeTree(XML_NAMESPACES);
+
+				// TODO: here is just stub response
+				envelope_tree.add("s:Body.tds:GetRelayOutputsResponse", "");
 
 				pt::ptree root_tree;
 				root_tree.put_child("s:Envelope", envelope_tree);
@@ -392,6 +416,7 @@ namespace osrv
 			handlers.emplace_back(new GetCapabilitiesHandler());
 			handlers.emplace_back(new GetDeviceInformationHandler());
 			handlers.emplace_back(new GetNetworkInterfacesHandler());
+			handlers.emplace_back(new GetRelayOutputsHandler());
 			handlers.emplace_back(new GetServicesHandler());
 			handlers.emplace_back(new GetScopesHandler());
 			handlers.emplace_back(new GetSystemDateAndTimeHandler());
