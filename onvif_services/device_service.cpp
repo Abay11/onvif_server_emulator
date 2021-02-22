@@ -421,6 +421,7 @@ namespace osrv
 			handlers.emplace_back(new GetScopesHandler());
 			handlers.emplace_back(new GetSystemDateAndTimeHandler());
 
+			// set default handler
 			srv.resource["/onvif/device_service"]["POST"] = DeviceServiceHandler;
 
 			SERVER_ADDRESS = "http://";

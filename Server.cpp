@@ -4,6 +4,8 @@
 #include "../onvif_services/media2_service.h"
 #include "../onvif_services/event_service.h"
 #include "../onvif_services/discovery_service.h"
+#include "../onvif_services/imaging_service.h"
+
 #include "utility/XmlParser.h"
 #include "utility/AuthHelper.h"
 #include "../onvif_services/physical_components/IDigitalInput.h"
@@ -42,7 +44,6 @@ namespace osrv
 			response->write(SimpleWeb::StatusCode::client_error_bad_request, "Bad request");
 		};
 
-
 		configs_dir += "/";
 		// TODO: as now here we read configs, we can refactor @read_server_configs function and pass ptree 
 		std::ifstream configs_file(configs_dir + COMMON_CONFIGS_NAME);
@@ -72,9 +73,9 @@ namespace osrv
 		device::init_service(*http_server_instance_, server_configs_, configs_dir, log);
 		media::init_service(*http_server_instance_, server_configs_, configs_dir, log);
 		media2::init_service(*http_server_instance_, server_configs_, configs_dir, log);
-		// the event service is not completed yet, comment for master branch for now
 		event::init_service(*http_server_instance_, server_configs_, configs_dir, log);
 		discovery::init_service(configs_dir, log);
+		imaging::init_service(*http_server_instance_, server_configs_, configs_dir, log);
 
 		rtspServer_ = new rtsp::Server(&log, server_configs_);
 

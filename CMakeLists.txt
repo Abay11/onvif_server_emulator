@@ -38,6 +38,8 @@ FILE(GLOB SERVICES_SRC
 	"onvif_services/media2_service.cpp"
 	"onvif_services/event_service.h"
 	"onvif_services/event_service.cpp"
+	"onvif_services/imaging_service.h"
+	"onvif_services/imaging_service.cpp"
 	"onvif_services/pullpoint/pull_point.h"
 	"onvif_services/pullpoint/pull_point.cpp"
 	"onvif_services/discovery_service.h"
