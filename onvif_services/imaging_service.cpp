@@ -26,6 +26,7 @@ static osrv::StringsMap XML_NAMESPACES;
 namespace osrv::imaging
 {
 	// a list of implemented methods
+	const std::string GetImagingSettings = "GetImagingSettings";
 	const std::string GetOptions = "GetOptions";
 		
 	const std::string CONFIGS_FILE = "imaging.config";
@@ -38,7 +39,7 @@ namespace osrv::imaging
 	struct GetOptionsHandler : public utility::http::RequestHandlerBase
 	{
 
-		GetOptionsHandler() : utility::http::RequestHandlerBase("GetOptions", osrv::auth::SECURITY_LEVELS::READ_MEDIA)
+		GetOptionsHandler() : utility::http::RequestHandlerBase(GetOptions, osrv::auth::SECURITY_LEVELS::READ_MEDIA)
 		{
 		}
 			
@@ -47,6 +48,29 @@ namespace osrv::imaging
 			auto envelope_tree = utility::soap::getEnvelopeTree(XML_NAMESPACES);
 
 			envelope_tree.add("s:Body.timg:GetOptionsResponse.timg:ImagingOptions", "");
+
+			pt::ptree root_tree;
+			root_tree.put_child("s:Envelope", envelope_tree);
+
+			std::ostringstream os;
+			pt::write_xml(os, root_tree);
+
+			utility::http::fillResponseWithHeaders(*response, os.str());
+		}
+	};
+	
+	struct GetImagingSettingsHandler : public utility::http::RequestHandlerBase
+	{
+
+		GetImagingSettingsHandler() : utility::http::RequestHandlerBase(GetImagingSettings, osrv::auth::SECURITY_LEVELS::READ_MEDIA)
+		{
+		}
+			
+		OVERLOAD_REQUEST_HANDLER
+		{
+			auto envelope_tree = utility::soap::getEnvelopeTree(XML_NAMESPACES);
+
+			envelope_tree.add("s:Body.timg:GetImagingSettingsResponse.timg:ImagingSettings", "");
 
 			pt::ptree root_tree;
 			root_tree.put_child("s:Envelope", envelope_tree);
@@ -191,6 +215,7 @@ namespace osrv::imaging
 			for (const auto& n : namespaces_tree)
 				XML_NAMESPACES.insert({ n.first, n.second.get_value<std::string>() });
 			
+			handlers.emplace_back(new GetImagingSettingsHandler());
 			handlers.emplace_back(new GetOptionsHandler());
 
 			srv.resource["/onvif/imaging_service"]["POST"] = ImagingServiceDefaultHandler;
