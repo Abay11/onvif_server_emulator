@@ -269,11 +269,11 @@ namespace osrv
 
 					option_node.add("tt:Encoding ", ec.second.get<std::string>("Encoding"));
 					
-					option_node.add("tt:QualityRange.Min", ec.second.get<float>("QualityRange.Min"));
-					option_node.add("tt:QualityRange.Max", ec.second.get<float>("QualityRange.Max"));
+					option_node.add("tt:QualityRange.tt:Min", ec.second.get<float>("QualityRange.Min"));
+					option_node.add("tt:QualityRange.tt:Max", ec.second.get<float>("QualityRange.Max"));
 
-					option_node.add("tt:ResolutionsAvailable.Width", ec.second.get<float>("ResolutionsAvailable.Width"));
-					option_node.add("tt:ResolutionsAvailable.Height", ec.second.get<float>("ResolutionsAvailable.Height"));
+					option_node.add("tt:ResolutionsAvailable.tt:Width", ec.second.get<float>("ResolutionsAvailable.Width"));
+					option_node.add("tt:ResolutionsAvailable.tt:Height", ec.second.get<float>("ResolutionsAvailable.Height"));
 
 					{ //BitrateRange 
 						std::vector<int> bitrates;
