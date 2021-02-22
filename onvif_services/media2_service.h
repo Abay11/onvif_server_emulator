@@ -23,6 +23,18 @@ namespace osrv
 			// functions throw an exception if error occured
 			void profile_to_soap(const ptree& profile_config, const ptree& configs_file, ptree& result);
 			void fill_video_encoder(const ptree& config_node, ptree& videoencoder_node);
+
+			template <typename T>
+			std::string to_value_list(const std::vector<T>& list)
+			{
+				std::stringstream ss;
+				for (const auto& t : list)
+				{
+					ss << t << " ";
+				}
+
+				return ss.str();
+			}
 		}
 	}
 }

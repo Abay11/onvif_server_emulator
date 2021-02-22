@@ -30,7 +30,10 @@ static osrv::StringsMap XML_NAMESPACES;
 static const std::string GetAnalyticsConfigurations = "GetAnalyticsConfigurations";
 static const std::string GetAudioDecoderConfigurations = "GetAudioDecoderConfigurations";
 static const std::string GetProfiles = "GetProfiles";
+static const std::string GetVideoEncoderConfigurations = "GetVideoEncoderConfigurations";
+static const std::string GetVideoEncoderConfigurationOptions = "GetVideoEncoderConfigurationOptions";
 static const std::string GetVideoSourceConfigurations = "GetVideoSourceConfigurations";
+static const std::string GetVideoSourceConfigurationOptions = "GetVideoSourceConfigurationOptions";
 static const std::string GetStreamUri = "GetStreamUri";
 
 namespace osrv
@@ -43,6 +46,8 @@ namespace osrv
 
 		static std::vector<utility::http::HandlerSP> handlers;
 
+		void do_handler_request(std::shared_ptr<HttpServer::Response> response,
+			std::shared_ptr<HttpServer::Request> request);
 
 		struct GetAnalyticsConfigurationsHandler : public utility::http::RequestHandlerBase
 		{
@@ -151,6 +156,151 @@ namespace osrv
 			}
 		};
 
+		struct GetVideoEncoderConfigurationsHandler : public utility::http::RequestHandlerBase
+		{
+			GetVideoEncoderConfigurationsHandler() : utility::http::RequestHandlerBase(GetVideoEncoderConfigurations, osrv::auth::SECURITY_LEVELS::READ_MEDIA)
+			{
+			}
+
+			OVERLOAD_REQUEST_HANDLER
+			{
+				const auto ve_config_list = PROFILES_CONFIGS_TREE.get_child("VideoEncoderConfigurations2");
+				pt::ptree ve_configs_node;
+				for (const auto& ve_config : ve_config_list)
+				{
+					pt::ptree videoencoder_configuration;
+					osrv::media2::util::fill_video_encoder(ve_config.second, videoencoder_configuration);
+					ve_configs_node.add_child("tr2:Configurations", videoencoder_configuration);
+				}
+
+				auto env_tree = utility::soap::getEnvelopeTree(XML_NAMESPACES);
+				env_tree.put_child("s:Body.tr2:GetVideoEncoderConfigurationsResponse", ve_configs_node);
+				pt::ptree root_tree;
+				root_tree.put_child("s:Envelope", env_tree);
+
+				std::ostringstream os;
+				pt::write_xml(os, root_tree);
+
+				utility::http::fillResponseWithHeaders(*response, os.str());
+			}
+		};
+
+		struct GetVideoEncoderConfigurationOptionsHandler : public utility::http::RequestHandlerBase
+		{
+			GetVideoEncoderConfigurationOptionsHandler() : utility::http::RequestHandlerBase(GetVideoEncoderConfigurationOptions, osrv::auth::SECURITY_LEVELS::READ_MEDIA)
+			{
+			}
+
+			OVERLOAD_REQUEST_HANDLER
+			{
+
+
+				// a request may contain specific config token or profile token,
+				// but for now, I no see reason somehow filter and process that additional conditions
+				// so just return "as is" from config files all encoding options
+
+				//// extract requested encoder configuration token 
+				//std::string configuration_token;
+				//std::string profile_token;
+				//{
+				//	auto request_str = request->content.string();
+				//	std::istringstream is(request_str);	
+				//	pt::ptree xml_tree;
+				//	pt::xml_parser::read_xml(is, xml_tree);
+				//	configuration_token = exns::find_hierarchy("Envelope.Body.GetVideoEncoderConfigurationOptions.ConfigurationToken", xml_tree);
+				//	profile_token = exns::find_hierarchy("Envelope.Body.GetVideoEncoderConfigurationOptions.ProfileToken", xml_tree);
+				//}
+
+				//if (!profile_token.empty())
+				//{
+				//	const auto profiles_configs_list = PROFILES_CONFIGS_TREE.get_child("MediaProfiles");
+
+				//	auto req_profile_config = std::find_if(profiles_configs_list.begin(), profiles_configs_list.end(),
+				//		[profile_token](const pt::ptree::value_type& it)
+				//		{
+				//			return it.second.get<std::string>("token") == profile_token;
+				//		});
+
+				//	if (req_profile_config == profiles_configs_list.end())
+				//	{
+				//		throw std::runtime_error("Client error: Not found requeried profile token!");
+				//	}
+				//}
+
+
+
+				const auto enc_config_options_list = PROFILES_CONFIGS_TREE.get_child("VideoEncoderConfigurationOptions2");
+
+				pt::ptree response_node;
+				for (const auto& ec : enc_config_options_list)
+				{
+					pt::ptree option_node;
+
+					{ //GOV length
+						option_node.add("<xmlattr>.GovLengthRange", ec.second.get<std::string>("GovLengthRange"));
+					}
+
+					{ //FrameRatesSupported 
+
+						std::vector<float> framerates;
+						auto fps_list = ec.second.get_child("FrameRatesSupported");
+						for (auto n : fps_list)
+						{
+							framerates.push_back(n.second.get_value<float>());
+						}
+						option_node.add("<xmlattr>.FrameRatesSupported", util::to_value_list(framerates));
+					}
+
+					{ //ProfilesSupported 
+
+						std::vector<std::string> profiles;
+						auto fps_list = ec.second.get_child("ProfilesSupported");
+						for (auto n : fps_list)
+						{
+							profiles.push_back(n.second.get_value<std::string>());
+						}
+						option_node.add("<xmlattr>.ProfilesSupported", util::to_value_list(profiles));
+					}
+					
+					option_node.add("<xmlattr>.ConstantBitRateSupported", ec.second.get<bool>("ConstantBitRateSupported"));
+
+					option_node.add("<xmlattr>.GuaranteedFrameRateSupported", ec.second.get<bool>("GuaranteedFrameRateSupported"));
+
+
+					option_node.add("tt:Encoding ", ec.second.get<std::string>("Encoding"));
+					
+					option_node.add("tt:QualityRange.Min", ec.second.get<float>("QualityRange.Min"));
+					option_node.add("tt:QualityRange.Max", ec.second.get<float>("QualityRange.Max"));
+
+					option_node.add("tt:ResolutionsAvailable.Width", ec.second.get<float>("ResolutionsAvailable.Width"));
+					option_node.add("tt:ResolutionsAvailable.Height", ec.second.get<float>("ResolutionsAvailable.Height"));
+
+					{ //BitrateRange 
+						std::vector<int> bitrates;
+						auto bitrates_list = ec.second.get_child("BitrateRange");
+						for (auto n : bitrates_list)
+						{
+							bitrates.push_back(n.second.get_value<int>());
+						}
+						option_node.add("tt:BitrateRange", util::to_value_list(bitrates));
+
+					}
+
+					response_node.add_child("tr2:Options", option_node);
+				}
+
+				auto env_tree = utility::soap::getEnvelopeTree(XML_NAMESPACES);
+				env_tree.put_child("s:Body.tr2:GetVideoEncoderConfigurationOptionsResponse", response_node);
+				pt::ptree root_tree;
+				root_tree.put_child("s:Envelope", env_tree);
+
+				std::ostringstream os;
+				pt::write_xml(os, root_tree);
+
+				utility::http::fillResponseWithHeaders(*response, os.str());
+			}
+		};
+
 		struct GetVideoSourceConfigurationsHandler : public utility::http::RequestHandlerBase
 		{
 			GetVideoSourceConfigurationsHandler() : utility::http::RequestHandlerBase(GetVideoSourceConfigurations, osrv::auth::SECURITY_LEVELS::READ_MEDIA)
@@ -179,6 +329,60 @@ namespace osrv
 			}
 		};
 		
+		struct GetVideoSourceConfigurationOptionsHandler : public utility::http::RequestHandlerBase
+		{
+			GetVideoSourceConfigurationOptionsHandler() : utility::http::RequestHandlerBase(GetVideoSourceConfigurationOptions, osrv::auth::SECURITY_LEVELS::READ_MEDIA)
+			{
+			}
+
+			OVERLOAD_REQUEST_HANDLER
+			{
+				// TODO:
+				// Here we should parse request and generate a response depends on required profile token and videosource
+				// configuration token, but for now it's ignored
+
+				auto vs_config_list = PROFILES_CONFIGS_TREE.get_child("VideoSourceConfigurations");
+				pt::ptree options_node;
+				for (const auto& vs_config : vs_config_list)
+				{
+					pt::ptree option;
+					option.add("<xmlattr>.MaximumNumberOfProfiles", vs_config.second.get<int>("Options.MaximumNumberOfProfiles"));
+
+					option.add("tt:BoundsRange.tt:XRange.tt:Min",
+						vs_config.second.get<int>("Options.BoundsRange.XRange.Min"));
+					option.add("tt:BoundsRange.tt:XRange.tt:Max",
+						vs_config.second.get<int>("Options.BoundsRange.XRange.Max"));
+
+					option.add("tt:BoundsRange.tt:YRange.tt:Min",
+						vs_config.second.get<int>("Options.BoundsRange.YRange.Min"));
+					option.add("tt:BoundsRange.tt:YRange.tt:Max",
+						vs_config.second.get<int>("Options.BoundsRange.YRange.Max"));
+
+					option.add("tt:BoundsRange.tt:WidthRange.tt:Min",
+						vs_config.second.get<int>("Options.BoundsRange.WidthRange.Min"));
+					option.add("tt:BoundsRange.tt:WidthRange.tt:Max",
+						vs_config.second.get<int>("Options.BoundsRange.WidthRange.Max"));
+
+					option.add("tt:BoundsRange.tt:HeightRange.tt:Min",
+						vs_config.second.get<int>("Options.BoundsRange.HeightRange.Min"));
+					option.add("tt:BoundsRange.tt:HeightRange.tt:Max",
+						vs_config.second.get<int>("Options.BoundsRange.HeightRange.Max"));
+
+					options_node.put_child("tr2:Options", option);
+				}
+
+				auto env_tree = utility::soap::getEnvelopeTree(XML_NAMESPACES);
+				env_tree.put_child("s:Body.tr2:GetVideoSourceConfigurationOptionsResponse", options_node);
+				pt::ptree root_tree;
+				root_tree.put_child("s:Envelope", env_tree);
+
+				std::ostringstream os;
+				pt::write_xml(os, root_tree);
+
+				utility::http::fillResponseWithHeaders(*response, os.str());
+			}
+		};
+
 		struct GetStreamUriHandler : public utility::http::RequestHandlerBase
 		{
 			GetStreamUriHandler() : utility::http::RequestHandlerBase(GetStreamUri,
@@ -240,6 +444,30 @@ namespace osrv
         void Media2ServiceHandler(std::shared_ptr<HttpServer::Response> response,
             std::shared_ptr<HttpServer::Request> request)
         {
+			if (auto delay = server_configs->network_delay_simulation_; delay > 0)
+			{
+				auto timer = std::make_shared<boost::asio::deadline_timer>(*server_configs->io_context_,
+					boost::posix_time::milliseconds(delay));
+				timer->async_wait(
+					[timer, response, request](const boost::system::error_code& ec)
+					{
+						if (ec)
+							return;
+
+						do_handler_request(response, request);
+					}
+				);
+
+			}
+			else
+			{
+				do_handler_request(response, request);
+			}
+        }
+
+		void do_handler_request(std::shared_ptr<HttpServer::Response> response,
+            std::shared_ptr<HttpServer::Request> request)
+		{
 			//extract requested method
 			std::string method;
 			auto content = request->content.string();
@@ -321,7 +549,7 @@ namespace osrv
 				logger_->Error("Not found an appropriate handler in DeviceService for: " + method);
 				*response << "HTTP/1.1 400 Bad request\r\nContent-Length: " << 0 << "\r\n\r\n";
 			}
-        }
+		}
 
         void init_service(HttpServer& srv, const osrv::ServerConfigs& server_configs_ptr,
 			const std::string& configs_path, ILogger& logger)
@@ -346,7 +574,10 @@ namespace osrv
 			handlers.emplace_back(new GetAnalyticsConfigurationsHandler());
 			handlers.emplace_back(new GetAudioDecoderConfigurationsHandler());
 			handlers.emplace_back(new GetProfilesHandler());
+			handlers.emplace_back(new GetVideoEncoderConfigurationsHandler());
+			handlers.emplace_back(new GetVideoEncoderConfigurationOptionsHandler());
 			handlers.emplace_back(new GetVideoSourceConfigurationsHandler());
+			handlers.emplace_back(new GetVideoSourceConfigurationOptionsHandler());
 			handlers.emplace_back(new GetStreamUriHandler());
 
             srv.resource["/onvif/media2_service"]["POST"] = Media2ServiceHandler;
@@ -399,6 +630,13 @@ namespace osrv
 					result.put_child("tr2:Configurations.tr2:VideoEncoder", videoencoder_configuration);
 				}
 
+				{ // Videoanalytics
+					// just fill dummy configs
+
+					pt::ptree analytics_node;
+					osrv::media::util::fill_analytics_configuration(analytics_node);
+					result.put_child("tr2:Analytics", analytics_node);
+				}
 			}
 			
 			void fill_video_encoder(const pt::ptree& config_node, pt::ptree& videoencoder_node)

@@ -50,6 +50,9 @@ namespace osrv
 		//TODO:: Need release
 		static std::vector<utility::http::HandlerSP> handlers;
 
+		void do_handler_request(std::shared_ptr<HttpServer::Response> response,
+			std::shared_ptr<HttpServer::Request> request);
+
 		struct GetAudioDecoderConfigurationsHandler : public utility::http::RequestHandlerBase
 		{
 			GetAudioDecoderConfigurationsHandler() : utility::http::RequestHandlerBase(GetAudioDecoderConfigurations, osrv::auth::SECURITY_LEVELS::READ_MEDIA)
@@ -452,6 +455,30 @@ namespace osrv
 		void MediaServiceHandler(std::shared_ptr<HttpServer::Response> response,
 			std::shared_ptr<HttpServer::Request> request)
 		{
+			if (auto delay = server_configs->network_delay_simulation_; delay > 0)
+			{
+				auto timer = std::make_shared<boost::asio::deadline_timer>(*server_configs->io_context_,
+					boost::posix_time::milliseconds(delay));
+				timer->async_wait(
+					[timer, response, request](const boost::system::error_code& ec)
+					{
+						if (ec)
+							return;
+
+						do_handler_request(response, request);
+					}
+				);
+
+			}
+			else
+			{
+				do_handler_request(response, request);
+			}
+		}
+
+		void do_handler_request(std::shared_ptr<HttpServer::Response> response,
+			std::shared_ptr<HttpServer::Request> request)
+		{
 			//extract requested method
 			std::string method;
 			auto content = request->content.string();
@@ -694,6 +721,15 @@ void osrv::media::util::fill_soap_videosource_configuration(const pt::ptree& con
 		config_node.get<std::string>("Bounds.width"));
 	videosource_node.put("tt:Bounds.<xmlattr>.height",
 		config_node.get<std::string>("Bounds.height"));
+}
+
+void osrv::media::util::fill_analytics_configuration(pt::ptree& result)
+{
+	result.add("<xmlattr>.token", "analytics_token0");
+	result.add("tt:Name", "Analytics0");
+	result.add("tt:UseCount", 2);
+	result.add("tt:AnalyticsEngineConfgiruation", "");
+	result.add("tt:RuleEngineConfiguration", "");
 }
 
 std::string osrv::media::util::generate_rtsp_url(const ServerConfigs& server_configs, const std::string& profile_stream_url)
