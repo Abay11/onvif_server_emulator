@@ -22,7 +22,7 @@ namespace osrv
 			digest_failed() : runtime_error("HTTP Digest authentication failed!") {}
 		};
 
-		enum class SECURITY_LEVELS
+		enum class SECURITY_LEVELS : unsigned char
 		{
 			PRE_AUTH = 0,
 			READ_SYSTEM = 1,
@@ -34,7 +34,7 @@ namespace osrv
 			UNRECOVERABLE = 3,
 		};
 		
-		enum class USER_TYPE
+		enum class USER_TYPE : unsigned char
 		{
 			ANON = 0,
 			USER,

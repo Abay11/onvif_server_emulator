@@ -34,7 +34,10 @@ static const std::string GetVideoEncoderConfigurations = "GetVideoEncoderConfigu
 static const std::string GetVideoEncoderConfigurationOptions = "GetVideoEncoderConfigurationOptions";
 static const std::string GetVideoSourceConfigurations = "GetVideoSourceConfigurations";
 static const std::string GetVideoSourceConfigurationOptions = "GetVideoSourceConfigurationOptions";
+static const std::string GetServiceCapabilities = "GetServiceCapabilities";
 static const std::string GetStreamUri = "GetStreamUri";
+static const std::string SetVideoEncoderConfiguration = "SetVideoEncoderConfiguration";
+static const std::string SetVideoSourceConfiguration = "SetVideoSourceConfiguration";
 
 namespace osrv
 {
@@ -374,6 +377,45 @@ namespace osrv
 				utility::http::fillResponseWithHeaders(*response, os.str());
 			}
 		};
+		
+		struct GetServiceCapabilitiesHandler : public utility::http::RequestHandlerBase
+		{
+			GetServiceCapabilitiesHandler() : utility::http::RequestHandlerBase(GetServiceCapabilities, osrv::auth::SECURITY_LEVELS::PRE_AUTH)
+			{
+			}
+
+			OVERLOAD_REQUEST_HANDLER
+			{
+				auto capabilities_config = CONFIGS_TREE.get_child("GetServiceCapabilities2");
+				pt::ptree capabilities_node;
+				capabilities_node.add("<xmlattr>.SnapshotUri", capabilities_config.get<bool>("SnapshotUri"));
+				capabilities_node.add("<xmlattr>.Rotation", capabilities_config.get<bool>("Rotation"));
+				capabilities_node.add("<xmlattr>.VideoSourceMode", capabilities_config.get<bool>("VideoSourceMode"));
+				capabilities_node.add("<xmlattr>.OSD", capabilities_config.get<bool>("OSD"));
+				capabilities_node.add("<xmlattr>.TemporaryOSDText", capabilities_config.get<bool>("TemporaryOSDText"));
+				capabilities_node.add("<xmlattr>.Mask", capabilities_config.get<bool>("Mask"));
+				capabilities_node.add("<xmlattr>.SourceMask", capabilities_config.get<bool>("SourceMask"));
+				
+				capabilities_node.add("tr2:ProfileCapabilities.MaximumNumberOfProfiles", capabilities_config.get<int>("ProfileCapabilities.MaximumNumberOfProfiles"));
+				capabilities_node.add("tr2:ProfileCapabilities.ConfigurationsSupported", capabilities_config.get<std::string>("ProfileCapabilities.ConfigurationsSupported"));
+
+				capabilities_node.add("tr2:StreamingCapabilities.<xmlattr>.RTSPStreaming", capabilities_config.get<bool>("StreamingCapabilities.RTSPStreaming"));
+				capabilities_node.add("tr2:StreamingCapabilities.<xmlattr>.RTPMulticast", capabilities_config.get<bool>("StreamingCapabilities.RTPMulticast"));
+				capabilities_node.add("tr2:StreamingCapabilities.<xmlattr>.RTP_RTSP_TCP", capabilities_config.get<bool>("StreamingCapabilities.RTP_RTSP_TCP"));
+				capabilities_node.add("tr2:StreamingCapabilities.<xmlattr>.NonAggregateControl", capabilities_config.get<bool>("StreamingCapabilities.NonAggregateControl"));
+				capabilities_node.add("tr2:StreamingCapabilities.<xmlattr>.AutoStartMulticast", capabilities_config.get<bool>("StreamingCapabilities.AutoStartMulticast"));
+
+				auto env_tree = utility::soap::getEnvelopeTree(XML_NAMESPACES);
+				env_tree.put_child("s:Body.tr2:GetServiceCapabilitiesResponse", capabilities_node);
+				pt::ptree root_tree;
+				root_tree.put_child("s:Envelope", env_tree);
+
+				std::ostringstream os;
+				pt::write_xml(os, root_tree);
+
+				utility::http::fillResponseWithHeaders(*response, os.str());
+			}
+		};
 
 		struct GetStreamUriHandler : public utility::http::RequestHandlerBase
 		{
@@ -421,6 +463,60 @@ namespace osrv
 
 				auto envelope_tree = utility::soap::getEnvelopeTree(XML_NAMESPACES);
 				envelope_tree.put_child("s:Body.tr2:GetStreamUriResponse", response_node);
+
+				pt::ptree root_tree;
+				root_tree.put_child("s:Envelope", envelope_tree);
+
+				std::ostringstream os;
+				pt::write_xml(os, root_tree);
+
+				utility::http::fillResponseWithHeaders(*response, os.str());
+			}
+		};
+		
+		struct SetVideoEncoderConfigurationHandler : public utility::http::RequestHandlerBase
+		{
+			SetVideoEncoderConfigurationHandler() : utility::http::RequestHandlerBase(SetVideoEncoderConfiguration,
+				osrv::auth::SECURITY_LEVELS::ACTUATE)
+			{
+			}
+
+			OVERLOAD_REQUEST_HANDLER
+			{
+				pt::ptree request_xml;
+				pt::xml_parser::read_xml(std::istringstream{ request->content.string() }, request_xml);
+
+				// TODO: add impmlementation
+
+				auto envelope_tree = utility::soap::getEnvelopeTree(XML_NAMESPACES);
+				envelope_tree.put("s:Body.tr2:SetVideoEncoderConfigurationResponse", "");
+
+				pt::ptree root_tree;
+				root_tree.put_child("s:Envelope", envelope_tree);
+
+				std::ostringstream os;
+				pt::write_xml(os, root_tree);
+
+				utility::http::fillResponseWithHeaders(*response, os.str());
+			}
+		};
+		
+		struct SetVideoSourceConfigurationHandler : public utility::http::RequestHandlerBase
+		{
+			SetVideoSourceConfigurationHandler() : utility::http::RequestHandlerBase(SetVideoSourceConfiguration,
+				osrv::auth::SECURITY_LEVELS::ACTUATE)
+			{
+			}
+
+			OVERLOAD_REQUEST_HANDLER
+			{
+				pt::ptree request_xml;
+				pt::xml_parser::read_xml(std::istringstream{ request->content.string() }, request_xml);
+
+				// TODO: add implementation
+
+				auto envelope_tree = utility::soap::getEnvelopeTree(XML_NAMESPACES);
+				envelope_tree.put("s:Body.tr2:SetVideoSourceConfigurationResponse", "");
 
 				pt::ptree root_tree;
 				root_tree.put_child("s:Envelope", envelope_tree);
@@ -530,7 +626,7 @@ namespace osrv
 				}
 				catch (const std::exception& e)
 				{
-					logger_->Error("A server's error occured in DeviceService while processing: " + method
+					logger_->Error("A server's error occured in Media2Service while processing: " + method
 						+ ". Info: " + e.what());
 					
 					*response << "HTTP/1.1 500 Server error\r\nContent-Length: " << 0 << "\r\n\r\n";
@@ -538,7 +634,7 @@ namespace osrv
 			}
 			else
 			{
-				logger_->Error("Not found an appropriate handler in DeviceService for: " + method);
+				logger_->Error("Not found an appropriate handler in Media2Service for: " + method);
 				*response << "HTTP/1.1 400 Bad request\r\nContent-Length: " << 0 << "\r\n\r\n";
 			}
 		}
@@ -566,14 +662,16 @@ namespace osrv
 			handlers.emplace_back(new GetAnalyticsConfigurationsHandler());
 			handlers.emplace_back(new GetAudioDecoderConfigurationsHandler());
 			handlers.emplace_back(new GetProfilesHandler());
+			handlers.emplace_back(new GetServiceCapabilitiesHandler());
 			handlers.emplace_back(new GetVideoEncoderConfigurationsHandler());
 			handlers.emplace_back(new GetVideoEncoderConfigurationOptionsHandler());
 			handlers.emplace_back(new GetVideoSourceConfigurationsHandler());
 			handlers.emplace_back(new GetVideoSourceConfigurationOptionsHandler());
 			handlers.emplace_back(new GetStreamUriHandler());
+			handlers.emplace_back(new SetVideoEncoderConfigurationHandler());
+			handlers.emplace_back(new SetVideoSourceConfigurationHandler());
 
             srv.resource["/onvif/media2_service"]["POST"] = Media2ServiceHandler;
-
         }
 
 
