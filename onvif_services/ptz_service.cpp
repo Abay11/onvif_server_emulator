@@ -1,4 +1,4 @@
-#include "imaging_service.h"
+#include "ptz_service.h"
 
 #include "../Logger.h"
 #include "../Server.h"
@@ -11,8 +11,6 @@
 #include <boost/property_tree/json_parser.hpp>
 #include <boost/property_tree/ptree.hpp>
 
-//#include "../utility/HttpDigestHelper.h"
-
 static ILogger* logger_ = nullptr;
 static osrv::ServerConfigs* server_configs;
 static DigestSessionSP digest_session;
@@ -23,90 +21,44 @@ namespace pt = boost::property_tree;
 static pt::ptree CONFIGS_TREE;
 static osrv::StringsMap XML_NAMESPACES;
 
-namespace osrv::imaging
-{
-	// a list of implemented methods
-	const std::string GetImagingSettings = "GetImagingSettings";
-	const std::string GetOptions = "GetOptions";
-	const std::string SetImagingSettings = "SetImagingSettings";
-		
-	const std::string CONFIGS_FILE = "imaging.config";
+// a list of implemented methods
+//const std::string GetNodes = "GetNodes";
 
-	static std::vector<utility::http::HandlerSP> handlers;
+
+static std::vector<utility::http::HandlerSP> handlers;
+
+namespace osrv::ptz
+{
+	const std::string CONFIGS_FILE = "ptz.config";
 
 	void do_handle_request(std::shared_ptr<HttpServer::Response> response,
 		std::shared_ptr<HttpServer::Request> request);
-	
-	struct GetImagingSettingsHandler : public utility::http::RequestHandlerBase
-	{
 
-		GetImagingSettingsHandler() : utility::http::RequestHandlerBase(GetImagingSettings, osrv::auth::SECURITY_LEVELS::READ_MEDIA)
-		{
-		}
-			
-		OVERLOAD_REQUEST_HANDLER
-		{
-			auto envelope_tree = utility::soap::getEnvelopeTree(XML_NAMESPACES);
+	//struct PtzNodesHandler : public utility::http::RequestHandlerBase
+	//{
 
-			envelope_tree.add("s:Body.timg:GetImagingSettingsResponse.timg:ImagingSettings", "");
+	//	PtzNodesHandler() : utility::http::RequestHandlerBase(GetPtzNodes, osrv::auth::SECURITY_LEVELS::READ_MEDIA)
+	//	{
+	//	}
 
-			pt::ptree root_tree;
-			root_tree.put_child("s:Envelope", envelope_tree);
+	//	OVERLOAD_REQUEST_HANDLER
+	//	{
+	//		auto envelope_tree = utility::soap::getEnvelopeTree(XML_NAMESPACES);
 
-			std::ostringstream os;
-			pt::write_xml(os, root_tree);
+	//		envelope_tree.add("s:Body.tptz:GetNodesResponse", "");
 
-			utility::http::fillResponseWithHeaders(*response, os.str());
-		}
-	};
+	//		pt::ptree root_tree;
+	//		root_tree.put_child("s:Envelope", envelope_tree);
 
-	struct GetOptionsHandler : public utility::http::RequestHandlerBase
-	{
+	//		std::ostringstream os;
+	//		pt::write_xml(os, root_tree);
 
-		GetOptionsHandler() : utility::http::RequestHandlerBase(GetOptions, osrv::auth::SECURITY_LEVELS::READ_MEDIA)
-		{
-		}
-			
-		OVERLOAD_REQUEST_HANDLER
-		{
-			auto envelope_tree = utility::soap::getEnvelopeTree(XML_NAMESPACES);
+	//		utility::http::fillResponseWithHeaders(*response, os.str());
+	//	}
+	//};
 
-			envelope_tree.add("s:Body.timg:GetOptionsResponse.timg:ImagingOptions", "");
 
-			pt::ptree root_tree;
-			root_tree.put_child("s:Envelope", envelope_tree);
-
-			std::ostringstream os;
-			pt::write_xml(os, root_tree);
-
-			utility::http::fillResponseWithHeaders(*response, os.str());
-		}
-	};
-
-	struct SetImagingSettingsHandler : public utility::http::RequestHandlerBase
-	{
-
-		SetImagingSettingsHandler() : utility::http::RequestHandlerBase(SetImagingSettings, osrv::auth::SECURITY_LEVELS::ACTUATE)
-		{
-		}
-			
-		OVERLOAD_REQUEST_HANDLER
-		{
-			auto envelope_tree = utility::soap::getEnvelopeTree(XML_NAMESPACES);
-
-			envelope_tree.add("s:Body.timg:SetImagingSettingsResponse", "");
-
-			pt::ptree root_tree;
-			root_tree.put_child("s:Envelope", envelope_tree);
-
-			std::ostringstream os;
-			pt::write_xml(os, root_tree);
-
-			utility::http::fillResponseWithHeaders(*response, os.str());
-		}
-	};
-
-	void ImagingServiceDefaultHandler(std::shared_ptr<HttpServer::Response> response,
+	void PtzServiceDefaultHandler(std::shared_ptr<HttpServer::Response> response,
 		std::shared_ptr<HttpServer::Request> request)
 	{
 		if (auto delay = server_configs->network_delay_simulation_; delay > 0)
@@ -164,7 +116,7 @@ namespace osrv::imaging
 			try
 			{
 				auto handler_ptr = *handler_it;
-				logger_->Debug("Handling ImagingService request: " + handler_ptr->get_name());
+				logger_->Debug("Handling PtzService request: " + handler_ptr->get_name());
 
 				//extract user credentials
 				osrv::auth::USER_TYPE current_user = osrv::auth::USER_TYPE::ANON;
@@ -222,10 +174,10 @@ namespace osrv::imaging
 	void init_service(HttpServer& srv, osrv::ServerConfigs& server_configs_instance, const std::string& configs_path, ILogger& logger)
 	{
 		if (logger_)
-			return logger_->Error("ImagingService is already initiated!");
+			return logger_->Error("PtzService is already initiated!");
 
 		logger_ = &logger;
-		logger_->Debug("Initiating Imaging service...");
+		logger_->Debug("Initiating Ptz service...");
 
 		server_configs = &server_configs_instance;
 		digest_session = server_configs_instance.digest_session_;
@@ -238,11 +190,10 @@ namespace osrv::imaging
 		auto namespaces_tree = CONFIGS_TREE.get_child("Namespaces");
 		for (const auto& n : namespaces_tree)
 			XML_NAMESPACES.insert({ n.first, n.second.get_value<std::string>() });
-		
-		handlers.emplace_back(new GetImagingSettingsHandler());
-		handlers.emplace_back(new GetOptionsHandler());
-		handlers.emplace_back(new SetImagingSettingsHandler());
 
-		srv.resource["/onvif/imaging_service"]["POST"] = ImagingServiceDefaultHandler;
+		//handlers.emplace_back(new GetImagingSettingsHandler());
+
+		srv.resource["/onvif/ptz_service"]["POST"] = PtzServiceDefaultHandler;
+
 	}
-}
+} // ptz

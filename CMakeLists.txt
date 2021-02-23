@@ -49,6 +49,8 @@ FILE(GLOB SERVICES_SRC
 	"onvif_services/physical_components/IPhysicalComponent.h"
   	"onvif_services/physical_components/IDigitalInput.h"
   	"onvif_services/physical_components/IDigitalInput.cpp"
+	"onvif_services/ptz_service.h"
+	"onvif_services/ptz_service.cpp"
 )
 
 FILE (GLOB UTILITY_SRC
