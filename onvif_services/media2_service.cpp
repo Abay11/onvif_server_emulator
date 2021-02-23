@@ -275,16 +275,8 @@ namespace osrv
 					option_node.add("tt:ResolutionsAvailable.tt:Width", ec.second.get<float>("ResolutionsAvailable.Width"));
 					option_node.add("tt:ResolutionsAvailable.tt:Height", ec.second.get<float>("ResolutionsAvailable.Height"));
 
-					{ //BitrateRange 
-						std::vector<int> bitrates;
-						auto bitrates_list = ec.second.get_child("BitrateRange");
-						for (auto n : bitrates_list)
-						{
-							bitrates.push_back(n.second.get_value<int>());
-						}
-						option_node.add("tt:BitrateRange", util::to_value_list(bitrates));
-
-					}
+					option_node.add("tt:BitrateRange.tt:Min", ec.second.get<int>("BitrateRange.Min"));
+					option_node.add("tt:BitrateRange.tt:Max", ec.second.get<int>("BitrateRange.Max"));
 
 					response_node.add_child("tr2:Options", option_node);
 				}
@@ -651,6 +643,9 @@ namespace osrv
 				videoencoder_node.add("tt:Resolution.tt:Width", config_node.get<int>("Resolution.Width"));
 				videoencoder_node.add("tt:Resolution.tt:Height", config_node.get<int>("Resolution.Height"));
 				videoencoder_node.add("tt:Quality", config_node.get<float>("Quality"));
+				videoencoder_node.add("tt:RateControl.tt:ConstantBitRate", config_node.get<bool>("RateControl.ConstantBitRate"));
+				videoencoder_node.add("tt:RateControl.tt:FrameRateLimit", config_node.get<float>("RateControl.FrameRateLimit"));
+				videoencoder_node.add("tt:RateControl.tt:BitrateLimit", config_node.get<int>("RateControl.BitrateLimit"));
 			}
 			
 		}

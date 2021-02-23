@@ -30,7 +30,11 @@ namespace osrv
 				std::stringstream ss;
 				for (const auto& t : list)
 				{
-					ss << t << " ";
+					if (!ss.str().empty())
+					{
+						ss << " ";
+					}
+					ss << t;
 				}
 
 				return ss.str();
