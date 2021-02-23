@@ -22,7 +22,7 @@ static pt::ptree CONFIGS_TREE;
 static osrv::StringsMap XML_NAMESPACES;
 
 // a list of implemented methods
-//const std::string GetNodes = "GetNodes";
+const std::string GetNodes = "GetNodes";
 
 
 static std::vector<utility::http::HandlerSP> handlers;
@@ -34,28 +34,57 @@ namespace osrv::ptz
 	void do_handle_request(std::shared_ptr<HttpServer::Response> response,
 		std::shared_ptr<HttpServer::Request> request);
 
-	//struct PtzNodesHandler : public utility::http::RequestHandlerBase
-	//{
+	struct GetNodesHandler : public utility::http::RequestHandlerBase
+	{
 
-	//	PtzNodesHandler() : utility::http::RequestHandlerBase(GetPtzNodes, osrv::auth::SECURITY_LEVELS::READ_MEDIA)
-	//	{
-	//	}
+		GetNodesHandler() : utility::http::RequestHandlerBase(GetNodes, osrv::auth::SECURITY_LEVELS::READ_MEDIA)
+		{
+		}
 
-	//	OVERLOAD_REQUEST_HANDLER
-	//	{
-	//		auto envelope_tree = utility::soap::getEnvelopeTree(XML_NAMESPACES);
+		OVERLOAD_REQUEST_HANDLER
+		{
+			auto envelope_tree = utility::soap::getEnvelopeTree(XML_NAMESPACES);
 
-	//		envelope_tree.add("s:Body.tptz:GetNodesResponse", "");
+			pt::ptree nodes_tree;
 
-	//		pt::ptree root_tree;
-	//		root_tree.put_child("s:Envelope", envelope_tree);
+			auto nodes_config = CONFIGS_TREE.get_child("Nodes");
 
-	//		std::ostringstream os;
-	//		pt::write_xml(os, root_tree);
+			for (const auto& node : nodes_config)
+			{
+				pt::ptree node_tree;
+				node_tree.add("<xmlattr>.token", node.second.get<std::string>("token"));
+				node_tree.add("<xmlattr>.FixedHomePosition", node.second.get<bool>("FixedHomePosition"));
+				node_tree.add("<xmlattr>.GeoMove", node.second.get<bool>("GeoMove"));
+				node_tree.add("tt:Name", node.second.get<std::string>("Name"));
 
-	//		utility::http::fillResponseWithHeaders(*response, os.str());
-	//	}
-	//};
+				for (const auto& space_node : node.second.get_child("SupportedPTZSpaces"))
+				{
+					const auto& space_name = space_node.second.get<std::string>("space");
+					const auto item_path = "tt:SupportedPTZSpaces." + space_name;
+					node_tree.add(item_path + "URI", space_node.second.get<std::string>("URI"));
+					node_tree.add(item_path + "XRange.Min", space_node.second.get<std::string>("XRange.Min"));
+					node_tree.add(item_path + "XRange.Max", space_node.second.get<std::string>("XRange.Max"));
+					node_tree.add(item_path + "YRange.Min", space_node.second.get<std::string>("YRange.Min"));
+					node_tree.add(item_path + "YRange.Max", space_node.second.get<std::string>("YRange.Max"));
+				}
+
+				node_tree.add("tt:MaximumNumberOfPresets", node.second.get<int>("MaximumNumberOfPresets"));
+				node_tree.add("tt:HomeSupported", node.second.get<bool>("HomeSupported"));
+
+				nodes_tree.add_child("tptz:PTZNode", node_tree);
+			}
+
+			envelope_tree.add_child("s:Body.tptz:GetNodesResponse", nodes_tree);
+
+			pt::ptree root_tree;
+			root_tree.put_child("s:Envelope", envelope_tree);
+
+			std::ostringstream os;
+			pt::write_xml(os, root_tree);
+
+			utility::http::fillResponseWithHeaders(*response, os.str());
+		}
+	};
 
 
 	void PtzServiceDefaultHandler(std::shared_ptr<HttpServer::Response> response,
@@ -191,7 +220,7 @@ namespace osrv::ptz
 		for (const auto& n : namespaces_tree)
 			XML_NAMESPACES.insert({ n.first, n.second.get_value<std::string>() });
 
-		//handlers.emplace_back(new GetImagingSettingsHandler());
+		handlers.emplace_back(new GetNodesHandler());
 
 		srv.resource["/onvif/ptz_service"]["POST"] = PtzServiceDefaultHandler;
 
