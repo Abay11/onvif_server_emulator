@@ -27,6 +27,7 @@ namespace osrv::imaging
 {
 	// a list of implemented methods
 	const std::string GetImagingSettings = "GetImagingSettings";
+	const std::string GetMoveOptions = "GetMoveOptions";
 	const std::string GetOptions = "GetOptions";
 	const std::string SetImagingSettings = "SetImagingSettings";
 		
@@ -49,6 +50,30 @@ namespace osrv::imaging
 			auto envelope_tree = utility::soap::getEnvelopeTree(XML_NAMESPACES);
 
 			envelope_tree.add("s:Body.timg:GetImagingSettingsResponse.timg:ImagingSettings", "");
+
+			pt::ptree root_tree;
+			root_tree.put_child("s:Envelope", envelope_tree);
+
+			std::ostringstream os;
+			pt::write_xml(os, root_tree);
+
+			utility::http::fillResponseWithHeaders(*response, os.str());
+		}
+	};
+
+	struct GetMoveOptionsHandler : public utility::http::RequestHandlerBase
+	{
+
+		GetMoveOptionsHandler() : utility::http::RequestHandlerBase(GetMoveOptions, osrv::auth::SECURITY_LEVELS::READ_MEDIA)
+		{
+		}
+
+		OVERLOAD_REQUEST_HANDLER
+		{
+			auto envelope_tree = utility::soap::getEnvelopeTree(XML_NAMESPACES);
+
+			envelope_tree.add("s:Body.timg:GetMoveOptionsResponse.timg:MoveOptions.tt:Continuous.tt:Speed.tt:Min", 1.00);
+			envelope_tree.add("s:Body.timg:GetMoveOptionsResponse.timg:MoveOptions.tt:Continuous.tt:Speed.tt:Max", 5.00);
 
 			pt::ptree root_tree;
 			root_tree.put_child("s:Envelope", envelope_tree);
@@ -240,6 +265,7 @@ namespace osrv::imaging
 			XML_NAMESPACES.insert({ n.first, n.second.get_value<std::string>() });
 		
 		handlers.emplace_back(new GetImagingSettingsHandler());
+		handlers.emplace_back(new GetMoveOptionsHandler());
 		handlers.emplace_back(new GetOptionsHandler());
 		handlers.emplace_back(new SetImagingSettingsHandler());
 
