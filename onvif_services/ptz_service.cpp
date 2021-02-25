@@ -23,6 +23,7 @@ static osrv::StringsMap XML_NAMESPACES;
 
 // a list of implemented methods
 const std::string GetNodes = "GetNodes";
+const std::string GetNode = "GetNode";
 
 
 static std::vector<utility::http::HandlerSP> handlers;
@@ -49,6 +50,59 @@ namespace osrv::ptz
 
 			auto nodes_config = CONFIGS_TREE.get_child("Nodes");
 
+			for (const auto& node : nodes_config)
+			{
+				pt::ptree node_tree;
+				node_tree.add("<xmlattr>.token", node.second.get<std::string>("token"));
+				node_tree.add("<xmlattr>.FixedHomePosition", node.second.get<bool>("FixedHomePosition"));
+				node_tree.add("<xmlattr>.GeoMove", node.second.get<bool>("GeoMove"));
+				node_tree.add("tt:Name", node.second.get<std::string>("Name"));
+
+				for (const auto& space_node : node.second.get_child("SupportedPTZSpaces"))
+				{
+					const auto& space_name = space_node.second.get<std::string>("space");
+					const auto item_path = "tt:SupportedPTZSpaces." + space_name;
+					node_tree.add(item_path + "URI", space_node.second.get<std::string>("URI"));
+					node_tree.add(item_path + "XRange.Min", space_node.second.get<std::string>("XRange.Min"));
+					node_tree.add(item_path + "XRange.Max", space_node.second.get<std::string>("XRange.Max"));
+					node_tree.add(item_path + "YRange.Min", space_node.second.get<std::string>("YRange.Min"));
+					node_tree.add(item_path + "YRange.Max", space_node.second.get<std::string>("YRange.Max"));
+				}
+
+				node_tree.add("tt:MaximumNumberOfPresets", node.second.get<int>("MaximumNumberOfPresets"));
+				node_tree.add("tt:HomeSupported", node.second.get<bool>("HomeSupported"));
+
+				nodes_tree.add_child("tptz:PTZNode", node_tree);
+			}
+
+			envelope_tree.add_child("s:Body.tptz:GetNodesResponse", nodes_tree);
+
+			pt::ptree root_tree;
+			root_tree.put_child("s:Envelope", envelope_tree);
+
+			std::ostringstream os;
+			pt::write_xml(os, root_tree);
+
+			utility::http::fillResponseWithHeaders(*response, os.str());
+		}
+	};
+	
+	struct GetNodeHandler : public utility::http::RequestHandlerBase
+	{
+
+		GetNodeHandler() : utility::http::RequestHandlerBase(GetNode, osrv::auth::SECURITY_LEVELS::READ_MEDIA)
+		{
+		}
+
+		OVERLOAD_REQUEST_HANDLER
+		{
+			auto envelope_tree = utility::soap::getEnvelopeTree(XML_NAMESPACES);
+
+			pt::ptree nodes_tree;
+
+			auto nodes_config = CONFIGS_TREE.get_child("Nodes");
+
+			// TODO: read only configs for required token
 			for (const auto& node : nodes_config)
 			{
 				pt::ptree node_tree;
