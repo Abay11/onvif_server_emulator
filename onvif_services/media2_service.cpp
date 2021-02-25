@@ -727,6 +727,23 @@ namespace osrv
 					osrv::media::util::fill_analytics_configuration(analytics_node);
 					result.put_child("tr2:Analytics", analytics_node);
 				}
+
+				{ // PTZ
+					// TODO: make reading from a profile
+
+					pt::ptree ptz_node;
+					{
+						ptz_node.add("<xmlattr>.token", "PtzConfigToken0");
+						ptz_node.add("tt:Name", "PtzConfig0");
+						ptz_node.add("tt:UseCount", 3);
+						ptz_node.add("tt:NodeToken", "PTZNODE_1");
+						ptz_node.add("tt:DefaultContinuousPanTiltVelocitySpace", 
+							"http://www.onvif.org/ver10/tptz/PanTiltSpaces/VelocityGenericSpace");
+						ptz_node.add("tt:DefaultContinuousZoomVelocitySpace",
+							"http://www.onvif.org/ver10/tptz/ZoomSpaces/VelocityGenericSpace");
+					}
+					result.put_child("tr2:PTZ", ptz_node);
+				}
 			}
 			
 			void fill_video_encoder(const pt::ptree& config_node, pt::ptree& videoencoder_node)

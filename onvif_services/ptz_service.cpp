@@ -22,8 +22,12 @@ static pt::ptree CONFIGS_TREE;
 static osrv::StringsMap XML_NAMESPACES;
 
 // a list of implemented methods
+const std::string GetCompatibleConfigurations = "GetCompatibleConfigurations";
+const std::string GetConfiguration = "GetConfiguration";
+const std::string GetConfigurations = "GetConfigurations";
 const std::string GetNodes = "GetNodes";
 const std::string GetNode = "GetNode";
+const std::string SetConfiguration = "SetConfiguration";
 
 
 static std::vector<utility::http::HandlerSP> handlers;
@@ -34,6 +38,126 @@ namespace osrv::ptz
 
 	void do_handle_request(std::shared_ptr<HttpServer::Response> response,
 		std::shared_ptr<HttpServer::Request> request);
+
+	struct GetCompatibleConfigurationsHandler : public utility::http::RequestHandlerBase
+	{
+
+		GetCompatibleConfigurationsHandler() : utility::http::RequestHandlerBase(GetCompatibleConfigurations, osrv::auth::SECURITY_LEVELS::READ_MEDIA)
+		{
+		}
+
+		OVERLOAD_REQUEST_HANDLER
+		{
+			auto envelope_tree = utility::soap::getEnvelopeTree(XML_NAMESPACES);
+
+			// TODO: impl. reading configs from a file
+			pt::ptree response_node;
+
+			{
+				pt::ptree ptz_node;
+				ptz_node.add("<xmlattr>.token", "PtzConfigToken0");
+				ptz_node.add("tt:Name", "PtzConfig0");
+				ptz_node.add("tt:UseCount", 3);
+				ptz_node.add("tt:NodeToken", "PTZNODE_1");
+				ptz_node.add("tt:DefaultContinuousPanTiltVelocitySpace",
+					"http://www.onvif.org/ver10/tptz/PanTiltSpaces/VelocityGenericSpace");
+				ptz_node.add("tt:DefaultContinuousZoomVelocitySpace",
+					"http://www.onvif.org/ver10/tptz/ZoomSpaces/VelocityGenericSpace");
+
+				response_node.add_child("PTZConfiguration", ptz_node);
+			}
+
+			envelope_tree.add_child("s:Body.tptz:GetCompatibleConfigurationsResponse", response_node);
+
+			pt::ptree root_tree;
+			root_tree.put_child("s:Envelope", envelope_tree);
+
+			std::ostringstream os;
+			pt::write_xml(os, root_tree);
+
+			utility::http::fillResponseWithHeaders(*response, os.str());
+		}
+	};
+
+	struct GetConfigurationHandler : public utility::http::RequestHandlerBase
+	{
+
+		GetConfigurationHandler() : utility::http::RequestHandlerBase(GetConfiguration, osrv::auth::SECURITY_LEVELS::READ_MEDIA)
+		{
+		}
+
+		OVERLOAD_REQUEST_HANDLER
+		{
+			auto envelope_tree = utility::soap::getEnvelopeTree(XML_NAMESPACES);
+
+			// TODO: impl. reading configs from a file
+			pt::ptree response_node;
+
+			{
+				pt::ptree ptz_node;
+				ptz_node.add("<xmlattr>.token", "PtzConfigToken0");
+				ptz_node.add("tt:Name", "PtzConfig0");
+				ptz_node.add("tt:UseCount", 3);
+				ptz_node.add("tt:NodeToken", "PTZNODE_1");
+				ptz_node.add("tt:DefaultContinuousPanTiltVelocitySpace",
+					"http://www.onvif.org/ver10/tptz/PanTiltSpaces/VelocityGenericSpace");
+				ptz_node.add("tt:DefaultContinuousZoomVelocitySpace",
+					"http://www.onvif.org/ver10/tptz/ZoomSpaces/VelocityGenericSpace");
+
+				response_node.add_child("PTZConfiguration", ptz_node);
+			}
+
+			envelope_tree.add_child("s:Body.tptz:GetConfigurationResponse", response_node);
+
+			pt::ptree root_tree;
+			root_tree.put_child("s:Envelope", envelope_tree);
+
+			std::ostringstream os;
+			pt::write_xml(os, root_tree);
+
+			utility::http::fillResponseWithHeaders(*response, os.str());
+		}
+	};
+
+	struct GetConfigurationsHandler : public utility::http::RequestHandlerBase
+	{
+
+		GetConfigurationsHandler() : utility::http::RequestHandlerBase(GetConfigurations, osrv::auth::SECURITY_LEVELS::READ_MEDIA)
+		{
+		}
+
+		OVERLOAD_REQUEST_HANDLER
+		{
+			auto envelope_tree = utility::soap::getEnvelopeTree(XML_NAMESPACES);
+
+			// TODO: impl. reading configs from a file
+			pt::ptree response_node;
+
+			{
+				pt::ptree ptz_node;
+				ptz_node.add("<xmlattr>.token", "PtzConfigToken0");
+				ptz_node.add("tt:Name", "PtzConfig0");
+				ptz_node.add("tt:UseCount", 3);
+				ptz_node.add("tt:NodeToken", "PTZNODE_1");
+				ptz_node.add("tt:DefaultContinuousPanTiltVelocitySpace",
+					"http://www.onvif.org/ver10/tptz/PanTiltSpaces/VelocityGenericSpace");
+				ptz_node.add("tt:DefaultContinuousZoomVelocitySpace",
+					"http://www.onvif.org/ver10/tptz/ZoomSpaces/VelocityGenericSpace");
+
+				response_node.add_child("PTZConfiguration", ptz_node);
+			}
+
+			envelope_tree.add_child("s:Body.tptz:GetConfigurationsResponse", response_node);
+
+			pt::ptree root_tree;
+			root_tree.put_child("s:Envelope", envelope_tree);
+
+			std::ostringstream os;
+			pt::write_xml(os, root_tree);
+
+			utility::http::fillResponseWithHeaders(*response, os.str());
+		}
+	};
 
 	struct GetNodesHandler : public utility::http::RequestHandlerBase
 	{
@@ -129,6 +253,29 @@ namespace osrv::ptz
 			}
 
 			envelope_tree.add_child("s:Body.tptz:GetNodesResponse", nodes_tree);
+
+			pt::ptree root_tree;
+			root_tree.put_child("s:Envelope", envelope_tree);
+
+			std::ostringstream os;
+			pt::write_xml(os, root_tree);
+
+			utility::http::fillResponseWithHeaders(*response, os.str());
+		}
+	};
+	
+	struct SetConfigurationHandler : public utility::http::RequestHandlerBase
+	{
+
+		SetConfigurationHandler() : utility::http::RequestHandlerBase(SetConfiguration, osrv::auth::SECURITY_LEVELS::ACTUATE)
+		{
+		}
+
+		OVERLOAD_REQUEST_HANDLER
+		{
+			auto envelope_tree = utility::soap::getEnvelopeTree(XML_NAMESPACES);
+
+			envelope_tree.add("s:Body.tptz:SetConfigurationResponse", "");
 
 			pt::ptree root_tree;
 			root_tree.put_child("s:Envelope", envelope_tree);
@@ -274,9 +421,13 @@ namespace osrv::ptz
 		for (const auto& n : namespaces_tree)
 			XML_NAMESPACES.insert({ n.first, n.second.get_value<std::string>() });
 
+		handlers.emplace_back(new GetCompatibleConfigurationsHandler());
+		handlers.emplace_back(new GetConfigurationHandler());
+		handlers.emplace_back(new GetConfigurationsHandler());
+		handlers.emplace_back(new GetNodeHandler());
 		handlers.emplace_back(new GetNodesHandler());
+		handlers.emplace_back(new SetConfigurationHandler());
 
 		srv.resource["/onvif/ptz_service"]["POST"] = PtzServiceDefaultHandler;
-
 	}
 } // ptz
