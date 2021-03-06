@@ -71,5 +71,51 @@ namespace osrv
 			}
 		}
 
+		MotionAlarmEventGenerator::MotionAlarmEventGenerator(const std::string& source_token,
+			int interval, const std::string& topic,
+			boost::asio::io_context& io_context, const ILogger& logger_)
+			: IEventGenerator(interval, topic, io_context, logger_),
+			source_token_(source_token)
+		{
+		}
+
+		void MotionAlarmEventGenerator::SetSourceToken(const std::string& token)
+		{
+			source_token_ = token;
+		}
+
+		std::deque<NotificationMessage> MotionAlarmEventGenerator::GenerateSynchronizationEvent() const
+		{
+			TRACE_LOG(logger_);
+
+			NotificationMessage nm;
+			nm.topic = notifications_topic_;
+			nm.utc_time = utility::datetime::system_utc_datetime();
+			nm.property_operation = "Initialized";
+			nm.source_name = "Source";
+			nm.source_value = source_token_;
+			nm.data_name = "State";
+			nm.data_value = "false";
+
+			return { nm };
+		}
+
+		void MotionAlarmEventGenerator::generate_event()
+		{
+			TRACE_LOG(logger_);
+
+			NotificationMessage nm;
+			nm.topic = notifications_topic_;
+			nm.utc_time = utility::datetime::system_utc_datetime();
+			nm.property_operation = "Changed";
+			nm.source_name = "Source";
+			nm.source_value = source_token_;
+			nm.data_name = "State";
+			// each time invert state
+			nm.data_value = InvertState() ? "true" : "false";
+
+			event_signal_(nm);
+		}
+
 	}
 }

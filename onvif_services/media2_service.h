@@ -13,7 +13,10 @@ namespace osrv
 	struct ServerConfigs;
 
 	namespace media2
+
 	{
+		const boost::property_tree::ptree& config_instance();
+		
 		void init_service(HttpServer& srv, const ServerConfigs& server_configs_ptr,
 			const std::string& configs_path, ILogger& logger);
 

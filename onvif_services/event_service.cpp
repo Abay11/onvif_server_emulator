@@ -7,6 +7,7 @@
 #include "../utility/SoapHelper.h"
 #include "pullpoint/pull_point.h"
 #include "device_service.h"
+#include "media2_service.h"
 
 #include "../utility/EventService.h"
 
@@ -240,10 +241,10 @@ namespace osrv
 							serializer.Ptree());
 					}
 
-					envelope_tree.add_child("tet:GetEventPropertiesResponse", response_tree);
+					envelope_tree.add_child("s:Body.tet:GetEventPropertiesResponse", response_tree);
 
 					pt::ptree root_tree;
-					root_tree.put_child("s:Envelope.s:Body", envelope_tree);
+					root_tree.put_child("s:Envelope", envelope_tree);
 
 					std::ostringstream os;
 					pt::write_xml(os, root_tree);
@@ -398,6 +399,14 @@ namespace osrv
 					notifications_manager->GetIoContext(), *log_));
 			di_event_generator->SetDigitalInputsList(server_configs->digital_inputs_);
 			notifications_manager->AddGenerator(di_event_generator);
+
+			// add motion alarms generator
+			auto ma_event_generator = std::make_shared<osrv::event::MotionAlarmEventGenerator>(
+				media2::config_instance().get_child("GetVideoSources").front().second.get<std::string>("token"),
+				EVENT_CONFIGS_TREE.get<int>("MotionAlarmEventGenerationTimeout"),
+				EVENT_CONFIGS_TREE.get<std::string>("MotionAlarmTopic"),
+				notifications_manager->GetIoContext(), *log_);
+			notifications_manager->AddGenerator(ma_event_generator);
 
 			notifications_manager->Run();
 

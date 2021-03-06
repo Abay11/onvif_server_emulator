@@ -107,5 +107,30 @@ namespace osrv
 			bool state = false;
 			const DigitalInputsList* di_list_ = nullptr;
 		};
+		
+		class MotionAlarmEventGenerator : public IEventGenerator
+		{
+		public:
+			MotionAlarmEventGenerator(const std::string& /*source_token*/, int /*interval*/, const std::string& /*topic*/,
+				boost::asio::io_context& /*io_context*/, const ILogger& /*logger_*/);
+
+			void SetSourceToken(const std::string& /*token*/);
+
+			// Inherited via IEventGenerator
+			std::deque<NotificationMessage> GenerateSynchronizationEvent() const override;
+
+		protected:
+			void generate_event() override;
+
+		private:
+			bool InvertState()
+			{
+				return state_ = !state_;
+			}
+
+		private:
+			bool state_ = false;
+			std::string source_token_;
+		};
 	}
 }

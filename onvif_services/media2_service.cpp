@@ -48,6 +48,12 @@ namespace osrv
 		//static std::map<std::string, handler_t*> handlers;
 
 		static std::vector<utility::http::HandlerSP> handlers;
+		
+		
+		const boost::property_tree::ptree& config_instance()
+		{
+			return CONFIGS_TREE;
+		}
 
 		void do_handler_request(std::shared_ptr<HttpServer::Response> response,
 			std::shared_ptr<HttpServer::Request> request);
