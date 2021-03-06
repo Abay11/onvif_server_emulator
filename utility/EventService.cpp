@@ -64,6 +64,7 @@ namespace osrv::event
 		if (source_properties_.size() < 1)
 			throw std::runtime_error("source properties is empty");
 
+		p.add(node_name + ".tt:MessageDescription.<xmlattr>.IsProperty", "true");
 		for (auto [prop_name, prop_type] : source_properties_)
 		{
 			p.add(node_name + ".tt:MessageDescription.tt:Source.tt:SimpleItemDescription.<xmlattr>.Name",

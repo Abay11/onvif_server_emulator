@@ -213,21 +213,14 @@ namespace osrv
 
 					namespace pt = boost::property_tree;					
 					auto envelope_tree = utility::soap::getEnvelopeTree(XML_NAMESPACES);
-					if(auto msg_id = exns::find_hierarchy("Envelope.Header.MessageID", request_tree); !msg_id.empty())
-						envelope_tree.add("s:Header.wsa:MessageID", msg_id);
 					envelope_tree.add("s:Header.wsa:To", "http://www.w3.org/2005/08/addressing/anonymous");
 					envelope_tree.add("s:Header.wsa:Action", "http://www.onvif.org/ver10/events/wsdl/EventPortType/GetEventPropertiesResponse");
 
 					pt::ptree response_tree;
 					response_tree.add("tet:TopicNamespaceLocation", "http://www.onvif.org/onvif/ver10/topics/topicns.xml");
-					response_tree.add("wsnt:FixedTopicSet", "http://www.onvif.org/onvif/ver10/topics/topicns.xml");
-					
-					//pt::ptree topicset_node;
-					//topicset_node.add("<xmlattr>.xmlns", "");
-					response_tree.add("wstop:TopicSet.<xmlattr>.xmlns", "");
+					response_tree.add("wsnt:FixedTopicSet", "true");
 					
 					{ // DI properties
-
 						StringPairsList_t source_props = { {"InputToken", "tt:ReferenceToken"} };
 						StringPairsList_t data_props = { {"LogicalState", "xs:boolean"} };
 						EventPropertiesSerializer serializer(EVENT_CONFIGS_TREE.get<std::string>("DigitalInputsTopic"),
@@ -243,14 +236,14 @@ namespace osrv
 						EventPropertiesSerializer serializer(EVENT_CONFIGS_TREE.get<std::string>("MotionAlarmTopic"),
 							source_props, data_props);
 
-						response_tree.add_child("wstop:TopicSet",
+						response_tree.add_child("wstop:TopicSet." + serializer.Path(),
 							serializer.Ptree());
 					}
 
 					envelope_tree.add_child("tet:GetEventPropertiesResponse", response_tree);
 
 					pt::ptree root_tree;
-					root_tree.put_child("s:Envelope", envelope_tree);
+					root_tree.put_child("s:Envelope.s:Body", envelope_tree);
 
 					std::ostringstream os;
 					pt::write_xml(os, root_tree);

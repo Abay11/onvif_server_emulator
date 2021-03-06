@@ -14,6 +14,7 @@ BOOST_AUTO_TEST_CASE(EventPropertiesSerializerTest1)
 	EventPropertiesSerializer serializer{ "tns1:Device/Trigger/DigitalInput", source_props, data_props };
 	BOOST_TEST("DigitalInput" == serializer.Name());
 	BOOST_TEST("tns1:Device.Trigger" == serializer.Path());
+	BOOST_TEST("true" == serializer.Ptree().get<std::string>("DigitalInput.tt:MessageDescription.<xmlattr>.IsProperty"));
 }
 
 BOOST_AUTO_TEST_CASE(EventPropertiesSerializerTest2)
