@@ -7,7 +7,6 @@
 #include "../utility/SoapHelper.h"
 #include "pullpoint/pull_point.h"
 #include "device_service.h"
-#include "media2_service.h"
 
 #include "../utility/EventService.h"
 
@@ -224,7 +223,7 @@ namespace osrv
 					{ // DI properties
 						StringPairsList_t source_props = { {"InputToken", "tt:ReferenceToken"} };
 						StringPairsList_t data_props = { {"LogicalState", "xs:boolean"} };
-						EventPropertiesSerializer serializer(EVENT_CONFIGS_TREE.get<std::string>("DigitalInputsTopic"),
+						EventPropertiesSerializer serializer(EVENT_CONFIGS_TREE.get<std::string>("DigitalInputsAlarm.Topic"),
 							source_props, data_props);
 
 						response_tree.add_child("wstop:TopicSet." + serializer.Path(),
@@ -234,7 +233,7 @@ namespace osrv
 					{ // Motion alarm
 						StringPairsList_t source_props = { {"Source", "tt:ReferenceToken"} };
 						StringPairsList_t data_props = { {"State", "xs:boolean"} };
-						EventPropertiesSerializer serializer(EVENT_CONFIGS_TREE.get<std::string>("MotionAlarmTopic"),
+						EventPropertiesSerializer serializer(EVENT_CONFIGS_TREE.get<std::string>("MotionAlarm.Topic"),
 							source_props, data_props);
 
 						response_tree.add_child("wstop:TopicSet." + serializer.Path(),
@@ -413,29 +412,37 @@ namespace osrv
 			// TODO: reading events generating interval from configs
 			// add event generators
 			auto di_event_generator = std::shared_ptr<osrv::event::DInputEventGenerator>(
-				new event::DInputEventGenerator(EVENT_CONFIGS_TREE.get<int>("DigitalInputsEventGenerationTimeout"),
-					EVENT_CONFIGS_TREE.get<std::string>("DigitalInputsTopic"),
+				new event::DInputEventGenerator(EVENT_CONFIGS_TREE.get<int>("DigitalInputsAlarm.EventGenerationTimeout"),
+					EVENT_CONFIGS_TREE.get<std::string>("DigitalInputsAlarm.Topic"),
 					notifications_manager->GetIoContext(), *log_));
 			di_event_generator->SetDigitalInputsList(server_configs->digital_inputs_);
 			notifications_manager->AddGenerator(di_event_generator);
 
 			// add motion alarms generator
-			auto ma_event_generator = std::make_shared<osrv::event::MotionAlarmEventGenerator>(
-				media2::config_instance().get_child("GetVideoSources").front().second.get<std::string>("token"),
-				EVENT_CONFIGS_TREE.get<int>("MotionAlarmEventGenerationTimeout"),
-				EVENT_CONFIGS_TREE.get<std::string>("MotionAlarmTopic"),
-				notifications_manager->GetIoContext(), *log_);
-			notifications_manager->AddGenerator(ma_event_generator);
+			if (EVENT_CONFIGS_TREE.get<bool>("MotionAlarm.GenerateEvents"))
+			{
+				auto ma_event_generator = std::make_shared<osrv::event::MotionAlarmEventGenerator>(
+					EVENT_CONFIGS_TREE.get<std::string>("MotionAlarm.Source"),
+					EVENT_CONFIGS_TREE.get<int>("MotionAlarm.EventGenerationTimeout"),
+					EVENT_CONFIGS_TREE.get<std::string>("MotionAlarm.Topic"),
+					notifications_manager->GetIoContext(), *log_);
+
+				notifications_manager->AddGenerator(ma_event_generator);
+			}
 
 			// add cell motion alarms generator
-			auto cellmotion_generator = std::make_shared<osrv::event::CellMotionEventGenerator>(
-				EVENT_CONFIGS_TREE.get<std::string>("CellMotion.VideoSourceConfigurationToken"),
-				EVENT_CONFIGS_TREE.get<std::string>("CellMotion.VideoAnalyticsConfigurationToken"),
-				EVENT_CONFIGS_TREE.get<std::string>("CellMotion.Rule"),
-				EVENT_CONFIGS_TREE.get<int>("CellMotion.EventGenerationTimeout"),
-				EVENT_CONFIGS_TREE.get<std::string>("CellMotion.Topic"),
-				notifications_manager->GetIoContext(), *log_);
-			notifications_manager->AddGenerator(cellmotion_generator);
+			if (EVENT_CONFIGS_TREE.get<bool>("CellMotion.GenerateEvents"))
+			{
+				auto cellmotion_generator = std::make_shared<osrv::event::CellMotionEventGenerator>(
+					EVENT_CONFIGS_TREE.get<std::string>("CellMotion.VideoSourceConfigurationToken"),
+					EVENT_CONFIGS_TREE.get<std::string>("CellMotion.VideoAnalyticsConfigurationToken"),
+					EVENT_CONFIGS_TREE.get<std::string>("CellMotion.Rule"),
+					EVENT_CONFIGS_TREE.get<int>("CellMotion.EventGenerationTimeout"),
+					EVENT_CONFIGS_TREE.get<std::string>("CellMotion.Topic"),
+					notifications_manager->GetIoContext(), *log_);
+
+				notifications_manager->AddGenerator(cellmotion_generator);
+			}
 
 			notifications_manager->Run();
 
