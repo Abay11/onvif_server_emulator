@@ -67,20 +67,21 @@ namespace osrv::event
 		p.add(node_name + ".tt:MessageDescription.<xmlattr>.IsProperty", "true");
 		for (auto [prop_name, prop_type] : source_properties_)
 		{
-			p.add(node_name + ".tt:MessageDescription.tt:Source.tt:SimpleItemDescription.<xmlattr>.Name",
-				prop_name);
-			p.add(node_name + ".tt:MessageDescription.tt:Source.tt:SimpleItemDescription.<xmlattr>.Type",
-				prop_type);
+			pt::ptree item_props;
+			item_props.add("<xmlattr>.Name", prop_name);
+			item_props.add("<xmlattr>.Type", prop_type);
+			p.add_child(node_name + ".tt:MessageDescription.tt:Source.tt:SimpleItemDescription",
+				item_props);
 		}
 		
 		for (auto [prop_name, prop_type] : data_properties_)
 		{
-			p.add(node_name + ".tt:MessageDescription.tt:Data.tt:SimpleItemDescription.<xmlattr>.Name",
-				prop_name);
-			p.add(node_name + ".tt:MessageDescription.tt:Data.tt:SimpleItemDescription.<xmlattr>.Type",
-				prop_type);
+			pt::ptree item_props;
+			item_props.add("<xmlattr>.Name", prop_name);
+			item_props.add("<xmlattr>.Type", prop_type);
+			p.add_child(node_name + ".tt:MessageDescription.tt:Data.tt:SimpleItemDescription",
+				item_props);
 		}
-
 
 		return p;
 	}

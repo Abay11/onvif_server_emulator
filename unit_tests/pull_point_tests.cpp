@@ -5,7 +5,12 @@
 #include "../onvif_services/pullpoint/pull_point.h"
 
 #include <boost/property_tree/ptree.hpp>
+#include <boost/property_tree/xml_parser.hpp>
 
+namespace
+{
+namespace pt = boost::property_tree;
+}
 
 /* FIX: the tested function @parse_pullmessages  was deleted, add restore these tests and generalize function
 BOOST_AUTO_TEST_CASE(parse_pullmessages_func_0)
@@ -106,19 +111,38 @@ BOOST_AUTO_TEST_CASE(compare_subscription_references_func)
 	BOOST_TEST(false == compare_subscription_references(full_ref, test_subscription_ref2));
 }
 
-BOOST_AUTO_TEST_CASE(serialize_notification_messages_func)
+BOOST_AUTO_TEST_CASE(serialize_notification_messages_func0)
 {
 	// empty queue
-
 	using namespace osrv::event;
 
 	std::deque<NotificationMessage> msgs;
 	boost::property_tree::ptree res = serialize_notification_messages(msgs, {});
 
 	auto ctime = exns::find_hierarchy("CurrentTime", res);
-	// FIX
-	// auto ttime = exns::find_hierarchy("TerminationTime", res);
+	auto ttime = exns::find_hierarchy("TerminationTime", res);
 
 	BOOST_TEST(!ctime.empty());
-	//BOOST_TEST(!ttime.empty());
+	BOOST_TEST(!ttime.empty());
 }
+
+BOOST_AUTO_TEST_CASE(serialize_notification_messages_func1)
+{
+	using namespace osrv::event;
+
+	std::deque<NotificationMessage> msgs;
+
+	NotificationMessage test_msg;
+	test_msg.source_item_descriptions.push_back({ "ItemName", "ItemValue"});
+
+	msgs.push_back(test_msg);
+
+	boost::property_tree::ptree res = serialize_notification_messages(msgs, {});
+
+	auto name = res.get<std::string>("wsnt:NotificationMessage.wsnt:Message.tt:Message.tt:Source.tt:SimpleItem.<xmlattr>.Name");
+	BOOST_TEST(name == "ItemName");
+
+	auto value = res.get<std::string>("wsnt:NotificationMessage.wsnt:Message.tt:Message.tt:Source.tt:SimpleItem.<xmlattr>.Value");
+	BOOST_TEST(value == "ItemValue");
+}
+

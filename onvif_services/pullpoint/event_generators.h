@@ -114,8 +114,6 @@ namespace osrv
 			MotionAlarmEventGenerator(const std::string& /*source_token*/, int /*interval*/, const std::string& /*topic*/,
 				boost::asio::io_context& /*io_context*/, const ILogger& /*logger_*/);
 
-			void SetSourceToken(const std::string& /*token*/);
-
 			// Inherited via IEventGenerator
 			std::deque<NotificationMessage> GenerateSynchronizationEvent() const override;
 
@@ -131,6 +129,32 @@ namespace osrv
 		private:
 			bool state_ = false;
 			std::string source_token_;
+		};
+
+		class CellMotionEventGenerator : public IEventGenerator
+		{
+		public:
+			CellMotionEventGenerator(const std::string& /*vsc_token*/, const std::string& /*vac_token*/, const std::string& /*rule*/,
+				int /*interval*/, const std::string& /*topic*/,
+				boost::asio::io_context& /*io_context*/, const ILogger& /*logger_*/);
+
+			// Inherited via IEventGenerator
+			std::deque<NotificationMessage> GenerateSynchronizationEvent() const override;
+
+		protected:
+			void generate_event() override;
+
+		private:
+			bool InvertState()
+			{
+				return state_ = !state_;
+			}
+
+		private:
+			bool state_ = false;
+			std::string video_source_configuration_token_;
+			std::string video_analytics_configuration_token_;
+			std::string rule_;
 		};
 	}
 }

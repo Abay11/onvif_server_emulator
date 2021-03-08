@@ -47,7 +47,7 @@ namespace exns
 			// we are looking for only elements in nodes, not in attributes
 			if ("<xmlattr>" != no_ns_node)
 			{
-				if (boost::iequals(tokens[i], no_ns_node)) // do intensive comparision
+				if (boost::iequals(tokens[i], no_ns_node)) // do insensitive comparision
 				{
 					if (i == tokens.size() - 1)
 					{
@@ -68,8 +68,14 @@ namespace exns
 					// <value2>some2</value>
 					// </root>
 					
-					// On the same level, elements are not the same - return not found
-					return {};
+					if (++assoc_it == node.end()) // Could not find match element on the same level - return not found
+					{
+						return {};
+					}
+					else
+					{
+						continue;
+					}
 				}
 
 				if(++i >= tokens.size())

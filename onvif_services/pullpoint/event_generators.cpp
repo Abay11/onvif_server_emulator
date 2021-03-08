@@ -33,8 +33,7 @@ namespace osrv
 				nm.topic = notifications_topic_;
 				nm.utc_time = utility::datetime::system_utc_datetime();
 				nm.property_operation = "Initialized";
-				nm.source_name = "InputToken";
-				nm.source_value = di->GetToken();
+				nm.source_item_descriptions.push_back({"InputToken", di->GetToken()});
 				nm.data_name = "LogicalState";
 				nm.data_value = di->GetState() ? "true" : "false";
 
@@ -60,8 +59,7 @@ namespace osrv
 				nm.topic = notifications_topic_;
 				nm.utc_time = utility::datetime::system_utc_datetime();
 				nm.property_operation = "Changed";
-				nm.source_name = "InputToken";
-				nm.source_value = di->GetToken();
+				nm.source_item_descriptions.push_back({"InputToken", di->GetToken()});
 				nm.data_name = "LogicalState";
 
 				// each time invert state
@@ -79,11 +77,6 @@ namespace osrv
 		{
 		}
 
-		void MotionAlarmEventGenerator::SetSourceToken(const std::string& token)
-		{
-			source_token_ = token;
-		}
-
 		std::deque<NotificationMessage> MotionAlarmEventGenerator::GenerateSynchronizationEvent() const
 		{
 			TRACE_LOG(logger_);
@@ -92,8 +85,7 @@ namespace osrv
 			nm.topic = notifications_topic_;
 			nm.utc_time = utility::datetime::system_utc_datetime();
 			nm.property_operation = "Initialized";
-			nm.source_name = "Source";
-			nm.source_value = source_token_;
+			nm.source_item_descriptions.push_back({"Source", source_token_});
 			nm.data_name = "State";
 			nm.data_value = "false";
 
@@ -108,8 +100,7 @@ namespace osrv
 			nm.topic = notifications_topic_;
 			nm.utc_time = utility::datetime::system_utc_datetime();
 			nm.property_operation = "Changed";
-			nm.source_name = "Source";
-			nm.source_value = source_token_;
+			nm.source_item_descriptions.push_back({"Source", source_token_});
 			nm.data_name = "State";
 			// each time invert state
 			nm.data_value = InvertState() ? "true" : "false";
@@ -117,5 +108,49 @@ namespace osrv
 			event_signal_(nm);
 		}
 
-	}
+		CellMotionEventGenerator::CellMotionEventGenerator(const std::string& vsc_token, const std::string& vac_token, const std::string& rule,
+			int interval, const std::string& topic, boost::asio::io_context& io_context, const ILogger& logger_)
+			: IEventGenerator(interval, topic, io_context, logger_)
+			,video_source_configuration_token_(vsc_token)
+			,video_analytics_configuration_token_(vac_token)
+			,rule_(rule)
+		{
+		}
+
+		std::deque<NotificationMessage> CellMotionEventGenerator::GenerateSynchronizationEvent() const
+		{
+			TRACE_LOG(logger_);
+
+			NotificationMessage nm;
+			nm.topic = notifications_topic_;
+			nm.utc_time = utility::datetime::system_utc_datetime();
+			nm.property_operation = "Initialized";
+			nm.source_item_descriptions.push_back({"VideoSourceConfigurationToken", video_source_configuration_token_});
+			nm.source_item_descriptions.push_back({"VideoAnalyticsConfigurationToken", video_analytics_configuration_token_});
+			nm.source_item_descriptions.push_back({"Rule", rule_});
+			nm.data_name = "State";
+			nm.data_value = "false";
+
+			return { nm };
+		}
+
+		void CellMotionEventGenerator::generate_event()
+		{
+			TRACE_LOG(logger_);
+
+			NotificationMessage nm;
+			nm.topic = notifications_topic_;
+			nm.utc_time = utility::datetime::system_utc_datetime();
+			nm.property_operation = "Changed";
+			nm.source_item_descriptions.push_back({"VideoSourceConfigurationToken", video_source_configuration_token_});
+			nm.source_item_descriptions.push_back({"VideoAnalyticsConfigurationToken", video_analytics_configuration_token_});
+			nm.source_item_descriptions.push_back({"Rule", rule_});
+			nm.data_name = "State";
+			// each time invert state
+			nm.data_value = InvertState() ? "true" : "false";
+
+			event_signal_(nm);
+		}
+
+}
 }

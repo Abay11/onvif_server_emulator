@@ -66,9 +66,18 @@ namespace osrv
 
 			OVERLOAD_REQUEST_HANDLER
 			{
-				pt::ptree analytics_configs;
+				// TODO: the implementation below is hardcoded. fix
+
 				auto envelope_tree = utility::soap::getEnvelopeTree(XML_NAMESPACES);
-				envelope_tree.add_child("s:Body.tr2:GetAnalyticsConfigurationsResponse", analytics_configs);
+
+				pt::ptree configurations_tree;
+				configurations_tree.add("<xmlattr>.token", "VideoAnalyticsConfigToken0");
+				configurations_tree.add("tt:Name", "VideoAnalyticsConfig0");
+				configurations_tree.add("tt:Count", "2");
+				configurations_tree.add("tt:AnalyticsEngineConfiguration", "");
+				configurations_tree.add("tt:RuleEngineConfiguration", "");
+				envelope_tree.add_child("s:Body.tr2:GetAnalyticsConfigurationsResponse.tr2:Configurations",
+					configurations_tree);
 
 				pt::ptree root_tree;
 				root_tree.put_child("s:Envelope", envelope_tree);

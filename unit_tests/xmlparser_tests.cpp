@@ -2,13 +2,19 @@
 
 #include "../utility/XmlParser.h"
 
-#include <string>
-
 #include <boost/property_tree/ptree.hpp>
+#include <boost/property_tree/xml_parser.hpp>
+
+#include <string>
+#include <sstream>
+
+namespace
+{
+	namespace pt = boost::property_tree;
+}
 
 BOOST_AUTO_TEST_CASE(find_hierarchy_func0)
 {
-	namespace pt = boost::property_tree;
 	pt::ptree test_xml;
 	std::string expected = "data";
 	const std::string full_hierarchy = "root.root2.element";
@@ -35,7 +41,6 @@ BOOST_AUTO_TEST_CASE(find_hierarchy_func0)
 
 BOOST_AUTO_TEST_CASE(find_hierarchy_func1)
 {
-	namespace pt = boost::property_tree;
 	pt::ptree test_xml;
 	std::string expected = "data";
 	const std::string full_hierarchy = "root.root2.element";
@@ -66,7 +71,6 @@ BOOST_AUTO_TEST_CASE(find_hierarchy_func2)
 {
 	std::string expected = "data";
 	
-	namespace pt = boost::property_tree;
 	pt::ptree test_xml;
 	// now a XML tree with a several childs
 	test_xml.add("root.root1.other_element", "other_data");
@@ -92,4 +96,22 @@ BOOST_AUTO_TEST_CASE(find_hierarchy_func2)
 	auto actual = exns::find_hierarchy(full_hierarchy, test_xml);
 
 	BOOST_TEST(expected == actual);
+}
+
+BOOST_AUTO_TEST_CASE(find_hierarchy_func3)
+{
+	std::string expected = "data1";
+	std::string test_input_xml_text =
+		R"(
+			<root>
+				<node0>data0</node0>
+				<node1>data1</node1>
+			</root>
+		)";
+	std::istringstream is(test_input_xml_text);
+	pt::ptree test_xml;
+	pt::xml_parser::read_xml(is, test_xml);
+	const std::string full_hierarchy = "root.node1";
+	auto actual = exns::find_hierarchy(full_hierarchy, test_xml);
+	BOOST_TEST(actual == expected);
 }

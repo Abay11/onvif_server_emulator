@@ -241,6 +241,25 @@ namespace osrv
 							serializer.Ptree());
 					}
 
+					{
+						// Cell motion
+						StringPairsList_t source_props;
+						source_props.push_back(std::make_pair(EVENT_CONFIGS_TREE.get<std::string>("CellMotion.VideoSourceConfigurationToken"),
+							"tt:ReferenceToken"));
+						source_props.push_back(std::make_pair(EVENT_CONFIGS_TREE.get<std::string>("CellMotion.VideoAnalyticsConfigurationToken"),
+							"tt:ReferenceToken"));
+						source_props.push_back(std::make_pair(EVENT_CONFIGS_TREE.get<std::string>("CellMotion.Rule"), "xs:string"));
+
+						StringPairsList_t data_props;
+						data_props.push_back(std::make_pair(EVENT_CONFIGS_TREE.get<std::string>("CellMotion.DataItemName"), "xs:boolean"));
+
+						EventPropertiesSerializer serializer(EVENT_CONFIGS_TREE.get<std::string>("CellMotion.Topic"),
+							source_props, data_props);
+
+						response_tree.add_child("wstop:TopicSet." + serializer.Path(),
+							serializer.Ptree());
+					}
+
 					envelope_tree.add_child("s:Body.tet:GetEventPropertiesResponse", response_tree);
 
 					pt::ptree root_tree;
@@ -407,6 +426,16 @@ namespace osrv
 				EVENT_CONFIGS_TREE.get<std::string>("MotionAlarmTopic"),
 				notifications_manager->GetIoContext(), *log_);
 			notifications_manager->AddGenerator(ma_event_generator);
+
+			// add cell motion alarms generator
+			auto cellmotion_generator = std::make_shared<osrv::event::CellMotionEventGenerator>(
+				EVENT_CONFIGS_TREE.get<std::string>("CellMotion.VideoSourceConfigurationToken"),
+				EVENT_CONFIGS_TREE.get<std::string>("CellMotion.VideoAnalyticsConfigurationToken"),
+				EVENT_CONFIGS_TREE.get<std::string>("CellMotion.Rule"),
+				EVENT_CONFIGS_TREE.get<int>("CellMotion.EventGenerationTimeout"),
+				EVENT_CONFIGS_TREE.get<std::string>("CellMotion.Topic"),
+				notifications_manager->GetIoContext(), *log_);
+			notifications_manager->AddGenerator(cellmotion_generator);
 
 			notifications_manager->Run();
 

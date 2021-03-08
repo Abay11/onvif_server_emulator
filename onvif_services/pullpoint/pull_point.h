@@ -27,8 +27,8 @@ namespace osrv
 			std::string utc_time;
 			std::string property_operation;
 
-			std::string source_name;
-			std::string source_value;
+			// { name, value }
+			StringPairsList_t source_item_descriptions;
 
 			std::string data_name;
 			std::string data_value;

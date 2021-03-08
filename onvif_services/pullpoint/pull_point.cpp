@@ -271,8 +271,13 @@ namespace osrv
 				msg_node.add("wsnt:Message.tt:Message.<xmlattr>.PropertyOperation", msg.property_operation);
 				msg_node.add("wsnt:Message.tt:Message.<xmlattr>.UtcTime", msg.utc_time);
 
-				msg_node.add("wsnt:Message.tt:Message.tt:Source.tt:SimpleItem.<xmlattr>.Value", msg.source_value);
-				msg_node.add("wsnt:Message.tt:Message.tt:Source.tt:SimpleItem.<xmlattr>.Name", msg.source_name);
+				for (const auto& [name, value] : msg.source_item_descriptions)
+				{
+					pt::ptree item_descr;
+					item_descr.add("<xmlattr>.Name", name);
+					item_descr.add("<xmlattr>.Value", value);
+					msg_node.add_child("wsnt:Message.tt:Message.tt:Source.tt:SimpleItem", item_descr);
+				}
 				
 				msg_node.add("wsnt:Message.tt:Message.tt:Data.tt:SimpleItem.<xmlattr>.Value", msg.data_value);
 				msg_node.add("wsnt:Message.tt:Message.tt:Data.tt:SimpleItem.<xmlattr>.Name", msg.data_name);

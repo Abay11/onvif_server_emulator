@@ -24,6 +24,7 @@
 		using HttpServer = SimpleWeb::Server<SimpleWeb::HTTP>;
 
 		using StringsMap = std::map<std::string, std::string>;
+		using StringPairsList_t = std::vector<std::pair<std::string, std::string> >;
 
 		namespace auth
 		{
