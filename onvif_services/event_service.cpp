@@ -259,6 +259,25 @@ namespace osrv
 							serializer.Ptree());
 					}
 
+					{
+						//Audio detection
+						StringPairsList_t source_props;
+						source_props.push_back(std::make_pair(EVENT_CONFIGS_TREE.get<std::string>("AudioDetection.SourceConfigurationToken"),
+							"tt:ReferenceToken"));
+						source_props.push_back(std::make_pair(EVENT_CONFIGS_TREE.get<std::string>("AudioDetection.AnalyticsConfigurationToken"),
+							"tt:ReferenceToken"));
+						source_props.push_back(std::make_pair(EVENT_CONFIGS_TREE.get<std::string>("AudioDetection.Rule"), "xs:string"));
+
+						StringPairsList_t data_props;
+						data_props.push_back(std::make_pair(EVENT_CONFIGS_TREE.get<std::string>("AudioDetection.DataItemName"), "xs:boolean"));
+
+						EventPropertiesSerializer serializer(EVENT_CONFIGS_TREE.get<std::string>("AudioDetection.Topic"),
+							source_props, data_props);
+
+						response_tree.add_child("wstop:TopicSet." + serializer.Path(),
+							serializer.Ptree());
+					}
+
 					envelope_tree.add_child("s:Body.tet:GetEventPropertiesResponse", response_tree);
 
 					pt::ptree root_tree;
@@ -437,11 +456,27 @@ namespace osrv
 					EVENT_CONFIGS_TREE.get<std::string>("CellMotion.VideoSourceConfigurationToken"),
 					EVENT_CONFIGS_TREE.get<std::string>("CellMotion.VideoAnalyticsConfigurationToken"),
 					EVENT_CONFIGS_TREE.get<std::string>("CellMotion.Rule"),
+					EVENT_CONFIGS_TREE.get<std::string>("CellMotion.DataItemName"),
 					EVENT_CONFIGS_TREE.get<int>("CellMotion.EventGenerationTimeout"),
 					EVENT_CONFIGS_TREE.get<std::string>("CellMotion.Topic"),
 					notifications_manager->GetIoContext(), *log_);
 
 				notifications_manager->AddGenerator(cellmotion_generator);
+			}
+
+			// add audio detection alarms generator
+			if (EVENT_CONFIGS_TREE.get<bool>("AudioDetection.GenerateEvents"))
+			{
+				auto audio_generator = std::make_shared<osrv::event::AudioDetectectionEventGenerator>(
+					EVENT_CONFIGS_TREE.get<std::string>("AudioDetection.SourceConfigurationToken"),
+					EVENT_CONFIGS_TREE.get<std::string>("AudioDetection.AnalyticsConfigurationToken"),
+					EVENT_CONFIGS_TREE.get<std::string>("AudioDetection.Rule"),
+					EVENT_CONFIGS_TREE.get<std::string>("AudioDetection.DataItemName"),
+					EVENT_CONFIGS_TREE.get<int>("AudioDetection.EventGenerationTimeout"),
+					EVENT_CONFIGS_TREE.get<std::string>("AudioDetection.Topic"),
+					notifications_manager->GetIoContext(), *log_);
+
+				notifications_manager->AddGenerator(audio_generator);
 			}
 
 			notifications_manager->Run();

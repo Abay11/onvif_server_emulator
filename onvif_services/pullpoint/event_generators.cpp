@@ -108,12 +108,15 @@ namespace osrv
 			event_signal_(nm);
 		}
 
-		CellMotionEventGenerator::CellMotionEventGenerator(const std::string& vsc_token, const std::string& vac_token, const std::string& rule,
+		CellMotionEventGenerator::CellMotionEventGenerator(const std::string& vsc_token, const std::string& vac_token,
+			const std::string& rule,
+			const std::string& din,
 			int interval, const std::string& topic, boost::asio::io_context& io_context, const ILogger& logger_)
 			: IEventGenerator(interval, topic, io_context, logger_)
 			,video_source_configuration_token_(vsc_token)
 			,video_analytics_configuration_token_(vac_token)
 			,rule_(rule)
+			,data_item_name_(din)
 		{
 		}
 
@@ -128,7 +131,7 @@ namespace osrv
 			nm.source_item_descriptions.push_back({"VideoSourceConfigurationToken", video_source_configuration_token_});
 			nm.source_item_descriptions.push_back({"VideoAnalyticsConfigurationToken", video_analytics_configuration_token_});
 			nm.source_item_descriptions.push_back({"Rule", rule_});
-			nm.data_name = "State";
+			nm.data_name = data_item_name_;
 			nm.data_value = "false";
 
 			return { nm };
@@ -145,12 +148,61 @@ namespace osrv
 			nm.source_item_descriptions.push_back({"VideoSourceConfigurationToken", video_source_configuration_token_});
 			nm.source_item_descriptions.push_back({"VideoAnalyticsConfigurationToken", video_analytics_configuration_token_});
 			nm.source_item_descriptions.push_back({"Rule", rule_});
-			nm.data_name = "State";
+			nm.data_name = data_item_name_;
+			nm.data_value = "false";
 			// each time invert state
 			nm.data_value = InvertState() ? "true" : "false";
 
 			event_signal_(nm);
 		}
 
+		AudioDetectectionEventGenerator::AudioDetectectionEventGenerator(const std::string& sct,
+			const std::string& acf, const std::string& r, const std::string& din,
+			int timeout, const std::string& topic, boost::asio::io_context& ioc, const ILogger& logger)
+			: IEventGenerator(timeout, topic, ioc, logger)
+			, source_configuration_token_(sct)
+			, analytics_configuration_token_(acf)
+			, rule_(r)
+			, data_item_name_(din)
+		{
+		}
+
+		std::deque<NotificationMessage> AudioDetectectionEventGenerator::GenerateSynchronizationEvent() const
+		{
+			TRACE_LOG(logger_);
+
+			NotificationMessage nm;
+			nm.topic = notifications_topic_;
+			nm.utc_time = utility::datetime::system_utc_datetime();
+			nm.property_operation = "Initialized";
+			nm.source_item_descriptions.push_back({"AudioSourceConfigurationToken", source_configuration_token_});
+			nm.source_item_descriptions.push_back({"AudioAnalyticsConfigurationToken", 
+				analytics_configuration_token_});
+			nm.source_item_descriptions.push_back({"Rule", rule_});
+			nm.data_name = data_item_name_;
+			nm.data_value = "false";
+
+			return { nm };
+		}
+
+		void AudioDetectectionEventGenerator::generate_event()
+		{
+			TRACE_LOG(logger_);
+
+			NotificationMessage nm;
+			nm.topic = notifications_topic_;
+			nm.utc_time = utility::datetime::system_utc_datetime();
+			nm.property_operation = "Changed";
+			nm.source_item_descriptions.push_back({"AudioSourceConfigurationToken",
+				source_configuration_token_});
+			nm.source_item_descriptions.push_back({"AudioAnalyticsConfigurationToken",
+				analytics_configuration_token_});
+			nm.source_item_descriptions.push_back({"Rule", rule_});
+			nm.data_name = data_item_name_;
+			// each time invert state
+			nm.data_value = InvertState() ? "true" : "false";
+
+			event_signal_(nm);
+		}
 }
 }

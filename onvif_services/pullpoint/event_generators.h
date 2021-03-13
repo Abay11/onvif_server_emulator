@@ -134,7 +134,9 @@ namespace osrv
 		class CellMotionEventGenerator : public IEventGenerator
 		{
 		public:
-			CellMotionEventGenerator(const std::string& /*vsc_token*/, const std::string& /*vac_token*/, const std::string& /*rule*/,
+			CellMotionEventGenerator(const std::string& /*vsc_token*/, const std::string& /*vac_token*/,
+				const std::string& /*rule*/,
+				const std::string& /*data_item_name*/,
 				int /*interval*/, const std::string& /*topic*/,
 				boost::asio::io_context& /*io_context*/, const ILogger& /*logger_*/);
 
@@ -155,6 +157,36 @@ namespace osrv
 			std::string video_source_configuration_token_;
 			std::string video_analytics_configuration_token_;
 			std::string rule_;
+			std::string data_item_name_;
+		};
+
+		class AudioDetectectionEventGenerator : public IEventGenerator
+		{
+		public:
+			AudioDetectectionEventGenerator(const std::string& /*asc_token*/, const std::string& /*ac_token*/,
+				const std::string& /*rule*/,
+				const std::string& /*data_item_name*/,
+				int /*interval*/, const std::string& /*topic*/,
+				boost::asio::io_context& /*io_context*/, const ILogger& /*logger_*/);
+
+			// Inherited via IEventGenerator
+			std::deque<NotificationMessage> GenerateSynchronizationEvent() const override;
+
+		protected:
+			void generate_event() override;
+
+		private:
+			bool InvertState()
+			{
+				return state_ = !state_;
+			}
+
+		private:
+			bool state_ = false;
+			std::string source_configuration_token_;
+			std::string analytics_configuration_token_;
+			std::string rule_;
+			std::string data_item_name_;
 		};
 	}
 }
