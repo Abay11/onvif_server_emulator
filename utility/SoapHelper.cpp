@@ -2,6 +2,8 @@
 
 #include <boost\property_tree\ptree.hpp>
 
+#include <map>
+
 namespace pt = boost::property_tree;
 
 namespace utility
@@ -10,7 +12,7 @@ namespace utility
 	{
 
 		//The helper function returns a pthree object formatted by Soap rules with passed xml namespaces
-		boost::property_tree::ptree utility::soap::getEnvelopeTree(const osrv::StringsMap& xmlns)
+		boost::property_tree::ptree utility::soap::getEnvelopeTree(const std::map<std::string, std::string>& xmlns)
 		{
 			boost::property_tree::ptree envelope_tree;
 

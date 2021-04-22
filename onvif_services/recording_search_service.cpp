@@ -11,7 +11,7 @@
 static ILogger* log_ = nullptr;
 static osrv::HttpServer* http_server_intance = nullptr;
 static const osrv::ServerConfigs* server_configs = nullptr;
-//static DigestSessionSP digest_session;
+//static std::shared_ptr<utility::digest::IDigestSession> digest_session;
 
 namespace osrv
 {

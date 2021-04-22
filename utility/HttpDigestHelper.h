@@ -5,11 +5,16 @@
 #include <chrono>
 #include <memory>
 
-#include "../Types.inl"
+#include "../HttpServerFwd.h"
 #include "AuthHelper.h"
 
 #include <boost/optional/optional_io.hpp>
 
+namespace osrv::auth
+{
+	struct UserAccount;
+}
+	
 namespace utility
 {
 	namespace string
@@ -60,6 +65,8 @@ namespace utility
 		class IDigestSession
 		{
 		public:
+			//using std::vector<osrv::auth::UserAccount> = std::vector<osrv::auth::UserAccount>;
+
 			//should generate a new nonce and add it to the pool
 			virtual DigestResponseHeader generateDigest() = 0;
 
@@ -68,13 +75,13 @@ namespace utility
 			//whether a nonce is staled or not using @isStaled flag
 			virtual bool verifyDigest(const DigestRequestHeader& digestInfo, bool& isStaled) = 0;
 
-			void set_users_list(const UsersList_t& users_list)
+			void set_users_list(const std::vector<osrv::auth::UserAccount>& users_list)
 			{
 				system_users.resize(users_list.size());
 				std::copy(users_list.begin(), users_list.end(), system_users.begin());
 			}
 
-			const UsersList_t& get_users_list() const
+			const std::vector<osrv::auth::UserAccount>& get_users_list() const
 			{
 				return system_users;
 			}
@@ -83,7 +90,7 @@ namespace utility
 			IDigestSession(const std::string& realm, const std::string& qop)
 				:realm_(realm), qop_(qop) {}
 
-			UsersList_t system_users;
+			std::vector<osrv::auth::UserAccount> system_users;
 
 			//the pool is used to hold all generated nonce
 			std::map<std::string, std::chrono::milliseconds> nonce_pool;

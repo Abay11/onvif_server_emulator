@@ -6,6 +6,7 @@
 #include "../onvif_services/discovery_service.h"
 #include "../onvif_services/imaging_service.h"
 #include "../onvif_services/ptz_service.h"
+#include "../onvif_services/recording_search_service.h"
 
 #include "utility/XmlParser.h"
 #include "utility/AuthHelper.h"
@@ -78,6 +79,7 @@ namespace osrv
 		discovery::init_service(configs_dir, log);
 		imaging::init_service(*http_server_instance_, server_configs_, configs_dir, log);
 		ptz::init_service(*http_server_instance_, server_configs_, configs_dir, log);
+		recording_search::init_service(*http_server_instance_, server_configs_, configs_dir, log);
 
 		rtspServer_ = new rtsp::Server(&log, server_configs_);
 

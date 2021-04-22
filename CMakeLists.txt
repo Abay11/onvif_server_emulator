@@ -30,6 +30,8 @@ pkg_check_modules(GST REQUIRED gstreamer-1.0 gstreamer-rtsp-server-1.0)
 add_subdirectory(Simple-Web-Server)
 
 FILE(GLOB SERVICES_SRC
+	"onvif_services/IOnvifService.h"
+	"onvif_services/IOnvifService.cpp"
 	"onvif_services/device_service.h"
 	"onvif_services/device_service.cpp"
 	"onvif_services/media_service.h"
@@ -51,6 +53,10 @@ FILE(GLOB SERVICES_SRC
   	"onvif_services/physical_components/IDigitalInput.cpp"
 	"onvif_services/ptz_service.h"
 	"onvif_services/ptz_service.cpp"
+	"onvif_services/ptz_service.h"
+	"onvif_services/ptz_service.cpp"
+	"onvif_services/recording_search_service.h"
+	"onvif_services/recording_search_service.cpp"
 )
 
 FILE (GLOB UTILITY_SRC
@@ -74,7 +80,7 @@ source_group("Utility" FILES ${UTILITY_SRC})
 
 add_library(onvif_server STATIC
 	Logger.h
-	Types.inl
+	HttpServerFwd.h
 	Server.cpp
 	Server.h
 	RtspServer.cpp
@@ -105,7 +111,9 @@ include_directories(
 	"${THIRD_LIBS_DIR}"
 )
 
-include_directories(main "${GST_INCLUDE_DIRS}")
+include_directories(main "${GST_INCLUDE_DIRS}"
+	"${CMAKE_CURRENT_SOURCE_DIR}/Simple-Web-Server")
+	
 target_compile_options(main PUBLIC "${GST_CFLAGS}")
 target_link_directories(main PUBLIC "${GST_INSTALLATION_PATH}/gstreamer/1.0/x86_64/lib")
 target_link_libraries(main

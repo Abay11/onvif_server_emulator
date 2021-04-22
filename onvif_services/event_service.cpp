@@ -17,6 +17,10 @@
 #include <boost/property_tree/ptree.hpp>
 
 #include <map>
+#include <vector>
+
+
+using StringPairsList_t = std::vector<std::pair<std::string, std::string>>;
 
 static ILogger* log_ = nullptr;
 
@@ -24,14 +28,14 @@ static ILogger* log_ = nullptr;
 static osrv::HttpServer* http_server_intance = nullptr;
 
 static const osrv::ServerConfigs* server_configs = nullptr;
-static DigestSessionSP digest_session;
+static std::shared_ptr<utility::digest::IDigestSession> digest_session;
 
 static std::unique_ptr<osrv::event::NotificationsManager> notifications_manager;
 
 namespace pt = boost::property_tree;
 static pt::ptree EVENT_CONFIGS_TREE;
 
-static osrv::StringsMap XML_NAMESPACES;
+static std::map<std::string, std::string> XML_NAMESPACES;
 
 static std::string CONFIGS_PATH; //will be init with the service initialization
 static const std::string EVENT_CONFIGS_FILE = "event.config";
@@ -409,7 +413,7 @@ namespace osrv
 				return log_->Error("EventService is already inited!");
 
 			log_ = &logger;
-			log_->Debug("Initiating Event service...");
+			log_->Info("Initiating Event service...");
 
 			http_server_intance = &srv;
 

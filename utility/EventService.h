@@ -4,11 +4,14 @@
 
 #include <string>
 #include <vector>
-#include <utility>
+
+namespace 
+{
+	using StringPairsList_t = std::vector<std::pair<std::string, std::string>>;
+}
 
 namespace osrv::event
 {
-	using StringPairsList_t = std::vector<std::pair<std::string, std::string> >;
 
 	class EventPropertiesSerializer
 	{

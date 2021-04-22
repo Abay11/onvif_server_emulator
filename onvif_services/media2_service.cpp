@@ -16,7 +16,7 @@
 static ILogger* logger_ = nullptr;
 
 static const osrv::ServerConfigs* server_configs;
-static DigestSessionSP digest_session;
+static std::shared_ptr<utility::digest::IDigestSession> digest_session;
 
 static const std::string PROFILES_CONFIGS_PATH = "media_profiles.config";
 static const std::string MEDIA_SERVICE_CONFIGS_PATH = "media2.config";
@@ -24,7 +24,7 @@ static const std::string MEDIA_SERVICE_CONFIGS_PATH = "media2.config";
 namespace pt = boost::property_tree;
 static pt::ptree CONFIGS_TREE;
 static pt::ptree PROFILES_CONFIGS_TREE;
-static osrv::StringsMap XML_NAMESPACES;
+static std::map<std::string, std::string> XML_NAMESPACES;
 
 //the list of implemented methods
 static const std::string GetAnalyticsConfigurations = "GetAnalyticsConfigurations";

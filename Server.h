@@ -1,11 +1,15 @@
 #pragma once
 
-#include "Types.inl"
+#include "HttpServerFwd.h"
 #include "Logger.h"
 #include "RtspServer.h"
+
 #include "utility/HttpDigestHelper.h"
+
 #include "onvif_services\discovery_service.h"
 #include "onvif_services\physical_components\IDigitalInput.h"
+
+#include <boost/asio/io_context.hpp>
 
 #include <memory>
 
@@ -14,11 +18,6 @@ namespace {
 	const unsigned short MASTER_PORT = 8080;
 }
 
-namespace boost::asio
-{
-	class io_context;
-	class io_context;
-}
 
 //namespace onvif server
 namespace osrv
@@ -31,6 +30,9 @@ namespace osrv
 		DIGEST_WSS,
 	};
 
+	using socket_t = boost::asio::basic_stream_socket<boost::asio::ip::tcp>;
+	using HttpServer = SimpleWeb::Server<socket_t>;
+
 	struct ServerConfigs
 	{
 		std::string ipv4_address_;
@@ -42,9 +44,9 @@ namespace osrv
 		bool enabled_rtsp_port_forwarding;
 		unsigned short forwarded_rtsp_port;
 
-		UsersList_t system_users_;
+		std::vector<osrv::auth::UserAccount> system_users_;
 		AUTH_SCHEME auth_scheme_{};
-		DigestSessionSP digest_session_;
+		std::shared_ptr<utility::digest::IDigestSession> digest_session_;
 
 		DigitalInputsList digital_inputs_;
 		

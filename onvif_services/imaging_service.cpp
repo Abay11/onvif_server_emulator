@@ -15,13 +15,13 @@
 
 static ILogger* logger_ = nullptr;
 static osrv::ServerConfigs* server_configs;
-static DigestSessionSP digest_session;
+static std::shared_ptr<utility::digest::IDigestSession> digest_session;
 
 static std::string CONFIGS_PATH; //will be init with the service initialization
 
 namespace pt = boost::property_tree;
 static pt::ptree CONFIGS_TREE;
-static osrv::StringsMap XML_NAMESPACES;
+static std::map<std::string, std::string> XML_NAMESPACES;
 
 namespace osrv::imaging
 {

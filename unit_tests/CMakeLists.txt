@@ -10,16 +10,17 @@ find_package(Boost REQUIRED
 )
 
 add_executable(test_executable
-	tests_main.cpp
-	auth_tests.cpp
-	media2_tests.cpp
-	http_da_tests.cpp
-	server_tests.cpp
+	auth_tests.cpp	
 	date_time_tests.cpp
-	pull_point_tests.cpp
-	xmlparser_tests.cpp
+	device_service_tests.cpp
 	discovery_tests.cpp
-	event_service_tests.cpp
+	event_service_tests.cpp	
+	http_da_tests.cpp
+	media2_tests.cpp
+	pull_point_tests.cpp
+	server_tests.cpp	
+	tests_main.cpp
+	xmlparser_tests.cpp
 )
 
 # indicates the include paths

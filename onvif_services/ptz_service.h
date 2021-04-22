@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../Types.inl"
+#include "../HttpServerFwd.h"
 #include <string>
 
 class ILogger;

@@ -17,7 +17,7 @@ namespace osrv
 		const char TYPE_OPER_STR[] = "operator";
 		const char TYPE_USER_STR[] = "user";
 
-		USER_TYPE get_usertype_by_username(const std::string& username, const UsersList_t& users)
+		USER_TYPE get_usertype_by_username(const std::string& username, const std::vector<osrv::auth::UserAccount>& users)
 		{
 			auto it = std::find_if(users.begin(), users.end(),
 				[&username, &users](const UserAccount& user) {

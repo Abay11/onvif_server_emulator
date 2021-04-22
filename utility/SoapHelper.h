@@ -1,17 +1,19 @@
 #pragma once
 
-#include "../Types.inl"
-
-#include <functional>
+#include "../HttpServerFwd.h"
 
 #include <boost\property_tree\ptree.hpp>
+
+#include <functional>
+#include <string>
+#include <map>
 
 namespace utility
 {
 	namespace soap
 	{
 		
-		boost::property_tree::ptree getEnvelopeTree(const osrv::StringsMap& xmlns);
+		boost::property_tree::ptree getEnvelopeTree(const std::map<std::string, std::string>& xmlns);
 
 		using ElementsProcessor = std::function<void(std::string&, std::string&)>;
 

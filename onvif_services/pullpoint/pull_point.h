@@ -14,8 +14,13 @@
 #include <boost/date_time/posix_time/posix_time.hpp>
 #include <boost/property_tree/ptree_fwd.hpp>
 
-#include "../Types.inl"
+#include "../HttpServerFwd.h"
 #include "../Simple-Web-Server/server_http.hpp"
+
+namespace
+{
+	using StringPairsList_t = std::vector<std::pair<std::string, std::string>>;
+}
 
 namespace osrv
 {
@@ -144,7 +149,7 @@ namespace osrv
 		class NotificationsManager
 		{
 		public:
-			NotificationsManager(const ILogger& logger, const osrv::StringsMap& xml_namespaces)
+			NotificationsManager(const ILogger& logger, const std::map<std::string, std::string>& xml_namespaces)
 				: logger_(&logger)
 			{
 				// XML namespaces are those, which added in the beginning of responses
@@ -202,7 +207,7 @@ namespace osrv
 
 			std::vector<std::shared_ptr<IEventGenerator>> event_generators_;
 
-			const osrv::StringsMap* xml_namespaces_ = nullptr;
+			const std::map<std::string, std::string>* xml_namespaces_ = nullptr;
 		};
 
 		struct PullMessagesRequest

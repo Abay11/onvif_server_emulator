@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../Types.inl"
+#include "../HttpServerFwd.h"
 #include "HttpDigestHelper.h"
 
 #include <stdexcept>
@@ -60,7 +60,7 @@ namespace osrv
 		}
 
 		//If could not found Username in users lists, ANON mode will be returned as default
-		USER_TYPE get_usertype_by_username(const std::string& /*username*/, const UsersList_t& /*users*/);
+		USER_TYPE get_usertype_by_username(const std::string& /*username*/, const std::vector<osrv::auth::UserAccount>& /*users*/);
 
 		//This converts for ex. "administrator" -> USER_TYPE::ADMIN
 		USER_TYPE str_to_usertype(const std::string& /*str*/);

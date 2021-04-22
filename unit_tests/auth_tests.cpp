@@ -18,7 +18,7 @@ BOOST_AUTO_TEST_CASE(auth_access)
 BOOST_AUTO_TEST_CASE(get_usertype_by_username_func)
 {
 	using namespace osrv::auth;
-	UsersList_t users;
+	std::vector<osrv::auth::UserAccount> users;
 	const std::string username = "agent007";
 	users.emplace_back(UserAccount{ username, "", USER_TYPE::ADMIN });
 	auto res = get_usertype_by_username(username, users);

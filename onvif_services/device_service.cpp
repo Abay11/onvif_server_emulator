@@ -18,7 +18,7 @@
 static ILogger* logger_ = nullptr;
 
 static osrv::ServerConfigs* server_configs;
-static DigestSessionSP digest_session;
+static std::shared_ptr<utility::digest::IDigestSession> digest_session;
 
 //List of implemented methods
 const std::string GetCapabilities = "GetCapabilities";
@@ -31,7 +31,7 @@ const std::string GetSystemDateAndTime = "GetSystemDateAndTime";
 
 namespace pt = boost::property_tree;
 static pt::ptree CONFIGS_TREE;
-static osrv::StringsMap XML_NAMESPACES;
+static std::map<std::string, std::string> XML_NAMESPACES;
 
 static std::string CONFIGS_PATH; //will be init with the service initialization
 static std::string SERVER_ADDRESS; // will be initiated in @init_service()
