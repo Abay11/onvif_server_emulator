@@ -57,6 +57,9 @@ FILE(GLOB SERVICES_SRC
 	"onvif_services/ptz_service.cpp"
 	"onvif_services/recording_search_service.h"
 	"onvif_services/recording_search_service.cpp"
+
+	"include/onvif_services/service_configs.h"
+	"src/onvif_services/service_configs.cpp"
 )
 
 FILE (GLOB UTILITY_SRC
@@ -111,7 +114,9 @@ include_directories(
 	"${THIRD_LIBS_DIR}"
 )
 
-include_directories(main "${GST_INCLUDE_DIRS}"
+include_directories(main
+	"${CMAKE_CURRENT_SOURCE_DIR}/include"
+	"${GST_INCLUDE_DIRS}"
 	"${CMAKE_CURRENT_SOURCE_DIR}/Simple-Web-Server")
 	
 target_compile_options(main PUBLIC "${GST_CFLAGS}")
