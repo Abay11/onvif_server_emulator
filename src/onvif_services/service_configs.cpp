@@ -7,7 +7,6 @@ namespace
 {
 	namespace pt = boost::property_tree;
 
-
 	class ConfigName
 	{
 	public:
@@ -47,14 +46,10 @@ namespace
 
 namespace osrv
 {
-	const PTreeSP ServiceConfigs::Config()
+	ServiceConfigs::operator const PTreeSP()
 	{
-		if (!json_config_)
-		{
-			json_config_ = std::make_shared<pt::ptree>();
-			pt::read_json(ConfigPath(config_path_, ConfigName(service_name_)), *json_config_);
-		}
-
+		auto json_config_ = std::make_shared<pt::ptree>();
+		pt::read_json(ConfigPath(config_path_, ConfigName(service_name_)), *json_config_);
 		return json_config_;
 	}
 }
