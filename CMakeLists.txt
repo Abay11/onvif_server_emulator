@@ -84,6 +84,8 @@ source_group("Utility" FILES ${UTILITY_SRC})
 add_library(onvif_server STATIC
 	Logger.h
 	HttpServerFwd.h
+	include/IOnvifServer.h
+	src/IOnvifServer.cpp
 	Server.cpp
 	Server.h
 	RtspServer.cpp
