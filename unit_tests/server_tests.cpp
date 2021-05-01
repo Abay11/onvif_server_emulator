@@ -3,8 +3,8 @@
 #include "../Server.h"
 #include "../onvif_services/physical_components/IDigitalInput.h"
 
-#include <boost\property_tree\ptree.hpp>
-#include <boost\property_tree\json_parser.hpp>
+#include <boost/property_tree/ptree.hpp>
+#include <boost/property_tree/json_parser.hpp>
 
 namespace pt = boost::property_tree;
 BOOST_AUTO_TEST_CASE(read_server_configs_func)

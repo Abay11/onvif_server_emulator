@@ -19,6 +19,7 @@ add_executable(test_executable
 	media2_tests.cpp
 	pull_point_tests.cpp
 	server_tests.cpp	
+	service_configs_tests.cpp
 	tests_main.cpp
 	xmlparser_tests.cpp
 )
