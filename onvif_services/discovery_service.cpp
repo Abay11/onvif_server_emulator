@@ -63,7 +63,7 @@ public:
 
 	void Stop()
 	{
-		if (!io_work_)
+		if (!io_work_ || !worker_)
 			return;
 
 		io_work_.reset();

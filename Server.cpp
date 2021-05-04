@@ -27,78 +27,9 @@ namespace osrv
 	
 	AUTH_SCHEME str_to_auth(const std::string& /*scheme*/);
 
-	Server::Server(std::string configs_dir, ILogger& log)
-		:logger_(log)
-		,http_server_instance_(new HttpServer)
+	Server::Server(const std::string& configs_dir, std::shared_ptr<ILogger> log)
+		: IOnvifServer(configs_dir, log)
 	{
-		http_server_instance_->config.port = MASTER_PORT;
-	
-		http_server_instance_->default_resource["GET"] = [](std::shared_ptr<HttpServer::Response> response,
-			std::shared_ptr<HttpServer::Request> request)
-		{
-			response->write(SimpleWeb::StatusCode::client_error_bad_request, "Could not open path " + request->path);
-		};
-		
-		http_server_instance_->default_resource["POST"] = [this](std::shared_ptr<HttpServer::Response> response,
-			std::shared_ptr<HttpServer::Request> request)
-		{
-			logger_.Warn("The server could not handle a request:" + request->method + " " + request->path);
-			response->write(SimpleWeb::StatusCode::client_error_bad_request, "Bad request");
-		};
-
-		configs_dir += "/";
-		// TODO: as now here we read configs, we can refactor @read_server_configs function and pass ptree 
-		std::ifstream configs_file(configs_dir + COMMON_CONFIGS_NAME);
-		if (configs_file.is_open())
-		{
-			namespace pt = boost::property_tree;
-			pt::ptree configs_tree;
-			pt::read_json(configs_file, configs_tree);
-			auto log_lvl = configs_tree.get<std::string>("loggingLevel", "");
-			if (!log_lvl.empty())
-				logger_.SetLogLevel(ILogger::to_lvl(log_lvl));
-		}
-		logger_.Info("Logging level: " + logger_.GetLogLevel());
-
-		server_configs_ = read_server_configs(configs_dir + COMMON_CONFIGS_NAME);
-
-		if (server_configs_.enabled_http_port_forwarding)
-			logger_.Info("HTTP port forwarding simulated on port: " + std::to_string(server_configs_.forwarded_http_port));
-
-		if (server_configs_.enabled_rtsp_port_forwarding)
-			logger_.Info("RTSP port forwarding simulated on port: " + std::to_string(server_configs_.forwarded_rtsp_port));
-
-		server_configs_.digest_session_ = std::make_shared<utility::digest::DigestSessionImpl>();
-		//TODO: here is the same list is copied into digest_session, although it's already stored in server_configs
-		server_configs_.digest_session_->set_users_list(server_configs_.system_users_);
-
-		device::init_service(*http_server_instance_, server_configs_, configs_dir, log);
-		media::init_service(*http_server_instance_, server_configs_, configs_dir, log);
-		media2::init_service(*http_server_instance_, server_configs_, configs_dir, log);
-		event::init_service(*http_server_instance_, server_configs_, configs_dir, log);
-		discovery::init_service(configs_dir, log);
-		imaging::init_service(*http_server_instance_, server_configs_, configs_dir, log);
-		ptz::init_service(*http_server_instance_, server_configs_, configs_dir, log);
-		recording_search::init_service(*http_server_instance_, server_configs_, configs_dir, log);
-
-		rtspServer_ = new rtsp::Server(&log, server_configs_);
-
-		if (auto delay = server_configs_.network_delay_simulation_; delay > 0)
-		{
-			logger_.Info("Network delay simulation is enabled. Equals (ms): " + std::to_string(delay));
-		}
-
-		io_context_ = std::make_shared<boost::asio::io_context>();
-		io_context_work_ = std::make_shared<boost::asio::io_context::work>(*io_context_);
-		io_context_thread_ = std::make_shared<std::thread>(
-			[this]()
-			{
-				logger_.Debug("Async IO Context's thread is running...");
-				io_context_->run();
-			}
-		);
-
-		server_configs_.io_context_ = io_context_;
 	}
 
 	Server::~Server()
@@ -108,17 +39,91 @@ namespace osrv
 		io_context_work_.reset();
 		try
 		{
-			if (io_context_thread_->joinable())
+			if (io_context_thread_ && io_context_thread_->joinable())
 			{
 				io_context_thread_->join();
-				logger_.Debug("Async IO Context's thread is joined.");
+				logger_->Debug("Async IO Context's thread is joined.");
 			}
 		}
 		catch (const std::exception&)
 		{
 		}
 
-		delete rtspServer_;
+		if (rtspServer_)
+			delete rtspServer_;
+	}
+
+	void Server::init()
+	{
+		http_server_->config.port = MASTER_PORT;
+	
+		http_server_->default_resource["GET"] = [](std::shared_ptr<HttpServer::Response> response,
+			std::shared_ptr<HttpServer::Request> request)
+		{
+			response->write(SimpleWeb::StatusCode::client_error_bad_request, "Could not open path " + request->path);
+		};
+		
+		http_server_->default_resource["POST"] = [this](std::shared_ptr<HttpServer::Response> response,
+			std::shared_ptr<HttpServer::Request> request)
+		{
+			logger_->Warn("The server could not handle a request:" + request->method + " " + request->path);
+			response->write(SimpleWeb::StatusCode::client_error_bad_request, "Bad request");
+		};
+
+		auto configs_dir = configs_path_ + "/";
+		// TODO: as now here we read configs, we can refactor @read_server_configs function and pass ptree 
+		std::ifstream configs_file(configs_dir + COMMON_CONFIGS_NAME);
+		if (configs_file.is_open())
+		{
+			namespace pt = boost::property_tree;
+			pt::ptree configs_tree;
+			pt::read_json(configs_file, configs_tree);
+			auto log_lvl = configs_tree.get<std::string>("loggingLevel", "");
+			if (!log_lvl.empty())
+				logger_->SetLogLevel(ILogger::to_lvl(log_lvl));
+		}
+		logger_->Info("Logging level: " + logger_->GetLogLevel());
+
+		server_configs_ = read_server_configs(configs_dir + COMMON_CONFIGS_NAME);
+
+		if (server_configs_->enabled_http_port_forwarding)
+			logger_->Info("HTTP port forwarding simulated on port: " + std::to_string(server_configs_->forwarded_http_port));
+
+		if (server_configs_->enabled_rtsp_port_forwarding)
+			logger_->Info("RTSP port forwarding simulated on port: " + std::to_string(server_configs_->forwarded_rtsp_port));
+
+		server_configs_->digest_session_ = std::make_shared<utility::digest::DigestSessionImpl>();
+		//TODO: here is the same list is copied into digest_session, although it's already stored in server_configs
+		server_configs_->digest_session_->set_users_list(server_configs_->system_users_);
+
+		device::init_service(*http_server_, *server_configs_, configs_dir, *logger_);
+		media::init_service(*http_server_, *server_configs_, configs_dir, *logger_);
+		media2::init_service(*http_server_, *server_configs_, configs_dir, *logger_);
+		event::init_service(*http_server_, *server_configs_, configs_dir, *logger_);
+		discovery::init_service(configs_dir, *logger_);
+		imaging::init_service(*http_server_, *server_configs_, configs_dir, *logger_);
+		ptz::init_service(*http_server_, *server_configs_, configs_dir, *logger_);
+		//recording_search::init_service(*http_server_, server_configs_, configs_dir, logger_);
+		RecordingSearchService()->Run();
+
+		rtspServer_ = new rtsp::Server(&*logger_, *server_configs_);
+
+		if (auto delay = server_configs_->network_delay_simulation_; delay > 0)
+		{
+			logger_->Info("Network delay simulation is enabled. Equals (ms): " + std::to_string(delay));
+		}
+
+		io_context_ = std::make_shared<boost::asio::io_context>();
+		io_context_work_ = std::make_shared<boost::asio::io_context::work>(*io_context_);
+		io_context_thread_ = std::make_shared<std::thread>(
+			[this]()
+			{
+				logger_->Debug("Async IO Context's thread is running...");
+				io_context_->run();
+			}
+		);
+
+		server_configs_->io_context_ = io_context_;
 	}
 
 void Server::run()
@@ -129,7 +134,7 @@ void Server::run()
 	promise<unsigned short> server_port;
 	thread server_thread([this, &server_port]() {
 		// Start server
-		http_server_instance_->start([&server_port](unsigned short port) {
+		http_server_->start([&server_port](unsigned short port) {
 				server_port.set_value(port);
 			});
 		});
@@ -142,17 +147,17 @@ void Server::run()
 	catch (const std::exception& e)
 	{
 		std::string what(e.what());
-		logger_.Error("Can't start Discovery Service: " + what);
+		logger_->Error("Can't start Discovery Service: " + what);
 	}
 
 	std::string msg("Server is successfully started on port: ");
 	msg += std::to_string(server_port.get_future().get());
-	logger_.Info(msg);
+	logger_->Info(msg);
 
 	server_thread.join();
 }
 
-ServerConfigs read_server_configs(const std::string& config_path)
+std::shared_ptr<ServerConfigs> read_server_configs(const std::string& config_path)
 {
 
 	std::ifstream configs_file(config_path);
@@ -163,22 +168,22 @@ ServerConfigs read_server_configs(const std::string& config_path)
 	pt::ptree configs_tree;
 	pt::read_json(configs_file, configs_tree);
 	
-	ServerConfigs read_configs;
+	auto read_configs = std::make_shared<ServerConfigs>();
 
-	read_configs.ipv4_address_ = configs_tree.get<std::string>("addresses.ipv4");
-	read_configs.http_port_ = configs_tree.get<std::string>("addresses.http_port");
-	read_configs.rtsp_port_ = configs_tree.get<std::string>("addresses.rtsp_port");
+	read_configs->ipv4_address_ = configs_tree.get<std::string>("addresses.ipv4");
+	read_configs->http_port_ = configs_tree.get<std::string>("addresses.http_port");
+	read_configs->rtsp_port_ = configs_tree.get<std::string>("addresses.rtsp_port");
 
-	read_configs.enabled_http_port_forwarding = configs_tree.get<bool>("portForwardingSimulation.enabled_for_http", false);
-	if (read_configs.enabled_http_port_forwarding)
-		read_configs.forwarded_http_port = configs_tree.get<unsigned short>("portForwardingSimulation.http_port");
+	read_configs->enabled_http_port_forwarding = configs_tree.get<bool>("portForwardingSimulation.enabled_for_http", false);
+	if (read_configs->enabled_http_port_forwarding)
+		read_configs->forwarded_http_port = configs_tree.get<unsigned short>("portForwardingSimulation.http_port");
 	
-	read_configs.enabled_rtsp_port_forwarding = configs_tree.get<bool>("portForwardingSimulation.enabled_for_rtsp", false);
-	if (read_configs.enabled_rtsp_port_forwarding)
-		read_configs.forwarded_rtsp_port = configs_tree.get<unsigned short>("portForwardingSimulation.rtsp_port");
+	read_configs->enabled_rtsp_port_forwarding = configs_tree.get<bool>("portForwardingSimulation.enabled_for_rtsp", false);
+	if (read_configs->enabled_rtsp_port_forwarding)
+		read_configs->forwarded_rtsp_port = configs_tree.get<unsigned short>("portForwardingSimulation.rtsp_port");
 
 	auto auth_scheme = configs_tree.get<std::string>("authentication");
-	read_configs.auth_scheme_ = str_to_auth(auth_scheme);
+	read_configs->auth_scheme_ = str_to_auth(auth_scheme);
 
 	auto users_node = configs_tree.get_child("users");
 	if (users_node.empty())
@@ -186,7 +191,7 @@ ServerConfigs read_server_configs(const std::string& config_path)
 
 	for (auto user : users_node)
 	{
-		read_configs.system_users_.emplace_back(
+		read_configs->system_users_.emplace_back(
 			osrv::auth::UserAccount{
 				user.second.get<std::string>(auth::UserAccount::LOGIN),
 				user.second.get<std::string>(auth::UserAccount::PASS),
@@ -194,7 +199,7 @@ ServerConfigs read_server_configs(const std::string& config_path)
 			});
 	}
 
-	read_configs.network_delay_simulation_ = configs_tree.get<unsigned short>("networkDelaySimulation.milliseconds");
+	read_configs->network_delay_simulation_ = configs_tree.get<unsigned short>("networkDelaySimulation.milliseconds");
 
 	return read_configs;
 }

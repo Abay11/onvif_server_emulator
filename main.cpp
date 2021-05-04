@@ -12,7 +12,7 @@ int main(int argc, char** argv)
 {
 	using namespace std;
 
-	ILogger* logger = ConsoleLoggerFactory().GetLogger(ILogger::LVL_DEBUG);
+	std::shared_ptr<ILogger> logger{ ConsoleLoggerFactory().GetLogger(ILogger::LVL_DEBUG) };
 	logger->Info("Simple ONVIF Server ver. " + SERVER_VERSION);
 
 	std::string configs_dir = DEFAULT_CONFIGS_DIR;
@@ -26,10 +26,10 @@ int main(int argc, char** argv)
 
 	try
 	{
-		osrv::Server* server = new osrv::Server(configs_dir, *logger);
+		//std::shared_ptr<osrv::IOnvifServer> server = std::make_shared<osrv::Server>(configs_dir, logger);
+		std::shared_ptr<osrv::Server> server{ new osrv::Server{configs_dir, logger} };
+		server->init();
 		server->run();
-
-		delete server;
 	}
 	catch (const std::exception& e)
 	{
@@ -39,8 +39,6 @@ int main(int argc, char** argv)
 	}
 
 	logger->Info("Server is stopped");
-
-	delete logger;
 
 	cout << "\n\nPress any key to exit";
 	getchar();

@@ -47,6 +47,9 @@ namespace osrv
 
 		Server::~Server()
 		{
+			if (!worker_thread)
+				return;
+
 			try
 			{
 				worker_thread->join();

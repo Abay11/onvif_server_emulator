@@ -31,9 +31,7 @@ namespace osrv
 	class IOnvifServer : public std::enable_shared_from_this<IOnvifServer>
 	{
 	public:
-		IOnvifServer(const std::string& configs_path)
-			: configs_path_(configs_path)
-		{}
+		IOnvifServer(const std::string& configs_path, std::shared_ptr<ILogger> logger);
 
 		const std::string& ConfigsPath() const;
 
@@ -45,14 +43,14 @@ namespace osrv
 		std::shared_ptr<ServerConfigs> ServerConfigs();
 
 	protected:
-		std::shared_ptr<ILogger> logger_;
-
 		const std::string& configs_path_;
+		std::shared_ptr<ILogger> logger_;
 		
 		std::shared_ptr<osrv::ServerConfigs> server_configs_;
 
 		std::shared_ptr<osrv::HttpServer> http_server_;
 
+		std::shared_ptr<IOnvifService> device_service_;
 		std::shared_ptr<IOnvifService> recording_search_service_;
 	};
 }

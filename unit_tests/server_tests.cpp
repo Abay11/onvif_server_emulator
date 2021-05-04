@@ -6,11 +6,13 @@
 #include <boost/property_tree/ptree.hpp>
 #include <boost/property_tree/json_parser.hpp>
 
+#include <memory>
+
 namespace pt = boost::property_tree;
 BOOST_AUTO_TEST_CASE(read_server_configs_func)
 {
 	const std::string server_configs_path = "../../unit_tests/test_data/system_users_list_test.config";
-	osrv::ServerConfigs actual_configs;
+	std::shared_ptr<osrv::ServerConfigs> actual_configs;
 	try {
 		actual_configs = osrv::read_server_configs(server_configs_path);
 	}
@@ -21,9 +23,9 @@ BOOST_AUTO_TEST_CASE(read_server_configs_func)
 	}
 	
 	auto expected_auth_scheme = osrv::AUTH_SCHEME::DIGEST;
-	BOOST_TEST(true == (actual_configs.auth_scheme_ == expected_auth_scheme));
+	BOOST_TEST(true == (actual_configs->auth_scheme_ == expected_auth_scheme));
 
-	auto actual_system_users = actual_configs.system_users_;
+	auto actual_system_users = actual_configs->system_users_;
 	
 	BOOST_TEST(3 == actual_system_users.size());
 

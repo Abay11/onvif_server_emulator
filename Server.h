@@ -1,5 +1,6 @@
 #pragma once
 
+#include "IOnvifServer.h"
 #include "HttpServerFwd.h"
 #include "Logger.h"
 #include "RtspServer.h"
@@ -56,32 +57,34 @@ namespace osrv
 		unsigned short network_delay_simulation_ = 0;
 	};
 
-	class Server
+	class Server : public IOnvifServer
 	{
 	public:
-		Server(std::string /*configs_dir*/, ILogger& /*log*/);
+		Server(const std::string& /*configs_dir*/, std::shared_ptr<ILogger> /*log*/);
 		Server(const ILogger&) = delete;
 		Server(ILogger&&) = delete;
 		~Server();
+
+		void init();
 
 		//throws exceptions in error
 		void run();
 
 	private:
-		ILogger& logger_;
+		//ILogger& logger_;
 
-		std::shared_ptr<HttpServer> http_server_instance_ = nullptr;
+		//std::shared_ptr<osrv::HttpServer> http_server_instance_ = nullptr;
 
-		ServerConfigs server_configs_;
+		//osrv::ServerConfigs server_configs_;
 
-		rtsp::Server* rtspServer_;
+		rtsp::Server* rtspServer_ = nullptr;
 
 		std::shared_ptr<boost::asio::io_context> io_context_;
 		std::shared_ptr<boost::asio::io_context::work> io_context_work_;
 		std::shared_ptr<std::thread> io_context_thread_;
 	};
 	
-	ServerConfigs read_server_configs(const std::string& /*config_path*/);
+	std::shared_ptr<ServerConfigs> read_server_configs(const std::string& /*config_path*/);
 
 	DigitalInputsList read_digital_inputs(const boost::property_tree::ptree& /*config_node*/);
 }
