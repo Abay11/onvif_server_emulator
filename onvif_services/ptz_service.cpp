@@ -22,12 +22,14 @@ static pt::ptree CONFIGS_TREE;
 static std::map<std::string, std::string> XML_NAMESPACES;
 
 // a list of implemented methods
+const std::string ContinuousMove = "ContinuousMove";
 const std::string GetCompatibleConfigurations = "GetCompatibleConfigurations";
 const std::string GetConfiguration = "GetConfiguration";
 const std::string GetConfigurations = "GetConfigurations";
 const std::string GetNodes = "GetNodes";
 const std::string GetNode = "GetNode";
 const std::string SetConfiguration = "SetConfiguration";
+const std::string Stop = "Stop";
 
 
 static std::vector<utility::http::HandlerSP> handlers;
@@ -38,6 +40,29 @@ namespace osrv::ptz
 
 	void do_handle_request(std::shared_ptr<HttpServer::Response> response,
 		std::shared_ptr<HttpServer::Request> request);
+
+	struct ContinuousMoveHandler : public utility::http::RequestHandlerBase
+	{
+
+		ContinuousMoveHandler() : utility::http::RequestHandlerBase(ContinuousMove, osrv::auth::SECURITY_LEVELS::ACTUATE)
+		{
+		}
+
+		OVERLOAD_REQUEST_HANDLER
+		{
+			auto envelope_tree = utility::soap::getEnvelopeTree(XML_NAMESPACES);
+					
+			envelope_tree.add("s:Body.tptz:ContinuousMoveResponse", "");
+
+			pt::ptree root_tree;
+			root_tree.put_child("s:Envelope", envelope_tree);
+
+			std::ostringstream os;
+			pt::write_xml(os, root_tree);
+
+			utility::http::fillResponseWithHeaders(*response, os.str());
+		}
+	};
 
 	struct GetCompatibleConfigurationsHandler : public utility::http::RequestHandlerBase
 	{
@@ -311,6 +336,29 @@ namespace osrv::ptz
 			do_handle_request(response, request);
 		}
 	}
+	
+	struct StopHandler : public utility::http::RequestHandlerBase
+	{
+
+		StopHandler() : utility::http::RequestHandlerBase(Stop, osrv::auth::SECURITY_LEVELS::ACTUATE)
+		{
+		}
+
+		OVERLOAD_REQUEST_HANDLER
+		{
+			auto envelope_tree = utility::soap::getEnvelopeTree(XML_NAMESPACES);
+					
+			envelope_tree.add("s:Body.tptz:StopResponse", "");
+
+			pt::ptree root_tree;
+			root_tree.put_child("s:Envelope", envelope_tree);
+
+			std::ostringstream os;
+			pt::write_xml(os, root_tree);
+
+			utility::http::fillResponseWithHeaders(*response, os.str());
+		}
+	};
 
 	void do_handle_request(std::shared_ptr<HttpServer::Response> response,
 		std::shared_ptr<HttpServer::Request> request)
@@ -421,12 +469,14 @@ namespace osrv::ptz
 		for (const auto& n : namespaces_tree)
 			XML_NAMESPACES.insert({ n.first, n.second.get_value<std::string>() });
 
+		handlers.emplace_back(new ContinuousMoveHandler());
 		handlers.emplace_back(new GetCompatibleConfigurationsHandler());
 		handlers.emplace_back(new GetConfigurationHandler());
 		handlers.emplace_back(new GetConfigurationsHandler());
 		handlers.emplace_back(new GetNodeHandler());
 		handlers.emplace_back(new GetNodesHandler());
 		handlers.emplace_back(new SetConfigurationHandler());
+		handlers.emplace_back(new StopHandler());
 
 		srv.resource["/onvif/ptz_service"]["POST"] = PtzServiceDefaultHandler;
 	}
