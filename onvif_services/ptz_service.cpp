@@ -28,6 +28,7 @@ const std::string GetConfiguration = "GetConfiguration";
 const std::string GetConfigurations = "GetConfigurations";
 const std::string GetNodes = "GetNodes";
 const std::string GetNode = "GetNode";
+const std::string RelativeMove = "RelativeMove";
 const std::string SetConfiguration = "SetConfiguration";
 const std::string Stop = "Stop";
 
@@ -184,6 +185,29 @@ namespace osrv::ptz
 		}
 	};
 
+	struct RelativeMoveHandler : public utility::http::RequestHandlerBase
+	{
+
+		RelativeMoveHandler() : utility::http::RequestHandlerBase(RelativeMove, osrv::auth::SECURITY_LEVELS::ACTUATE)
+		{
+		}
+
+		OVERLOAD_REQUEST_HANDLER
+		{
+			auto envelope_tree = utility::soap::getEnvelopeTree(XML_NAMESPACES);
+					
+			envelope_tree.add("s:Body.tptz:RelativeMoveResponse", "");
+
+			pt::ptree root_tree;
+			root_tree.put_child("s:Envelope", envelope_tree);
+
+			std::ostringstream os;
+			pt::write_xml(os, root_tree);
+
+			utility::http::fillResponseWithHeaders(*response, os.str());
+		}
+	};
+	
 	struct GetNodesHandler : public utility::http::RequestHandlerBase
 	{
 
@@ -475,6 +499,7 @@ namespace osrv::ptz
 		handlers.emplace_back(new GetConfigurationsHandler());
 		handlers.emplace_back(new GetNodeHandler());
 		handlers.emplace_back(new GetNodesHandler());
+		handlers.emplace_back(new RelativeMoveHandler());
 		handlers.emplace_back(new SetConfigurationHandler());
 		handlers.emplace_back(new StopHandler());
 
