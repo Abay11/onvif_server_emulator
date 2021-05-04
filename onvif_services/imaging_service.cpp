@@ -29,7 +29,9 @@ namespace osrv::imaging
 	const std::string GetImagingSettings = "GetImagingSettings";
 	const std::string GetMoveOptions = "GetMoveOptions";
 	const std::string GetOptions = "GetOptions";
+	const std::string Move = "Move";
 	const std::string SetImagingSettings = "SetImagingSettings";
+	const std::string Stop = "Stop";
 		
 	const std::string CONFIGS_FILE = "imaging.config";
 
@@ -107,6 +109,29 @@ namespace osrv::imaging
 			utility::http::fillResponseWithHeaders(*response, os.str());
 		}
 	};
+	
+	struct MoveHandler : public utility::http::RequestHandlerBase
+	{
+
+		MoveHandler() : utility::http::RequestHandlerBase(Move, osrv::auth::SECURITY_LEVELS::ACTUATE)
+		{
+		}
+			
+		OVERLOAD_REQUEST_HANDLER
+		{
+			auto envelope_tree = utility::soap::getEnvelopeTree(XML_NAMESPACES);
+
+			envelope_tree.add("s:Body.timg:MoveResponse", "");
+
+			pt::ptree root_tree;
+			root_tree.put_child("s:Envelope", envelope_tree);
+
+			std::ostringstream os;
+			pt::write_xml(os, root_tree);
+
+			utility::http::fillResponseWithHeaders(*response, os.str());
+		}
+	};
 
 	struct SetImagingSettingsHandler : public utility::http::RequestHandlerBase
 	{
@@ -120,6 +145,29 @@ namespace osrv::imaging
 			auto envelope_tree = utility::soap::getEnvelopeTree(XML_NAMESPACES);
 
 			envelope_tree.add("s:Body.timg:SetImagingSettingsResponse", "");
+
+			pt::ptree root_tree;
+			root_tree.put_child("s:Envelope", envelope_tree);
+
+			std::ostringstream os;
+			pt::write_xml(os, root_tree);
+
+			utility::http::fillResponseWithHeaders(*response, os.str());
+		}
+	};
+
+	struct StopHandler : public utility::http::RequestHandlerBase
+	{
+
+		StopHandler() : utility::http::RequestHandlerBase(Stop, osrv::auth::SECURITY_LEVELS::ACTUATE)
+		{
+		}
+			
+		OVERLOAD_REQUEST_HANDLER
+		{
+			auto envelope_tree = utility::soap::getEnvelopeTree(XML_NAMESPACES);
+
+			envelope_tree.add("s:Body.timg:StopResponse", "");
 
 			pt::ptree root_tree;
 			root_tree.put_child("s:Envelope", envelope_tree);
@@ -231,7 +279,7 @@ namespace osrv::imaging
 			}
 			catch (const std::exception& e)
 			{
-				logger_->Error("A server's error occured in PtzService while processing: " + method
+				logger_->Error("A server's error occured in ImagingService while processing: " + method
 					+ ". Info: " + e.what());
 
 				*response << "HTTP/1.1 500 Server error\r\nContent-Length: " << 0 << "\r\n\r\n";
@@ -239,7 +287,7 @@ namespace osrv::imaging
 		}
 		else
 		{
-			logger_->Error("Not found an appropriate handler in PtzService for: " + method);
+			logger_->Error("Not found an appropriate handler in ImagingService for: " + method);
 			*response << "HTTP/1.1 400 Bad request\r\nContent-Length: " << 0 << "\r\n\r\n";
 		}
 	}
@@ -267,7 +315,9 @@ namespace osrv::imaging
 		handlers.emplace_back(new GetImagingSettingsHandler());
 		handlers.emplace_back(new GetMoveOptionsHandler());
 		handlers.emplace_back(new GetOptionsHandler());
+		handlers.emplace_back(new MoveHandler());
 		handlers.emplace_back(new SetImagingSettingsHandler());
+		handlers.emplace_back(new StopHandler());
 
 		srv.resource["/onvif/imaging_service"]["POST"] = ImagingServiceDefaultHandler;
 	}
