@@ -10,15 +10,7 @@ class ILogger;
 
 namespace osrv
 {
-	//struct ServerConfigs;
-
-	//namespace recording_search
-	//{
-		static const std::string NS = "https://www.onvif.org/ver10/search.wsdl";
-
-	//	void init_service(HttpServer& /*srv*/, const osrv::ServerConfigs& /*configs*/,
-	//		const std::string& /*configs_path*/, ILogger& /*logger*/);
-	//}
+	//static const std::string NS = "https://www.onvif.org/ver10/search.wsdl";
 
 	class RecordingSearchService : public IOnvifService
 	{
@@ -26,10 +18,6 @@ namespace osrv
 		RecordingSearchService(const std::string& service_uri,
 			const std::string& service_name, std::shared_ptr<IOnvifServer> srv);
 
-		void handleRequestImpl(std::shared_ptr<std::ostream> response,
-			const std::istream& request) override;
-
 	private:
-
 	};
 }
