@@ -61,7 +61,9 @@ FILE(GLOB SERVICES_SRC
 	"include/onvif_services/service_configs.h"
 	"src/onvif_services/service_configs.cpp"
 
-	"onvif/OnvifRequest.h"
+	"onvif/Recording.h"
+	"onvif/Recording.cpp"
+	"onvif/OnvifRequest.h"	
 )
 
 FILE (GLOB UTILITY_SRC

@@ -20,7 +20,9 @@ add_executable(test_executable
 	pull_point_tests.cpp
 	server_tests.cpp	
 	service_configs_tests.cpp
+	recording_tests.cpp
 	tests_main.cpp
+	xmlparser_tests.cpp
 	xmlparser_tests.cpp
 )
 

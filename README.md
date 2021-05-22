@@ -51,3 +51,11 @@ Each ONVIF service is implemented as a separate instance. Each service may have 
  #### Probe match properties
 
  "UseStaticResponse" - values: true/false. Points whether to response to the discovery Probe match with static message. Content will be read from `discovery_service_responses/probe_match.responses`. Currently is implemented only static variant.
+
+
+ ## Recording Search
+
+ #### Recordings descriptions
+
+ "DataFrom" - The earliest point in time. If not specified is condidered data recorded from 24 hours ago.
+ "DataUntil" - The most recent point in time. If not specified is condidered data recorded until now.

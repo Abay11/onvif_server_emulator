@@ -50,20 +50,6 @@ namespace osrv
 		}
 
 	protected:
-		//virtual void runImpl() = 0;
-
-		//virtual void handleRequestImpl(std::shared_ptr<HttpServer::Response> response,
-		//	std::shared_ptr<HttpServer::Request> request) = 0;
-		//virtual void handleRequestImpl(std::shared_ptr<std::ostream> response,
-		//	const std::istream& request) = 0;
-		//virtual void handleRequestImpl(std::shared_ptr<std::ostream> response,
-		//	const std::istream& request) = 0;
-
-	private:
-		//void handleRequest(std::shared_ptr<std::ostream> response,
-		//	std::istream& request);
-
-	protected:
 		const std::string service_uri_;
 		const std::string service_name_;
 		std::shared_ptr<pt::ptree> configs_ptree_;
@@ -73,7 +59,6 @@ namespace osrv
 		const std::shared_ptr<ILogger> log_;
 
 		std::vector<HandlerSP> requestHandlers_;
-
 
 	private:
 		bool is_running_ = false;
