@@ -19,8 +19,8 @@ namespace osrv
 			return name_;
 		}
 
-		boost::posix_time::ptime DataFrom() const;
-		boost::posix_time::ptime DataUntil() const;
+		boost::posix_time::ptime DateFrom() const;
+		boost::posix_time::ptime DateUntil() const;
 
 
 	private:
@@ -41,6 +41,7 @@ namespace osrv
 		{}
 
 		//Recording Recording(const std::string& name);
+		std::vector<Recording> Recordings();
 
 
 	private:
