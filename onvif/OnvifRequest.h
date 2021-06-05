@@ -7,14 +7,17 @@
 #include <../Simple-Web-Server/server_http.hpp>
 
 #include <string>
+#include <map>
 
 namespace osrv
 {
 	struct OnvifRequestBase
 	{
-		OnvifRequestBase(const std::string& name, osrv::auth::SECURITY_LEVELS lvl) :
-			name_(name),
-			security_level_(lvl)
+		OnvifRequestBase(const std::string& name,
+			osrv::auth::SECURITY_LEVELS lvl, const std::map<std::string, std::string>& ns) :
+			name_(name)
+			, security_level_(lvl)
+			, ns_(ns)
 		{
 		}
 
@@ -26,20 +29,22 @@ namespace osrv
 			throw std::exception("Method is not implemented");
 		}
 
-		std::string get_name() const
+		std::string name() const
 		{
 			return name_;
 		}
 
-		osrv::auth::SECURITY_LEVELS get_security_level()
+		osrv::auth::SECURITY_LEVELS security_level()
 		{
 			return security_level_;
 		}
 
-	private:
-		//Method name should be exactly match the name in the specification
-		std::string name_;
+	protected:
+		const std::map<std::string, std::string>& ns_;
 
+	private:
+		//Method name should match the name in the specification
+		std::string name_;
 		osrv::auth::SECURITY_LEVELS security_level_;
 	};
 }

@@ -32,7 +32,6 @@ namespace osrv
 
 	};
 
-
 	class RecordingsMgr
 	{
 	public:

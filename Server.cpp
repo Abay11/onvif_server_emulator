@@ -70,6 +70,14 @@ namespace osrv
 			response->write(SimpleWeb::StatusCode::client_error_bad_request, "Bad request");
 		};
 
+		http_server_->on_error = [this](std::shared_ptr<HttpServer::Request> request, const SimpleWeb::error_code& ec)
+		{
+			//if (ec != SimpleWeb::errc::operation_canceled && SimpleWeb::error_code::)
+			//{
+			//	logger_->Error("HTTP server internal error: " + ec.message());
+			//}
+		};
+
 		auto configs_dir = configs_path_ + "/";
 		// TODO: as now here we read configs, we can refactor @read_server_configs function and pass ptree 
 		std::ifstream configs_file(configs_dir + COMMON_CONFIGS_NAME);
@@ -133,10 +141,17 @@ void Server::run()
 	// Start server and receive assigned port when server is listening for requests
 	promise<unsigned short> server_port;
 	thread server_thread([this, &server_port]() {
-		// Start server
-		http_server_->start([&server_port](unsigned short port) {
-				server_port.set_value(port);
-			});
+			// Start HTTP server
+			try
+			{
+				http_server_->start([&server_port](unsigned short port) {
+					server_port.set_value(port);
+					});
+			}
+			catch (const std::exception& e)
+			{
+				logger_->Error(std::string("HTTP server finished with a critical erroe: ") + e.what());
+			}
 		});
 
 	rtspServer_->run();

@@ -13,47 +13,17 @@
 #include "../utility/XmlParser.h"
 #include "../utility/HttpHelper.h"
 
+#include "../onvif/OnvifRequest.h"
+
 #include <boost/property_tree/ptree.hpp>
 #include <boost/property_tree/xml_parser.hpp>
+
+#include <exception>
 
 namespace pt = boost::property_tree;
 
 namespace osrv
 {
-
-	struct OnvifRequestBase
-	{
-		OnvifRequestBase(const std::string& name, osrv::auth::SECURITY_LEVELS lvl) :
-			name_(name),
-			security_level_(lvl)
-		{
-		}
-
-		virtual ~OnvifRequestBase() {}
-
-		virtual void operator()(std::shared_ptr<HttpServer::Response> response,
-			std::shared_ptr<HttpServer::Request> request)
-		{
-			throw std::exception("Method is not implemented");
-		}
-
-		std::string get_name() const
-		{
-			return name_;
-		}
-
-		osrv::auth::SECURITY_LEVELS get_security_level()
-		{
-			return security_level_;
-		}
-
-	private:
-		//Method name should be exactly match the name in the specification
-		std::string name_;
-
-		osrv::auth::SECURITY_LEVELS security_level_;
-	};
-
 
 	struct RequestHandler
 	{
@@ -79,13 +49,14 @@ namespace osrv
 				log_->Error(e.what());
 			}
 
+			
 			auto handlers = service_->Handlers();
 			auto handler_it = std::find_if(handlers.begin(), handlers.end(),
-				[&method](const HandlerSP handler)
-				{
-					return handler->get_name() == method;
-				}
-			);
+					[method](const HandlerSP handler)
+					{
+						return handler->name() == method;
+					}
+				);
 
 			std::shared_ptr<ServerConfigs> srv_cfg = service_->OnvifServer()->ServerConfigs();
 			if (handler_it != handlers.end())
@@ -94,7 +65,7 @@ namespace osrv
 				try
 				{
 					auto handler_ptr = *handler_it;
-					log_->Debug("Handling PtzService request: " + handler_ptr->get_name());
+					log_->Debug("Handling " + service_->ServiceName() + " request: " + handler_ptr->name());
 
 					//extract user credentials
 					osrv::auth::USER_TYPE current_user = osrv::auth::USER_TYPE::ANON;
@@ -117,7 +88,7 @@ namespace osrv
 							}
 						}
 
-						if (!osrv::auth::isUserHasAccess(current_user, handler_ptr->get_security_level()))
+						if (!osrv::auth::isUserHasAccess(current_user, handler_ptr->security_level()))
 						{
 							throw osrv::auth::digest_failed{};
 						}
@@ -180,19 +151,24 @@ void osrv::IOnvifService::Run()
 	if (is_running_)
 		return;
 
-	log_->Info("Running " + service_name_ + " service...");
-
 	// TODO: uncomment and use this after DeviceService implementation as OnvifService
 	//const auto dvc_srv_cfg = onvif_server_->DeviceService()->configs_ptree_;;
 
 	auto dvc_srv_cfg = device::get_configs_tree_instance();
 	const auto service_config = dvc_srv_cfg.find("GetServices");
 
+	auto namespaces_tree = configs_ptree_->get_child("Namespaces");
+	for (const auto& n : namespaces_tree)
+		xml_namespaces_.insert({ n.first, n.second.get_value<std::string>() });
+
 	const auto uri = service_uri_;
 	auto search_configs = std::find_if(service_config->second.begin(), service_config->second.end(),
 		[uri](const pt::ptree::iterator::value_type tree) { return tree.second.get<std::string>("namespace") == uri; });
 
 	std::string search_xaddr = "/" + search_configs->second.get<std::string>("XAddr");
+
+
+	log_->Info("Running " + service_name_ + " service on address: " + search_xaddr);
 
 	http_server_->resource[search_xaddr]["POST"] = [this](std::shared_ptr<HttpServer::Response> response,
 		std::shared_ptr<HttpServer::Request> request) {

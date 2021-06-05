@@ -11,6 +11,7 @@
 #include <ostream>
 #include <istream>
 #include <memory>
+#include <map>
 
 class ILogger;
 
@@ -57,6 +58,8 @@ namespace osrv
 		std::shared_ptr<HttpServer> http_server_;
 		std::shared_ptr<osrv::ServerConfigs> server_configs_;
 		const std::shared_ptr<ILogger> log_;
+
+		std::map<std::string, std::string> xml_namespaces_;
 
 		std::vector<HandlerSP> requestHandlers_;
 
