@@ -10,6 +10,8 @@ class ILogger;
 
 namespace osrv
 {
+	class RecordingsMgr;
+
 	class RecordingSearchService : public IOnvifService
 	{
 	public:
@@ -17,5 +19,6 @@ namespace osrv
 			const std::string& service_name, std::shared_ptr<IOnvifServer> srv);
 
 	private:
+		std::shared_ptr<RecordingsMgr> rec_mgr_;
 	};
 }

@@ -35,15 +35,16 @@ namespace osrv
 	class RecordingsMgr
 	{
 	public:
-		RecordingsMgr(const std::string& file)
+		RecordingsMgr(std::string file)
 			: file_(file)
 		{}
 
 		//Recording Recording(const std::string& name);
 		std::vector<Recording> Recordings();
+		//std::vector<Recording> Recordings();
 
 
 	private:
-		const std::string& file_;
+		const std::string file_;
 	};
 }
