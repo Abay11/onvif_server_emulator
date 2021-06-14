@@ -21,7 +21,7 @@ BOOST_AUTO_TEST_CASE(RecordingTest0)
 {
 	// as we not specified recording data FROM and UNTIL
 	// it's expected FROM will will be 24 hourc ago and UNTIL till now
-	osrv::Recording recording("RecordingToken0");
+	osrv::Recording recording("RecordingToken0", "VideoTrack0");
 
 	// just do rough comparison
 	auto now = boost::posix_time::second_clock::universal_time();
@@ -35,7 +35,7 @@ BOOST_AUTO_TEST_CASE(RecordingTest0)
 BOOST_AUTO_TEST_CASE(RecordingTest1)
 {
 	auto expected = bpt::from_iso_string("20130528T075623");
-	auto actual = osrv::Recording("RecordingToken0", "20130528T075623").DateFrom();
+	auto actual = osrv::Recording("RecordingToken0", "VideoTrack0", "20130528T075623").DateFrom();
 	BOOST_TEST(actual == expected);
 }
 
@@ -43,7 +43,7 @@ BOOST_AUTO_TEST_CASE(RecordingTest2)
 {
 	std::string data = "20130528T075655";
 	auto expected = bpt::from_iso_string(data);
-	auto actual = osrv::Recording("RecordingToken0", "20130528T075623", data).DateUntil();
+	auto actual = osrv::Recording("RecordingToken0", "VideoTrack0", "20130528T075623", data).DateUntil();
 	BOOST_TEST(actual == expected);
 }
 
@@ -83,7 +83,67 @@ BOOST_AUTO_TEST_CASE(RecordingManager1)
 	const bpt::ptime expected_date_until = bpt::from_iso_string("20210523T060000");
 
 	BOOST_ASSERT(recordings.size() == 1);
-	BOOST_TEST(recordings.front().Name() == expected_name);
+	BOOST_TEST(recordings.front().Token() == expected_name);
 	BOOST_TEST(recordings.front().DateFrom() == expected_date_from);
 	BOOST_TEST(recordings.front().DateUntil() == expected_date_until);
+}
+
+BOOST_AUTO_TEST_CASE(EventsSearchSession0)
+{
+	using namespace osrv;
+
+	std::string from{"20210523T000000"};
+	std::string until{"20210523T060000"};
+
+	auto  r = std::make_shared<osrv::Recording>("rtoken0", "vtoken", from, until);
+	auto re = r->RecordingEvents();
+	EventsSearchSessionFactory factory("SimpleEventsSearchSession");
+
+	std::string searchStartPoint = "20210523T000000";
+	std::string searchEndPoint = "20210523T060000";
+
+	auto searchSession = re->SearchSession(searchStartPoint, searchEndPoint, factory);
+	auto searchToken = searchSession->SearchToken();
+	
+	std::string expected = "SearchToken0";
+	BOOST_TEST(searchToken == expected);
+
+	auto resultEvents = searchSession->Events();
+	
+	BOOST_TEST(2 == resultEvents.size());
+	BOOST_TEST(true == resultEvents[0].isDataPresent);
+	BOOST_TEST(boost::posix_time::from_iso_string(from) == resultEvents[0].utcTime);
+	
+	BOOST_TEST(false == resultEvents[1].isDataPresent);
+	BOOST_TEST(boost::posix_time::from_iso_string(until) == resultEvents[1].utcTime);
+}
+
+BOOST_AUTO_TEST_CASE(EventsSearchSession1)
+{
+	using namespace osrv;
+
+	std::string from{"20210523T000000"};
+	std::string until{"20210523T060000"};
+
+	auto  r = std::make_shared<osrv::Recording>("rtoken0", "vtoken", from, until);
+	auto re = r->RecordingEvents();
+	EventsSearchSessionFactory factory("SimpleEventsSearchSession");
+
+	std::string searchStartPoint = "20210523T030000";
+	std::string searchEndPoint = "20210523T033000";
+
+	auto searchSession = re->SearchSession(searchStartPoint, searchEndPoint, factory);
+	auto searchToken = searchSession->SearchToken();
+	
+	std::string expected = "SearchToken0";
+	BOOST_TEST(searchToken == expected);
+
+	auto resultEvents = searchSession->Events();
+	
+	BOOST_TEST(2 == resultEvents.size());
+	BOOST_TEST(true == resultEvents[0].isDataPresent);
+	BOOST_TEST(boost::posix_time::from_iso_string(searchStartPoint) == resultEvents[0].utcTime);
+	
+	BOOST_TEST(false == resultEvents[1].isDataPresent);
+	BOOST_TEST(boost::posix_time::from_iso_string(searchEndPoint) == resultEvents[1].utcTime);
 }

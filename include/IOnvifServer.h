@@ -17,8 +17,8 @@ namespace osrv
 
 	namespace SERVICE_URI
 	{
-		const std::string DEVICE = "https://www.onvif.org/ver10/device/wsdl/devicemgmt.wsdl";
-		const std::string SEARCH = "https://www.onvif.org/ver10/search.wsdl";
+		const std::string DEVICE = "http://www.onvif.org/ver10/device/wsdl/devicemgmt/wsdl";
+		const std::string SEARCH = "http://www.onvif.org/ver10/search/wsdl";
 	};
 
 	class OnvifServiceFactory

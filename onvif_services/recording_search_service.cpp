@@ -23,6 +23,7 @@ namespace osrv
 	namespace pt = boost::property_tree;
 
 	// the list of implemented methods
+	const std::string FindEvents{"FindEvents"};
 	const std::string FindRecordings{"FindRecordings"};
 	const std::string GetRecordingSearchResults{"GetRecordingSearchResults"};
 	const std::string GetServiceCapabilities{"GetServiceCapabilities"};
@@ -55,6 +56,31 @@ namespace osrv
 		unsigned int searchToken_ = 0;
 	};
 	
+	struct FindEventsHandler : public OnvifRequestBase
+	{
+		FindEventsHandler(const std::map<std::string, std::string>& xs)
+			: OnvifRequestBase(FindRecordings, auth::SECURITY_LEVELS::READ_MEDIA, xs) {}
+
+		void operator()(std::shared_ptr<HttpServer::Response> response,
+			std::shared_ptr<HttpServer::Request> request) override
+		{
+			// TODO: more correct implementation should process requests parameters
+			// Scope (IncludedSources, IncludedRecordings, RecordingInformationFilter, MaxMatches, KeepAliveTime
+
+			auto envelope_tree = utility::soap::getEnvelopeTree(ns_);
+			//envelope_tree.add("s:Body.tse:FindRecordingsResponse.tse:SearchToken",
+			//	std::to_string(searchToken_++));
+
+			pt::ptree root_tree;
+			root_tree.put_child("s:Envelope", envelope_tree);
+
+			std::ostringstream os;
+			pt::write_xml(os, root_tree);
+
+			utility::http::fillResponseWithHeaders(*response, os.str());
+		}
+	};
+	
 	struct GetRecordingSearchResultsHandler : public OnvifRequestBase
 	{
 		GetRecordingSearchResultsHandler(std::shared_ptr<osrv::RecordingsMgr> rec_mgr,
@@ -74,7 +100,7 @@ namespace osrv
 			for (const auto& r : rec_mgr_->Recordings())
 			{
 				pt::ptree rec_info;
-				rec_info.add("tt:RecordingToken", r.Name());
+				rec_info.add("tt:RecordingToken", r.Token());
 				rec_info.add("tt:Source.tt:SourceId", "http://localhost/sourceID");
 				rec_info.add("tt:Source.tt:Name", "DeviceName");
 				rec_info.add("tt:Source.tt:Location", "Location description");
