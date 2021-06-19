@@ -58,8 +58,9 @@ namespace osrv
 	
 	struct FindEventsHandler : public OnvifRequestBase
 	{
-		FindEventsHandler(const std::map<std::string, std::string>& xs)
-			: OnvifRequestBase(FindRecordings, auth::SECURITY_LEVELS::READ_MEDIA, xs) {}
+		FindEventsHandler(std::shared_ptr<RecordingsMgr> rec_mgr, const std::map<std::string, std::string>& xs)
+			: OnvifRequestBase(FindEvents, auth::SECURITY_LEVELS::READ_MEDIA, xs)
+		, rec_mgr_(rec_mgr) {}
 
 		void operator()(std::shared_ptr<HttpServer::Response> response,
 			std::shared_ptr<HttpServer::Request> request) override
@@ -67,9 +68,14 @@ namespace osrv
 			// TODO: more correct implementation should process requests parameters
 			// Scope (IncludedSources, IncludedRecordings, RecordingInformationFilter, MaxMatches, KeepAliveTime
 
+			// TODO: select required recording
+			auto rec = rec_mgr_->Recordings().front();
+			auto re = rec->RecordingEvents();
+
+			auto ss = re->NewSearchSession(EventsSearchSessionFactory("SimpleEventsSearchSession"));
+
 			auto envelope_tree = utility::soap::getEnvelopeTree(ns_);
-			//envelope_tree.add("s:Body.tse:FindRecordingsResponse.tse:SearchToken",
-			//	std::to_string(searchToken_++));
+			envelope_tree.add("s:Body.tse:FindEventsResponse.tse:SearchToken", ss->SearchToken());
 
 			pt::ptree root_tree;
 			root_tree.put_child("s:Envelope", envelope_tree);
@@ -79,6 +85,9 @@ namespace osrv
 
 			utility::http::fillResponseWithHeaders(*response, os.str());
 		}
+
+	private:
+		std::shared_ptr<RecordingsMgr> rec_mgr_;
 	};
 	
 	struct GetRecordingSearchResultsHandler : public OnvifRequestBase
@@ -100,22 +109,22 @@ namespace osrv
 			for (const auto& r : rec_mgr_->Recordings())
 			{
 				pt::ptree rec_info;
-				rec_info.add("tt:RecordingToken", r.Token());
+				rec_info.add("tt:RecordingToken", r->Token());
 				rec_info.add("tt:Source.tt:SourceId", "http://localhost/sourceID");
 				rec_info.add("tt:Source.tt:Name", "DeviceName");
 				rec_info.add("tt:Source.tt:Location", "Location description");
 				rec_info.add("tt:Source.tt:Description", "Source description");
 				rec_info.add("tt:Source.tt:Address", "http://localhost/address");
 				
-				rec_info.add("tt:EarliestRecording", utility::datetime::posix_datetime_to_utc(r.DateFrom()));
-				rec_info.add("tt:LatestRecording", utility::datetime::posix_datetime_to_utc(r.DateUntil()));
+				rec_info.add("tt:EarliestRecording", utility::datetime::posix_datetime_to_utc(r->DateFrom()));
+				rec_info.add("tt:LatestRecording", utility::datetime::posix_datetime_to_utc(r->DateUntil()));
 				rec_info.add("tt:ContentRecording", "Content description");
 
 				rec_info.add("tt:Track.tt:TrackToken", "VideoTrack_0");
 				rec_info.add("tt:Track.tt:TrackType", "Video");
 				rec_info.add("tt:Track.tt:Description", "Video track");
-				rec_info.add("tt:Track.tt:DataFrom", utility::datetime::posix_datetime_to_utc(r.DateFrom()));
-				rec_info.add("tt:Track.tt:DataTo", utility::datetime::posix_datetime_to_utc(r.DateUntil()));
+				rec_info.add("tt:Track.tt:DataFrom", utility::datetime::posix_datetime_to_utc(r->DateFrom()));
+				rec_info.add("tt:Track.tt:DataTo", utility::datetime::posix_datetime_to_utc(r->DateUntil()));
 				rec_info.add("tt:Track.tt:RecordingStatus", "Initiated");
 
 				results_tree.add_child("tt:RecordingInformation", rec_info);
@@ -161,9 +170,9 @@ namespace osrv
 	{
 		rec_mgr_ = std::make_shared<RecordingsMgr>(ConfigPath(srv->ConfigsPath(), ConfigName(service_name)));
 
+		requestHandlers_.push_back(std::make_shared<FindEventsHandler>(rec_mgr_, xml_namespaces_));
 		requestHandlers_.push_back(std::make_shared<FindRecordingsHandler>(xml_namespaces_));
-		requestHandlers_.push_back(
-			std::make_shared<GetRecordingSearchResultsHandler>(rec_mgr_, xml_namespaces_));
+		requestHandlers_.push_back(std::make_shared<GetRecordingSearchResultsHandler>(rec_mgr_, xml_namespaces_));
 		requestHandlers_.push_back(std::make_shared<GetServiceCapabilitiesHandler>(xml_namespaces_));
 	}
 }

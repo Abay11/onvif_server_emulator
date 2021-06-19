@@ -30,7 +30,7 @@ namespace osrv
 		boost::posix_time::ptime DateFrom() const;
 		boost::posix_time::ptime DateUntil() const;
 
-		std::unique_ptr<RecordingEvents> RecordingEvents();
+		std::shared_ptr<RecordingEvents> RecordingEvents();
 		
 
 	private:
@@ -41,6 +41,19 @@ namespace osrv
 		boost::posix_time::ptime fixed_from_;
 		boost::posix_time::ptime fixed_until_;
 	};
+
+	class RecordingsReaderFromConfig
+	{
+	public:
+		RecordingsReaderFromConfig(const std::string configFile)
+			: configFile_(configFile) {}
+
+		std::vector<std::shared_ptr<osrv::Recording>> Recordings();
+
+	private:
+		const std::string configFile_;
+	};
+
 
 	struct RecordingEvent
 	{
@@ -83,9 +96,11 @@ namespace osrv
 		RecordingEvents(std::shared_ptr<Recording> relatedRecording)
 			: relatedRecording_(relatedRecording) {}
 
-		std::unique_ptr<IEventsSearchSession> SearchSession(boost::posix_time::ptime from, boost::posix_time::ptime until, EventsSearchSessionFactory& factory);
-		std::unique_ptr<IEventsSearchSession> SearchSession(std::string stringUTCFrom, std::string stringUTCUntil, EventsSearchSessionFactory& factory);
-		std::unique_ptr<IEventsSearchSession> SearchSession(EventsSearchSessionFactory& factory);
+		std::shared_ptr<IEventsSearchSession> NewSearchSession(boost::posix_time::ptime from, boost::posix_time::ptime until, EventsSearchSessionFactory& factory);
+		std::shared_ptr<IEventsSearchSession> NewSearchSession(std::string stringUTCFrom, std::string stringUTCUntil, EventsSearchSessionFactory& factory);
+		std::shared_ptr<IEventsSearchSession> NewSearchSession(EventsSearchSessionFactory& factory);
+		std::shared_ptr<IEventsSearchSession> SearchSession(std::string searchToken);
+
 
 	private:
 		std::string SearchToken();
@@ -138,7 +153,7 @@ namespace osrv
 			: file_(file)
 		{}
 
-		std::vector<Recording> Recordings();
+		std::vector<std::shared_ptr<osrv::Recording>> Recordings();
 
 	private:
 		const std::string file_;

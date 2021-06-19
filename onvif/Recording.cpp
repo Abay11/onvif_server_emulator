@@ -37,43 +37,42 @@ boost::posix_time::ptime osrv::Recording::DateUntil() const
 
 	return fixed_until_;
 }
-std::unique_ptr<osrv::RecordingEvents> osrv::Recording::RecordingEvents()
+
+std::shared_ptr<osrv::RecordingEvents> osrv::Recording::RecordingEvents()
 {
-	return std::make_unique<osrv::RecordingEvents>(shared_from_this());
+	return std::make_shared<osrv::RecordingEvents>(shared_from_this());
 }
 
 
-std::vector<osrv::Recording> osrv::RecordingsMgr::Recordings()
+std::vector<std::shared_ptr<osrv::Recording>> osrv::RecordingsMgr::Recordings()
 {
-	std::ifstream ifile(file_);
-	pt::ptree configs;
-	pt::json_parser::read_json(ifile, configs);
-
-	std::vector<Recording> recordings;
-	for (const auto& r : configs.find("Recordings")->second)
-	{
-		recordings.emplace_back(r.second.get<std::string>("Name"),
-			r.second.get<std::string>("VideoTrack"),
-			r.second.get<std::string>("DateFrom"),
-			r.second.get<std::string>("DateUntil"));
-	}
-
-	return recordings;
+	return RecordingsReaderFromConfig(file_).Recordings();
 }
 
-std::unique_ptr<osrv::IEventsSearchSession> osrv::RecordingEvents::SearchSession(boost::posix_time::ptime from, boost::posix_time::ptime until, EventsSearchSessionFactory& factory)
+std::shared_ptr<osrv::IEventsSearchSession> osrv::RecordingEvents::NewSearchSession(boost::posix_time::ptime from, boost::posix_time::ptime until, EventsSearchSessionFactory& factory)
 {
-	return factory.NewSession(SearchToken(), from, until, relatedRecording_);
+	std::shared_ptr<osrv::IEventsSearchSession> ss = factory.NewSession(SearchToken(), from, until, relatedRecording_);
+	searchSessions_.insert(ss);
+	return ss;
 }
 
-std::unique_ptr<osrv::IEventsSearchSession> osrv::RecordingEvents::SearchSession(std::string stringUTCFrom, std::string stringUTCUntil, EventsSearchSessionFactory& factory)
+std::shared_ptr<osrv::IEventsSearchSession> osrv::RecordingEvents::NewSearchSession(std::string stringUTCFrom, std::string stringUTCUntil, EventsSearchSessionFactory& factory)
 {
-	return SearchSession(bptime::from_iso_string(stringUTCFrom), bptime::from_iso_string(stringUTCUntil), factory);
+	return NewSearchSession(bptime::from_iso_string(stringUTCFrom), bptime::from_iso_string(stringUTCUntil), factory);
 }
 
-std::unique_ptr<osrv::IEventsSearchSession> osrv::RecordingEvents::SearchSession(EventsSearchSessionFactory& factory)
+std::shared_ptr<osrv::IEventsSearchSession> osrv::RecordingEvents::NewSearchSession(osrv::EventsSearchSessionFactory& factory)
 {
-	return SearchSession(relatedRecording_->DateFrom(), relatedRecording_->DateUntil(), factory);
+	return NewSearchSession(relatedRecording_->DateFrom(), relatedRecording_->DateUntil(), factory);
+}
+
+std::shared_ptr<osrv::IEventsSearchSession> osrv::RecordingEvents::SearchSession(std::string searchToken)
+{
+	if (auto ss = std::find_if(searchSessions_.begin(), searchSessions_.end(),
+		[searchToken](auto ss) { return ss->SearchToken() == searchToken; }); ss != searchSessions_.end())
+		return *ss;
+
+	throw std::runtime_error("Not found search session with token: " + searchToken);
 }
 
 std::string osrv::RecordingEvents::SearchToken()
@@ -92,4 +91,27 @@ std::vector<osrv::RecordingEvent> osrv::SimpleEventsSearchSessionImpl::Events()
 	result.push_back({ relatedRecording_->Token(), relatedRecording_->VideoTrackToken(),
 		TOPIC, searchEndPoint_, false });
 	return result;
+}
+
+std::vector<std::shared_ptr<osrv::Recording>> osrv::RecordingsReaderFromConfig::Recordings()
+{
+	pt::ptree configTree;
+	pt::json_parser::read_json(configFile_, configTree);
+
+	std::vector<std::shared_ptr<osrv::Recording>> recordings;
+
+	for (auto r : configTree.get_child("Recordings"))
+	{
+		recordings.push_back(std::make_shared<Recording>
+			(
+			r.second.get<std::string>("Token"),
+			r.second.get<std::string>("VideoTrack"),
+			// TODO: make optional next two with default value
+			r.second.get<std::string>("DateFrom"),
+			r.second.get<std::string>("DateUntil")
+			)
+		);
+	}
+
+	return recordings;
 }

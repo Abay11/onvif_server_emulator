@@ -6,13 +6,17 @@
 #include <fstream>
 #include <sstream>
 #include <iostream>
+#include <string>
+
+using namespace std::string_literals;
 
 namespace bpt = boost::posix_time;
 namespace pt = boost::property_tree;
 
+const std::string config_file = "../../server_configs/Recording Search.config";
+
 BOOST_AUTO_TEST_CASE(ConfigPathTest)
 {
-	const std::string config_file = "../../server_configs/Recording Search.config";
 	std::ifstream ifile(config_file);
 	BOOST_ASSERT(true == ifile.is_open());
 }
@@ -47,6 +51,22 @@ BOOST_AUTO_TEST_CASE(RecordingTest2)
 	BOOST_TEST(actual == expected);
 }
 
+BOOST_AUTO_TEST_CASE(RecordingReaderFromConfig0)
+{
+	using namespace osrv;
+
+	auto recordings = RecordingsReaderFromConfig(config_file).Recordings();
+	BOOST_ASSERT(false == recordings.empty());
+
+	BOOST_TEST(true == ("Recording_0"s == recordings[0]->Token()));
+	BOOST_TEST(true == ("VideoTrack_0"s == recordings[0]->VideoTrackToken()));
+	BOOST_TEST(true
+		== (boost::posix_time::from_iso_string("20210523T000000") == recordings[0]->DateFrom()));
+	BOOST_TEST(true
+		== (boost::posix_time::from_iso_string("20210523T060000") == recordings[0]->DateUntil()));
+}
+
+
 BOOST_AUTO_TEST_CASE(RecordingManager0)
 {
 	std::string json_config_example = R"(
@@ -54,7 +74,7 @@ BOOST_AUTO_TEST_CASE(RecordingManager0)
 			"Recordings":
 			[
 				{
-					"Name":"Recording_0",
+					"Token":"Recording_0",
 					"DataFrom":"20210523T000000",
 					"DataUntil":"20210523T060000"
 				}
@@ -70,7 +90,7 @@ BOOST_AUTO_TEST_CASE(RecordingManager0)
 
 	const std::string expected_name = "Recording_0";
 	auto rec_it = recordings_it->second.begin();
-	BOOST_TEST(rec_it->second.get<std::string>("Name") == expected_name);
+	BOOST_TEST(rec_it->second.get<std::string>("Token") == expected_name);
 }
 
 BOOST_AUTO_TEST_CASE(RecordingManager1)
@@ -83,9 +103,9 @@ BOOST_AUTO_TEST_CASE(RecordingManager1)
 	const bpt::ptime expected_date_until = bpt::from_iso_string("20210523T060000");
 
 	BOOST_ASSERT(recordings.size() == 1);
-	BOOST_TEST(recordings.front().Token() == expected_name);
-	BOOST_TEST(recordings.front().DateFrom() == expected_date_from);
-	BOOST_TEST(recordings.front().DateUntil() == expected_date_until);
+	BOOST_TEST(recordings.front()->Token() == expected_name);
+	BOOST_TEST(recordings.front()->DateFrom() == expected_date_from);
+	BOOST_TEST(recordings.front()->DateUntil() == expected_date_until);
 }
 
 BOOST_AUTO_TEST_CASE(EventsSearchSession0)
@@ -102,7 +122,7 @@ BOOST_AUTO_TEST_CASE(EventsSearchSession0)
 	std::string searchStartPoint = "20210523T000000";
 	std::string searchEndPoint = "20210523T060000";
 
-	auto searchSession = re->SearchSession(searchStartPoint, searchEndPoint, factory);
+	auto searchSession = re->NewSearchSession(searchStartPoint, searchEndPoint, factory);
 	auto searchToken = searchSession->SearchToken();
 	
 	std::string expected = "SearchToken0";
@@ -132,7 +152,7 @@ BOOST_AUTO_TEST_CASE(EventsSearchSession1)
 	std::string searchStartPoint = "20210523T030000";
 	std::string searchEndPoint = "20210523T033000";
 
-	auto searchSession = re->SearchSession(searchStartPoint, searchEndPoint, factory);
+	auto searchSession = re->NewSearchSession(searchStartPoint, searchEndPoint, factory);
 	auto searchToken = searchSession->SearchToken();
 	
 	std::string expected = "SearchToken0";
@@ -146,4 +166,27 @@ BOOST_AUTO_TEST_CASE(EventsSearchSession1)
 	
 	BOOST_TEST(false == resultEvents[1].isDataPresent);
 	BOOST_TEST(boost::posix_time::from_iso_string(searchEndPoint) == resultEvents[1].utcTime);
+}
+
+BOOST_AUTO_TEST_CASE(EventsSearchSession2)
+{
+	using namespace osrv;
+
+	std::string from{"20210523T000000"};
+	std::string until{"20210523T060000"};
+
+	auto  r = std::make_shared<osrv::Recording>("rtoken0", "vtoken", from, until);
+	auto re = r->RecordingEvents();
+	EventsSearchSessionFactory factory("SimpleEventsSearchSession");
+
+	std::string searchStartPoint = "20210523T030000";
+	std::string searchEndPoint = "20210523T033000";
+
+	auto searchSession = re->NewSearchSession(searchStartPoint, searchEndPoint, factory);
+	auto searchToken = searchSession->SearchToken();
+
+	auto ss = re->SearchSession(searchToken);
+	
+	BOOST_ASSERT(!ss->Events().empty());
+	BOOST_TEST(ss->SearchToken() == searchToken);
 }
