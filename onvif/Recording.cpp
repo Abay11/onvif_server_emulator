@@ -40,13 +40,19 @@ boost::posix_time::ptime osrv::Recording::DateUntil() const
 
 std::shared_ptr<osrv::RecordingEvents> osrv::Recording::RecordingEvents()
 {
-	return std::make_shared<osrv::RecordingEvents>(shared_from_this());
+	if (!recordingEvents_)
+		recordingEvents_ = std::make_shared<osrv::RecordingEvents>(shared_from_this());
+
+	return recordingEvents_;
 }
 
 
-std::vector<std::shared_ptr<osrv::Recording>> osrv::RecordingsMgr::Recordings()
+const std::vector<std::shared_ptr<osrv::Recording>>& osrv::RecordingsMgr::Recordings()
 {
-	return RecordingsReaderFromConfig(file_).Recordings();
+	if (recordings_.empty())
+		recordings_ = RecordingsReaderFromConfig(file_).Recordings();
+
+	return recordings_;
 }
 
 std::shared_ptr<osrv::IEventsSearchSession> osrv::RecordingEvents::NewSearchSession(boost::posix_time::ptime from, boost::posix_time::ptime until, EventsSearchSessionFactory& factory)

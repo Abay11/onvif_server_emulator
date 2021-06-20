@@ -40,7 +40,7 @@ namespace osrv
 			pt::ptree* tree = new exns::Parser();
 			try
 			{
-				pt::xml_parser::read_xml(request->content, *tree);
+				pt::xml_parser::read_xml(std::istringstream(request->content.string()), *tree);
 				auto* ptr = static_cast<exns::Parser*>(tree);
 				method = static_cast<exns::Parser*>(tree)->___getMethod();
 			}

@@ -11,6 +11,7 @@
 #include "../utility/SoapHelper.h"
 #include "../utility/HttpHelper.h"
 #include "../utility/DateTime.hpp"
+#include "../utility/XmlParser.h"
 
 #include "onvif_services/service_configs.h"
 
@@ -25,6 +26,7 @@ namespace osrv
 	// the list of implemented methods
 	const std::string FindEvents{"FindEvents"};
 	const std::string FindRecordings{"FindRecordings"};
+	const std::string GetEventSearchResults{"GetEventSearchResults"};
 	const std::string GetRecordingSearchResults{"GetRecordingSearchResults"};
 	const std::string GetServiceCapabilities{"GetServiceCapabilities"};
 
@@ -90,6 +92,73 @@ namespace osrv
 		std::shared_ptr<RecordingsMgr> rec_mgr_;
 	};
 	
+	struct GetEventSearchResultsHandler : public OnvifRequestBase
+	{
+		GetEventSearchResultsHandler(std::shared_ptr<osrv::RecordingsMgr> rec_mgr,
+			std::map<std::string, std::string>& xs)
+			: OnvifRequestBase(GetEventSearchResults, auth::SECURITY_LEVELS::READ_MEDIA, xs)
+			, rec_mgr_(rec_mgr)
+		{}
+
+		void operator()(std::shared_ptr<HttpServer::Response> response,
+			std::shared_ptr<HttpServer::Request> request) override
+		{
+			// TODO: more correct implementation should process requests parameters
+			// MinResults, MaxResults, WaitTime
+
+			pt::ptree request_xml;
+			auto s = request->content.string();
+			pt::xml_parser::read_xml(std::istringstream{ request->content.string() }, request_xml);
+			auto searchToken = exns::find_hierarchy("Envelope.Body.GetEventSearchResults.SearchToken", request_xml);
+			auto searchSession = rec_mgr_->Recordings().front()->RecordingEvents()->SearchSession(searchToken);
+
+			pt::ptree results_tree;
+
+			for (const auto& e : searchSession->Events())
+			{
+				pt::ptree ev_info;
+				ev_info.add("tt:RecordingToken", e.recordingToken);
+				ev_info.add("tt:TrackToken", e.trackToken);
+				ev_info.add("tt:Time", utility::datetime::posix_datetime_to_utc(e.utcTime));
+				ev_info.add("tt:Event.wsnt:Topic.<xmlattr>.Dialect", "http://www.onvif.org/ver10/tev/topicExpression/ConcreteSet");
+				ev_info.put("tt:Event.wsnt:Topic", "tns1:RecordingHistory/Track/State");
+				ev_info.add("tt:Event.wsnt:Message.tt:Message.<xmlattr>.UtcTime", utility::datetime::posix_datetime_to_utc(e.utcTime));
+				ev_info.add("tt:Event.wsnt:Message.tt:Message.<xmlattr>.PropertyOperation", "Changed");
+
+				pt::ptree recordingItemDescr;
+				recordingItemDescr.add("<xmlattr>.Name", "RecordingToken");
+				recordingItemDescr.add("<xmlattr>.Value", e.recordingToken);
+				ev_info.add_child("tt:Event.wsnt:Message.tt:Message.tt:Source.tt:SimpleItem", recordingItemDescr);
+
+				pt::ptree trackItemDescr;
+				trackItemDescr.add("<xmlattr>.Name", "Track");
+				trackItemDescr.add("<xmlattr>.Value", e.trackToken);
+				ev_info.add_child("tt:Event.wsnt:Message.tt:Message.tt:Source.tt:SimpleItem", trackItemDescr);
+
+				ev_info.add("tt:Event.wsnt:Message.tt:Message.tt:Data.tt:SimpleItem.<xmlattr>.Name", "IsDataPresent");
+				ev_info.add("tt:Event.wsnt:Message.tt:Message.tt:Data.tt:SimpleItem.<xmlattr>.Value", e.isDataPresent);
+				ev_info.add("tt:StartStateEvent", false);
+
+				results_tree.add_child("tt:Result", ev_info);
+			}
+
+			results_tree.add("tt:SearchState", "Completed");
+
+			auto envelope_tree = utility::soap::getEnvelopeTree(ns_);
+			envelope_tree.add_child("s:Body.tse:GetEventSearchResultsResponse.tse:ResultList", results_tree);
+
+			pt::ptree root;
+			root.add_child("s:Envelope", envelope_tree);
+			std::ostringstream os;
+			pt::write_xml(os, root);
+
+			utility::http::fillResponseWithHeaders(*response, os.str());
+		}
+
+	private:
+		std::shared_ptr<RecordingsMgr> rec_mgr_;
+	};
+
 	struct GetRecordingSearchResultsHandler : public OnvifRequestBase
 	{
 		GetRecordingSearchResultsHandler(std::shared_ptr<osrv::RecordingsMgr> rec_mgr,
@@ -172,6 +241,7 @@ namespace osrv
 
 		requestHandlers_.push_back(std::make_shared<FindEventsHandler>(rec_mgr_, xml_namespaces_));
 		requestHandlers_.push_back(std::make_shared<FindRecordingsHandler>(xml_namespaces_));
+		requestHandlers_.push_back(std::make_shared<GetEventSearchResultsHandler>(rec_mgr_, xml_namespaces_));
 		requestHandlers_.push_back(std::make_shared<GetRecordingSearchResultsHandler>(rec_mgr_, xml_namespaces_));
 		requestHandlers_.push_back(std::make_shared<GetServiceCapabilitiesHandler>(xml_namespaces_));
 	}

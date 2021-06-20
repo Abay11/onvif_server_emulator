@@ -182,6 +182,7 @@ BOOST_AUTO_TEST_CASE(EventsSearchSession2)
 	std::string searchStartPoint = "20210523T030000";
 	std::string searchEndPoint = "20210523T033000";
 
+	// NOTE: FOR SOME REASON VS COMPILATOR COMPLAINS ABOUT MEMORY LEAKS
 	auto searchSession = re->NewSearchSession(searchStartPoint, searchEndPoint, factory);
 	auto searchToken = searchSession->SearchToken();
 

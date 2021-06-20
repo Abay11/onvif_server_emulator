@@ -40,6 +40,8 @@ namespace osrv
 		const std::string until_;
 		boost::posix_time::ptime fixed_from_;
 		boost::posix_time::ptime fixed_until_;
+
+		std::shared_ptr<osrv::RecordingEvents> recordingEvents_;
 	};
 
 	class RecordingsReaderFromConfig
@@ -153,9 +155,11 @@ namespace osrv
 			: file_(file)
 		{}
 
-		std::vector<std::shared_ptr<osrv::Recording>> Recordings();
+		const std::vector<std::shared_ptr<osrv::Recording>>& Recordings();
 
 	private:
 		const std::string file_;
+
+		std::vector<std::shared_ptr<osrv::Recording>> recordings_;
 	};
 }
