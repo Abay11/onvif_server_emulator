@@ -6,6 +6,8 @@
 
 #include "../onvif_services/recording_search_service.h"
 
+#include "../onvif_services/replay_control_service.h"
+
 namespace osrv
 {
 
@@ -21,6 +23,11 @@ namespace osrv
 		if (SERVICE_URI::SEARCH == service_uri)
 		{
 			return std::make_shared<RecordingSearchService>(service_uri, "Recording Search", srv);
+		}
+
+		if (SERVICE_URI::REPLAY == service_uri)
+		{
+			return std::make_shared<ReplayControlService>(service_uri, "Replay Control", srv);
 		}
 
 		throw std::runtime_error("Unknown service URI!");
@@ -53,12 +60,22 @@ namespace osrv
 	{
 		if (!recording_search_service_)
 		{
-			auto t = shared_from_this();
 			recording_search_service_ = OnvifServiceFactory()
-				.Create(SERVICE_URI::SEARCH, t);
+				.Create(SERVICE_URI::SEARCH, shared_from_this());
 		}
 
 		return recording_search_service_;
+	}
+
+	std::shared_ptr<IOnvifService> IOnvifServer::ReplayControlService()
+	{
+		if (!replay_control_service_)
+		{
+			replay_control_service_ = OnvifServiceFactory()
+				.Create(SERVICE_URI::REPLAY, shared_from_this());
+		}
+
+		return replay_control_service_;
 	}
 
 	const std::shared_ptr<ILogger> IOnvifServer::Logger() const

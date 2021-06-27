@@ -113,6 +113,7 @@ namespace osrv
 		ptz::init_service(*http_server_, *server_configs_, configs_dir, *logger_);
 		//recording_search::init_service(*http_server_, server_configs_, configs_dir, logger_);
 		RecordingSearchService()->Run();
+		ReplayControlService()->Run();
 
 		rtspServer_ = new rtsp::Server(&*logger_, *server_configs_);
 

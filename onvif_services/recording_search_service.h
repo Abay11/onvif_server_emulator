@@ -1,10 +1,6 @@
 #pragma once
 
-#include "../HttpServerFwd.h"
-
 #include "IOnvifService.h"
-
-#include <string>
 
 class ILogger;
 

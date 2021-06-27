@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.16)
 
-project(OnvifServer)
+project(OnvifServerEmulator)
 
 set(CMAKE_CXX_STANDARD 17)
 
@@ -57,6 +57,8 @@ FILE(GLOB SERVICES_SRC
 	"onvif_services/ptz_service.cpp"
 	"onvif_services/recording_search_service.h"
 	"onvif_services/recording_search_service.cpp"
+	"onvif_services/replay_control_service.h"
+	"onvif_services/replay_control_service.cpp"
 
 	"include/onvif_services/service_configs.h"
 	"src/onvif_services/service_configs.cpp"
