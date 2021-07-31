@@ -23,6 +23,25 @@ namespace osrv
 			void fill_analytics_configuration(/*const pt::ptree& config_node,*/ pt::ptree& result);
 
 			std::string generate_rtsp_url(const ServerConfigs& /*server_configs*/, const std::string& /*profile_stream_url*/);
+
+
+			class MultichannelProfilesNamesConverter
+			{
+			public:
+				MultichannelProfilesNamesConverter(const std::string& name)
+					: name_(name)
+				{
+				}
+
+				std::string CleanedName()
+				{
+					auto start_pos = name_.find('_') + 1;
+					return name_.substr(start_pos);
+				}
+
+			private:
+				const std::string& name_;
+			};
 		}
 	}
 }

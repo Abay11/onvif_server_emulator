@@ -136,22 +136,56 @@ namespace osrv
 				pt::ptree response_node;
 				if (profile_token.empty())
 				{
-					// response all media profiles' configs
-					for (auto elements : profiles_configs_list)
+
+					if (server_configs->multichannel_enabled_)
 					{
-						pt::ptree profile_node;
-						util::profile_to_soap(elements.second, PROFILES_CONFIGS_TREE, profile_node);
-						response_node.add_child("tr2:Profiles", profile_node);
+						std::string vsToken = profiles_configs_list.front().second.get<std::string>("VideoSourceConfiguration");
+						for (size_t i = 0; i < server_configs->channels_count_; ++i)
+						{
+							auto it = profiles_configs_list.begin();
+							while (std::find_if(it, profiles_configs_list.end(),
+								[vsToken](pt::ptree::value_type tree)
+								{
+									return tree.second.get<std::string>("VideoSourceConfiguration") == vsToken;
+								}) != profiles_configs_list.end())
+							{
+								pt::ptree profile_node;
+								util::profile_to_soap(it->second, PROFILES_CONFIGS_TREE, profile_node);
+
+								std::string profileToken = std::to_string(i) + "_"
+									+ it->second.get<std::string>("token");
+								profile_node.put("<xmlattr>.token", profileToken);
+
+								std::string vsToken = "VideoSource" + std::to_string(i);
+								profile_node.put("tr2:Configurations.tr2:VideoSource.tt:SourceToken", vsToken);
+
+								response_node.add_child("tr2:Profiles", profile_node);
+								++it;
+							}
+						}
+					}
+					else
+					{
+						// response all media profiles' configs
+						for (auto elements : profiles_configs_list)
+						{
+							pt::ptree profile_node;
+							util::profile_to_soap(elements.second, PROFILES_CONFIGS_TREE, profile_node);
+							response_node.add_child("tr2:Profiles", profile_node);
+						}
 					}
 				}
 				else
 				{
 					// response only one profile's configs
+
+					std::string cleanedName = media::util::MultichannelProfilesNamesConverter(profile_token).CleanedName();
+
 					auto profiles_config_it = std::find_if(profiles_configs_list.begin(),
 						profiles_configs_list.end(),
-						[&profile_token](const pt::ptree::value_type& i)
+						[&cleanedName](const pt::ptree::value_type& i)
 						{
-							return i.second.get<std::string>("token") == profile_token;
+							return i.second.get<std::string>("token") == cleanedName;
 						});
 
 					if (profiles_config_it == profiles_configs_list.end())
@@ -159,6 +193,10 @@ namespace osrv
 
 					pt::ptree profile_node;
 					util::profile_to_soap(profiles_config_it->second, PROFILES_CONFIGS_TREE, profile_node);
+
+					if (server_configs->multichannel_enabled_)
+						profile_node.put("<xmlattr>.token", profile_token);
+
 					response_node.add_child("tr2:Profiles", profile_node);
 				}
 
@@ -326,7 +364,19 @@ namespace osrv
 					pt::ptree videosource_configuration;
 					osrv::media::util::fill_soap_videosource_configuration(vs_config.second, videosource_configuration);
 					vs_configs_node.put_child("tr2:Configurations", videosource_configuration);
+
+					// multichannel simulaiton with the first channel configs
+					if (server_configs->multichannel_enabled_)
+					{
+						for (size_t i = 0; i < server_configs->channels_count_ - 1; ++i)
+						{
+							vs_configs_node.put_child("tr2:Configurations", videosource_configuration);
+						}
+
+						break;
+					}
 				}
+
 				auto env_tree = utility::soap::getEnvelopeTree(XML_NAMESPACES);
 				env_tree.put_child("s:Body.tr2:GetVideoSourceConfigurationsResponse", vs_configs_node);
 				pt::ptree root_tree;
@@ -444,12 +494,14 @@ namespace osrv
 				pt::ptree request_xml;
 				pt::xml_parser::read_xml(std::istringstream{ request->content.string() }, request_xml);
 
-				std::string requested_token;
-				{
-					requested_token = exns::find_hierarchy("Envelope.Body.GetStreamUri.ProfileToken", request_xml);
+				std::string requested_token = exns::find_hierarchy("Envelope.Body.GetStreamUri.ProfileToken", request_xml);
 
-					logger_->Debug("Requested token to get URI=" + requested_token);
+				if (server_configs->multichannel_enabled_)
+				{
+					requested_token = media::util::MultichannelProfilesNamesConverter(requested_token).CleanedName();
 				}
+
+				logger_->Debug("Requested token to get URI=" + requested_token);
 
 				auto profiles_config_list = PROFILES_CONFIGS_TREE.get_child("MediaProfiles");
 

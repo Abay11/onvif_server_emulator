@@ -55,6 +55,9 @@ namespace osrv
 
 		// milliseconds
 		unsigned short network_delay_simulation_ = 0;
+
+		bool multichannel_enabled_ = false;
+		unsigned char channels_count_ = 0;
 	};
 
 	class Server : public IOnvifServer

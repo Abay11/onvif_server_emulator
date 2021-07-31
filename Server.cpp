@@ -216,6 +216,9 @@ std::shared_ptr<ServerConfigs> read_server_configs(const std::string& config_pat
 	}
 
 	read_configs->network_delay_simulation_ = configs_tree.get<unsigned short>("networkDelaySimulation.milliseconds");
+	
+	read_configs->multichannel_enabled_ = configs_tree.get<bool>("multichannelSimulation.enabled");
+	read_configs->channels_count_ = configs_tree.get<unsigned char>("multichannelSimulation.channelCount");
 
 	return read_configs;
 }
