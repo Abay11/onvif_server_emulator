@@ -75,7 +75,7 @@ std::shared_ptr<osrv::IEventsSearchSession> osrv::RecordingEvents::NewSearchSess
 std::shared_ptr<osrv::IEventsSearchSession> osrv::RecordingEvents::SearchSession(std::string searchToken)
 {
 	if (auto ss = std::find_if(searchSessions_.begin(), searchSessions_.end(),
-		[searchToken](auto ss) { return ss->SearchToken() == searchToken; }); ss != searchSessions_.end())
+		[searchToken](auto it) { return it->SearchToken() == searchToken; }); ss != searchSessions_.end())
 		return *ss;
 
 	throw std::runtime_error("Not found search session with token: " + searchToken);
