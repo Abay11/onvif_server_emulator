@@ -127,7 +127,7 @@ namespace osrv::rtsp{
 		onvif_factory_create_element(GstRTSPMediaFactory* factory,
 			const GstRTSPUrl* url)
 	{
-		GstElement* replay_bin, * q1, /** parse,*/ * pay, /** onvifts,*/ * q2;
+		GstElement* replay_bin, * q1, /** parse,*/ * pay, *onvifts, * q2;
 		GstElement* ret = gst_bin_new(NULL);
 		GstElement* pbin = gst_bin_new("pay0");
 		GstPad* sinkpad, * srcpad;
@@ -137,14 +137,14 @@ namespace osrv::rtsp{
 
 		MAKE_AND_ADD(q1, pbin, "queue", fail, NULL);
 		MAKE_AND_ADD(pay, pbin, "rtph264pay", fail, NULL);
-		//MAKE_AND_ADD(onvifts, pbin, "rtponviftimestamp", fail, NULL);
+		MAKE_AND_ADD(onvifts, pbin, "rtponviftimestamp", fail, NULL);
 		MAKE_AND_ADD(q2, pbin, "queue", fail, NULL);
 
 
 		gst_bin_add(GST_BIN(ret), pbin);
 
 		
-		if (!gst_element_link_many(q1, /*parse,*/ pay, /*onvifts,*/ q2, NULL))
+		if (!gst_element_link_many(q1, /*parse,*/ pay, onvifts, q2, NULL))
 			goto fail;
 
 		sinkpad = gst_element_get_static_pad(q1, "sink");
@@ -158,10 +158,10 @@ namespace osrv::rtsp{
 		gst_element_add_pad(pbin, gst_ghost_pad_new("src", srcpad));
 		gst_object_unref(srcpad);
 
-		//g_object_set(onvifts, "set-t-bit", TRUE, "set-e-bit", TRUE, "ntp-offset",
-		//	G_GUINT64_CONSTANT(0), "drop-out-of-segment", FALSE, NULL);
+		g_object_set(onvifts, "set-t-bit", TRUE, "set-e-bit", TRUE, "ntp-offset",
+			G_GUINT64_CONSTANT(0), "drop-out-of-segment", FALSE, NULL);
 
-		//gst_element_set_clock(onvifts, gst_system_clock_obtain());
+		gst_element_set_clock(onvifts, gst_system_clock_obtain());
 
 	done:
 		return ret;
