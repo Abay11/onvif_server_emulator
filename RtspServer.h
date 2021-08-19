@@ -13,6 +13,20 @@ namespace osrv
 	struct ServerConfigs;
 	namespace rtsp
 	{
+
+
+		G_BEGIN_DECLS
+
+		G_DECLARE_FINAL_TYPE(ReplayBin, replay_bin, REPLAY, BIN, GstBin);
+
+		G_DECLARE_FINAL_TYPE(OnvifFactory, onvif_factory, ONVIF, FACTORY,
+			GstRTSPOnvifMediaFactory);
+
+		G_END_DECLS
+
+
+
+
 		class Server
 		{
 		public:
@@ -23,9 +37,10 @@ namespace osrv
 		private:
 			GMainLoop* loop_;
 			GstRTSPServer* server_;
-			GstRTSPMountPoints* mounts;
-			GstRTSPMediaFactory* factoryHighStream;
-			GstRTSPMediaFactory* factoryLowStream;
+			GstRTSPMountPoints* mounts_;
+			GstRTSPMediaFactory* factory_;
+			//GstRTSPMediaFactory* factoryHighStream;
+			//GstRTSPMediaFactory* factoryLowStream;
 
 			ServerConfigs* server_configs_ = nullptr;
 
