@@ -245,8 +245,22 @@ namespace osrv
 
 					/* attach the server to the default maincontext */
 					gst_rtsp_server_attach(server_, NULL);
-					gchar* service = gst_rtsp_server_get_service(server_);
-					g_free(service);
+
+					//gchar* service = gst_rtsp_server_get_service(server_);
+					int actually_used_port = gst_rtsp_server_get_bound_port(server_);
+					if (stoi(server_configs_->rtsp_port_) != actually_used_port)
+						logger_->Warn("RTSP Server port is binding on: " + std::to_string(actually_used_port));
+
+					gchar* server_address = gst_rtsp_server_get_address(server_);
+					std::stringstream uris;
+					uris << "rtsp://" << server_address << ":" << actually_used_port << "/Live&HighStream";
+					uris << "\nrtsp://" << server_address << ":" << actually_used_port << "/Live&LowStream";
+					uris << "\nrtsp://" << server_address << ":" << actually_used_port << "/Recording0";
+
+					g_free(server_address);
+
+					logger_->Info("RTSP Server is running. Available URIs:\n" + uris.str());
+
 					g_main_loop_run(loop_);
 				}
 			);
