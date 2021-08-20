@@ -201,22 +201,25 @@ namespace osrv
 
 			g_signal_connect(server_, "client-connected", G_CALLBACK(client_connected_callback), NULL);
 
+			factoryHighStream_ = gst_rtsp_media_factory_new();
+			gst_rtsp_media_factory_set_launch(factoryHighStream_,
+				"(videotestsrc is-live=1 ! video/x-raw,width=1280,height=720 ! x264enc ! rtph264pay name=pay0 pt=96 )");
 			mounts_ = gst_rtsp_server_get_mount_points(server_);
-			factory_ = onvif_factory_new();
-			gst_rtsp_media_factory_set_media_gtype(factory_, GST_TYPE_RTSP_ONVIF_MEDIA);
+			replayFactory_ = onvif_factory_new();
+			gst_rtsp_media_factory_set_media_gtype(replayFactory_, GST_TYPE_RTSP_ONVIF_MEDIA);
 			
-			gst_rtsp_mount_points_add_factory(mounts_, "/Recording0", factory_);
+			gst_rtsp_mount_points_add_factory(mounts_, "/Recording0", replayFactory_);
 			g_object_unref(mounts_);
 		};
 
 		Server::~Server()
 		{
-			if (!worker_thread)
+			if (!worker_thread_)
 				return;
 
 			try
 			{
-				worker_thread->join();
+				worker_thread_->join();
 			}
 			catch (const std::exception&) {}
 		};
@@ -224,7 +227,7 @@ namespace osrv
 		void Server::run()
 		{
 			//TODO: stop GSt main loop by signal
-			worker_thread = new std::thread(
+			worker_thread_ = new std::thread(
 				[this]() {
 
 					/* attach the server to the default maincontext */

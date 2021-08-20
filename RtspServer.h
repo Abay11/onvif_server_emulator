@@ -38,13 +38,13 @@ namespace osrv
 			GMainLoop* loop_;
 			GstRTSPServer* server_;
 			GstRTSPMountPoints* mounts_;
-			GstRTSPMediaFactory* factory_;
-			//GstRTSPMediaFactory* factoryHighStream;
-			//GstRTSPMediaFactory* factoryLowStream;
+			GstRTSPMediaFactory* factoryHighStream_;
+			GstRTSPMediaFactory* factoryLowStream_;
+			GstRTSPMediaFactory* replayFactory_;
 
 			ServerConfigs* server_configs_ = nullptr;
 
-			std::thread* worker_thread = nullptr;
+			std::thread* worker_thread_ = nullptr;
 
 			ILogger* logger_;
 		};
