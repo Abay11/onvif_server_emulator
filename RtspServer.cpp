@@ -207,8 +207,6 @@ namespace osrv
 			
 			gst_rtsp_mount_points_add_factory(mounts_, "/Recording0", factory_);
 			g_object_unref(mounts_);
-
-			
 		};
 
 		Server::~Server()
@@ -232,7 +230,6 @@ namespace osrv
 					/* attach the server to the default maincontext */
 					gst_rtsp_server_attach(server_, NULL);
 					gchar* service = gst_rtsp_server_get_service(server_);
-					g_print("stream ready at rtsp://127.0.0.1:%s/test\n", service);
 					g_free(service);
 					g_main_loop_run(loop_);
 				}
