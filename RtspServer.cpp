@@ -5,14 +5,8 @@
 #include <gst/gst.h>
 #include <gst/rtsp-server/rtsp-server.h>
 
-#include <stdexcept>
-#include <sstream>
-
 GST_DEBUG_CATEGORY_STATIC(onvif_server_debug);
 #define GST_CAT_DEFAULT (onvif_server_debug)
-
-
-
 
 #define MAKE_AND_ADD(var, pipe, name, label, elem_name) \
 G_STMT_START { \
@@ -26,7 +20,8 @@ G_STMT_START { \
   } \
 } G_STMT_END
 
-namespace osrv::rtsp{
+namespace osrv::rtsp
+{
 
 	struct _ReplayBin
 	{
@@ -46,8 +41,7 @@ namespace osrv::rtsp{
 
 	G_DEFINE_TYPE(ReplayBin, replay_bin, GST_TYPE_BIN);
 
-	static void
-		replay_bin_init(ReplayBin* self)
+	static void replay_bin_init(ReplayBin* self)
 	{
 		self->incoming_seek = NULL;
 		self->outgoing_seek = NULL;
@@ -57,19 +51,16 @@ namespace osrv::rtsp{
 		self->min_pts = GST_CLOCK_TIME_NONE;
 	}
 
-	static void
-		replay_bin_class_init(ReplayBinClass* klass)
+	static void replay_bin_class_init(ReplayBinClass* klass)
 	{
 	}
 
-	static GstElement*
-		replay_bin_new(void)
+	static GstElement* replay_bin_new(void)
 	{
 		return GST_ELEMENT(g_object_new(replay_bin_get_type(), NULL));
 	}
 
-	static GstElement*
-		create_replay_bin(GstElement* parent)
+	static GstElement* create_replay_bin(GstElement* parent)
 	{
 		GstElement* ret, *src, *demux, *enc;
 		GstPad* ghost;
@@ -87,21 +78,9 @@ namespace osrv::rtsp{
 		if (!gst_element_add_pad(ret, gst_ghost_pad_new("src", padTmp)))
 			goto fail;
 		gst_object_unref(padTmp);
-		//ghost = gst_ghost_pad_new("src", (GstPad*)src);
-		//gst_element_add_pad(ret, ghost);
-
-		//gst_pad_set_event_function(ghost, replay_bin_event_func);
-		//gst_pad_add_probe(ghost, GST_PAD_PROBE_TYPE_EVENT_DOWNSTREAM,
-		//	replay_bin_event_probe, NULL, NULL);
-		//gst_pad_add_probe(ghost, GST_PAD_PROBE_TYPE_BUFFER, replay_bin_buffer_probe,
-		//	NULL, NULL);
-		//gst_pad_set_query_function(ghost, replay_bin_query_func);
 
 		if (!gst_element_link(src, enc))
 			goto fail;
-
-		//g_object_set(src, "location", filename, NULL);
-		//g_signal_connect(demux, "pad-added", G_CALLBACK(demux_pad_added_cb), ghost);
 
 	done:
 		return ret;
@@ -118,13 +97,11 @@ namespace osrv::rtsp{
 
 	G_DEFINE_TYPE(OnvifFactory, onvif_factory, GST_TYPE_RTSP_MEDIA_FACTORY);
 
-	static void
-		onvif_factory_init(OnvifFactory* factory)
+	static void onvif_factory_init(OnvifFactory* factory)
 	{
 	}
 
-	static GstElement*
-		onvif_factory_create_element(GstRTSPMediaFactory* factory,
+	static GstElement* onvif_factory_create_element(GstRTSPMediaFactory* factory,
 			const GstRTSPUrl* url)
 	{
 		GstElement* replay_bin, * q1, /** parse,*/ * pay, *onvifts, * q2;
@@ -172,16 +149,14 @@ namespace osrv::rtsp{
 		goto done;
 	}
 
-	static void
-		onvif_factory_class_init(OnvifFactoryClass* klass)
+	static void onvif_factory_class_init(OnvifFactoryClass* klass)
 	{
 		GstRTSPMediaFactoryClass* mf_class = GST_RTSP_MEDIA_FACTORY_CLASS(klass);
 
 		mf_class->create_element = onvif_factory_create_element;
 	}
 
-	static GstRTSPMediaFactory*
-		onvif_factory_new(void)
+	static GstRTSPMediaFactory* onvif_factory_new(void)
 	{
 		GstRTSPMediaFactory* result;
 
@@ -192,6 +167,20 @@ namespace osrv::rtsp{
 	}
 }
 
+gchar* check_requirements_callback(GstRTSPClient* self,	GstRTSPContext* ctx, char** arr, gpointer user_data)
+{
+	// TODO implement correct check
+	GString* unsupported = g_string_new("");
+
+	return g_string_free(unsupported, FALSE);
+}
+
+void client_connected_callback(GstRTSPServer* self,
+	GstRTSPClient* object,
+	gpointer user_data)
+{
+	g_signal_connect(object, "check-requirements", G_CALLBACK(check_requirements_callback), NULL);
+}
 
 namespace osrv
 {
@@ -210,11 +199,13 @@ namespace osrv
 			server_ = gst_rtsp_server_new();
 			g_object_set(server_, "service", "8554", NULL);
 
+			g_signal_connect(server_, "client-connected", G_CALLBACK(client_connected_callback), NULL);
+
 			mounts_ = gst_rtsp_server_get_mount_points(server_);
 			factory_ = onvif_factory_new();
 			gst_rtsp_media_factory_set_media_gtype(factory_, GST_TYPE_RTSP_ONVIF_MEDIA);
 			
-			gst_rtsp_mount_points_add_factory(mounts_, "/test", factory_);
+			gst_rtsp_mount_points_add_factory(mounts_, "/Recording0", factory_);
 			g_object_unref(mounts_);
 
 			
