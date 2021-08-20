@@ -198,17 +198,30 @@ namespace osrv
 			/* create a server instance */
 			server_ = gst_rtsp_server_new();
 			g_object_set(server_, "service", "8554", NULL);
+			gst_rtsp_server_set_address(server_, server_configs_->ipv4_address_.c_str());
+			gst_rtsp_server_set_service(server_, server_configs_->rtsp_port_.c_str());
 
 			g_signal_connect(server_, "client-connected", G_CALLBACK(client_connected_callback), NULL);
+
+			mounts_ = gst_rtsp_server_get_mount_points(server_);
 
 			factoryHighStream_ = gst_rtsp_media_factory_new();
 			gst_rtsp_media_factory_set_launch(factoryHighStream_,
 				"(videotestsrc is-live=1 ! video/x-raw,width=1280,height=720 ! x264enc ! rtph264pay name=pay0 pt=96 )");
-			mounts_ = gst_rtsp_server_get_mount_points(server_);
+			gst_rtsp_media_factory_set_shared(factoryHighStream_, TRUE);
+			
+			factoryLowStream_ = gst_rtsp_media_factory_new();
+			gst_rtsp_media_factory_set_launch(factoryHighStream_,
+				"(videotestsrc is-live=1 ! video/x-raw,width=640,height=320 ! x264enc ! rtph264pay name=pay0 pt=96 )");
+			gst_rtsp_media_factory_set_shared(factoryLowStream_, TRUE);
+
 			replayFactory_ = onvif_factory_new();
 			gst_rtsp_media_factory_set_media_gtype(replayFactory_, GST_TYPE_RTSP_ONVIF_MEDIA);
 			
+			gst_rtsp_mount_points_add_factory(mounts_, "/Live&HighStream", factoryHighStream_);
+			gst_rtsp_mount_points_add_factory(mounts_, "/Live&LowStream", factoryLowStream_);
 			gst_rtsp_mount_points_add_factory(mounts_, "/Recording0", replayFactory_);
+
 			g_object_unref(mounts_);
 		};
 
