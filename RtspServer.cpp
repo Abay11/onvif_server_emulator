@@ -62,7 +62,10 @@ namespace osrv::rtsp
 
 	static GstElement* create_replay_bin(GstElement* parent)
 	{
-		GstElement* ret, *src, *demux, *enc;
+		GstElement *ret,
+			*src,
+			*timestampOSD,
+			*enc;
 		GstPad* ghost;
 
 		ret = replay_bin_new();
@@ -72,14 +75,18 @@ namespace osrv::rtsp
 		}
 
 		MAKE_AND_ADD(src, ret, "videotestsrc", fail, NULL);
+		MAKE_AND_ADD(timestampOSD, ret, "timeoverlay", fail, NULL);
 		MAKE_AND_ADD(enc, ret, "x264enc", fail, NULL);
+
+		static const int RUNNING_TIME = 2;
+		g_object_set(timestampOSD, "time-mode", RUNNING_TIME, NULL);
 
 		auto* padTmp = gst_element_get_static_pad(enc, "src");
 		if (!gst_element_add_pad(ret, gst_ghost_pad_new("src", padTmp)))
 			goto fail;
 		gst_object_unref(padTmp);
 
-		if (!gst_element_link(src, enc))
+		if (!gst_element_link_many(src, timestampOSD, enc, NULL))
 			goto fail;
 
 	done:
