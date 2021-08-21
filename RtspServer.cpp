@@ -207,12 +207,12 @@ namespace osrv
 
 			factoryHighStream_ = gst_rtsp_media_factory_new();
 			gst_rtsp_media_factory_set_launch(factoryHighStream_,
-				"(videotestsrc is-live=1 ! video/x-raw,width=1280,height=720 ! x264enc ! rtph264pay name=pay0 pt=96 )");
+				"(videotestsrc is-live=1 ! timeoverlay ! video/x-raw,width=1280,height=720 ! x264enc ! rtph264pay name=pay0 pt=96 )");
 			gst_rtsp_media_factory_set_shared(factoryHighStream_, TRUE);
 			
 			factoryLowStream_ = gst_rtsp_media_factory_new();
-			gst_rtsp_media_factory_set_launch(factoryHighStream_,
-				"(videotestsrc is-live=1 ! video/x-raw,width=640,height=320 ! x264enc ! rtph264pay name=pay0 pt=96 )");
+			gst_rtsp_media_factory_set_launch(factoryLowStream_,
+				"(videotestsrc is-live=1 ! timeoverlay ! video/x-raw,width=640,height=320 ! x264enc ! rtph264pay name=pay0 pt=96 )");
 			gst_rtsp_media_factory_set_shared(factoryLowStream_, TRUE);
 
 			replayFactory_ = onvif_factory_new();
