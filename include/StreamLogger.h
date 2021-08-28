@@ -1,12 +1,15 @@
 #pragma once
 
-#include "Logger.h"
+#include "../Logger.h"
 
-class ConsoleLogger : public ILogger
+#include <ostream>
+
+class StreamLogger : public ILogger
 {
 public:
-	ConsoleLogger(int loggingLevel = LVL_INFO)
+	StreamLogger(std::ostream& os, int loggingLevel = LVL_INFO)
 		: ILogger(loggingLevel)
+		, os_(os)
 	{
 	}
 
@@ -19,7 +22,7 @@ public:
 	{
 		write(msg, LVL_WARN);
 	}
-	
+
 	void Info(const std::string& msg) const override
 	{
 		write(msg, LVL_INFO);
@@ -29,7 +32,7 @@ public:
 	{
 		write(msg, LVL_DEBUG);
 	}
-	
+
 	void Trace(const std::string& msg) const override
 	{
 		write(msg, LVL_TRACE);
@@ -65,11 +68,12 @@ private:
 		}
 
 		decorated_msg << msg;
-		
+
 		std::lock_guard<std::mutex> lg(log_writer_mutex);
-		std::cout << "\n" << decorated_msg.str() << std::endl;
+		os_ << "\n" << decorated_msg.str() << std::endl;
 	}
 
 private:
+	std::ostream& os_;
 	mutable std::mutex log_writer_mutex;
 };

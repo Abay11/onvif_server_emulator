@@ -8,14 +8,18 @@ static const std::string SERVER_VERSION = "0.1";
 
 static const std::string DEFAULT_CONFIGS_DIR = "./server_configs";
 
+static const std::string LOG_FILENAME = "OnvifServer.log";
+
 int main(int argc, char** argv)
 {
 	using namespace std;
+	std::cout << "ONVIF Server Emulator v" + SERVER_VERSION;
 
-	std::shared_ptr<ILogger> logger{ ConsoleLoggerFactory().GetLogger(ILogger::LVL_DEBUG) };
-	logger->Info("Simple ONVIF Server ver. " + SERVER_VERSION);
+	std::shared_ptr<ILogger> logger{ FileLoggerFactory(LOG_FILENAME).GetLogger(ILogger::LVL_DEBUG) };
 
 	std::string configs_dir = DEFAULT_CONFIGS_DIR;
+
+	logger->Info("New run");
 
 	if (argc > 1)
 	{

@@ -99,8 +99,10 @@ add_library(onvif_server STATIC
 	"${SERVICES_SRC}"
 	"${UTILITY_SRC}"
 
-	LoggerFactories.h
-	ConsoleLogger.h
+	include/LoggerFactories.h
+	include/ConsoleLogger.h
+	include/FileLogger.h
+	include/StreamLogger.h
 )
 
 add_executable(main main.cpp)
