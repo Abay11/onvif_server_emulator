@@ -55,8 +55,6 @@ namespace osrv
 
 	void Server::init()
 	{
-		http_server_->config.port = MASTER_PORT;
-	
 		http_server_->default_resource["GET"] = [](std::shared_ptr<HttpServer::Response> response,
 			std::shared_ptr<HttpServer::Request> request)
 		{
@@ -94,6 +92,9 @@ namespace osrv
 
 		server_configs_ = read_server_configs(configs_dir + COMMON_CONFIGS_NAME);
 
+		http_server_->config.address = server_configs_->ipv4_address_;
+		http_server_->config.port = std::stoi(server_configs_->http_port_);
+
 		if (server_configs_->enabled_http_port_forwarding)
 			logger_->Info("HTTP port forwarding simulated on port: " + std::to_string(server_configs_->forwarded_http_port));
 
@@ -111,7 +112,6 @@ namespace osrv
 		discovery::init_service(configs_dir, *logger_);
 		imaging::init_service(*http_server_, *server_configs_, configs_dir, *logger_);
 		ptz::init_service(*http_server_, *server_configs_, configs_dir, *logger_);
-		//recording_search::init_service(*http_server_, server_configs_, configs_dir, logger_);
 		RecordingSearchService()->Run();
 		ReplayControlService()->Run();
 

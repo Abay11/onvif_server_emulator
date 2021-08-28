@@ -14,12 +14,6 @@
 
 #include <memory>
 
-namespace {
-	const std::string MASTER_ADDR = "127.0.0.1";
-	const unsigned short MASTER_PORT = 8080;
-}
-
-
 //namespace onvif server
 namespace osrv
 {
