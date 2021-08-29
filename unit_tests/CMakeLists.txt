@@ -10,6 +10,7 @@ find_package(Boost REQUIRED
 )
 
 add_executable(test_executable
+	audio_source_tests.cpp
 	auth_tests.cpp	
 	date_time_tests.cpp
 	device_service_tests.cpp

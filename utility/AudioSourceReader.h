@@ -1,0 +1,34 @@
+#pragma once
+
+#include <boost/property_tree/ptree_fwd.hpp>
+
+namespace
+{
+	namespace pt = boost::property_tree;
+}
+
+namespace utility
+{
+	class AudioSourceConfigsReader
+	{
+	public:
+		AudioSourceConfigsReader(const pt::ptree&);
+
+		//pt::ptree
+
+	private:
+		const pt::ptree& cfgs_;
+	};
+
+	class AudioEncoderReaderByToken
+	{
+	public:
+		AudioEncoderReaderByToken(const std::string&, const pt::ptree&);
+
+		pt::ptree AudioEncoder();
+
+	private:
+		const std::string& token_;
+		const pt::ptree& cfgs_;
+	};
+}

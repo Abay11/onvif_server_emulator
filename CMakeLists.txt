@@ -69,6 +69,8 @@ FILE(GLOB SERVICES_SRC
 )
 
 FILE (GLOB UTILITY_SRC
+	"utility/AudioSourceReader.h"
+	"utility/AudioSourceReader.cpp"
 	"utility/XmlParser.h"
 	"utility/XmlParser.cpp"
 	"utility/HttpHelper.h"
