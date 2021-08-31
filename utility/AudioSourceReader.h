@@ -31,4 +31,18 @@ namespace utility
 		const std::string& token_;
 		const pt::ptree& cfgs_;
 	};
+	
+	class AudioEncoderReaderByProfileToken
+	{
+	public:
+		AudioEncoderReaderByProfileToken(const std::string&, const pt::ptree&);
+
+		const std::string RelatedAudioEncoderToken();
+
+		pt::ptree AudioEncoder();
+
+	private:
+		const std::string& profileToken_;
+		const pt::ptree& cfgs_;
+	};
 }

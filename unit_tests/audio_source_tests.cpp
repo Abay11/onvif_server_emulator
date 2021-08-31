@@ -15,7 +15,7 @@ BOOST_AUTO_TEST_CASE(ASConfigPathTest)
 }
 
 
-BOOST_AUTO_TEST_CASE(AudioEncoderReaderByToken)
+BOOST_AUTO_TEST_CASE(AudioEncoderReaderByTokenTest)
 {
 	pt::ptree configTree;
 	pt::json_parser::read_json(config_file, configTree);
@@ -25,3 +25,28 @@ BOOST_AUTO_TEST_CASE(AudioEncoderReaderByToken)
 
 	BOOST_TEST(token == aeCfg.get<std::string>("token"));
 }
+
+BOOST_AUTO_TEST_CASE(AudioEncoderReaderByProfileToken_RelatedAudioEncoderTokenTest)
+{
+	pt::ptree configTree;
+	pt::json_parser::read_json(config_file, configTree);
+
+	const auto profileToken = "ProfileToken0";
+
+	auto aeCfgToken = utility::AudioEncoderReaderByProfileToken(profileToken, configTree).RelatedAudioEncoderToken();
+
+	const auto token = "AudioEncCfg0";
+
+	BOOST_TEST(token == aeCfgToken);
+}
+
+BOOST_AUTO_TEST_CASE(AudioEncoderReaderByProfileTokenTest)
+{
+	pt::ptree configTree;
+	pt::json_parser::read_json(config_file, configTree);
+	const auto profileToken = "ProfileToken0";
+	auto aeCfg = utility::AudioEncoderReaderByProfileToken(profileToken, configTree).AudioEncoder();
+	const auto token = "AudioEncCfg0";
+	BOOST_TEST(token == aeCfg.get<std::string>("token"));
+}
+
