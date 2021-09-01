@@ -5,6 +5,7 @@
 #include "../utility/XmlParser.h"
 #include "../utility/HttpHelper.h"
 #include "../utility/SoapHelper.h"
+#include "../utility/AudioSourceReader.h"
 #include "../Server.h"
 
 #include "../Simple-Web-Server/server_http.hpp"
@@ -28,6 +29,7 @@ static std::map<std::string, std::string> XML_NAMESPACES;
 
 //the list of implemented methods
 static const std::string GetAnalyticsConfigurations = "GetAnalyticsConfigurations";
+static const std::string GetAudioEncoderConfigurations = "GetAudioEncoderConfigurations";
 static const std::string GetAudioDecoderConfigurations = "GetAudioDecoderConfigurations";
 static const std::string GetProfiles = "GetProfiles";
 static const std::string GetVideoEncoderConfigurations = "GetVideoEncoderConfigurations";
@@ -81,6 +83,66 @@ namespace osrv
 
 				pt::ptree root_tree;
 				root_tree.put_child("s:Envelope", envelope_tree);
+
+				std::ostringstream os;
+				pt::write_xml(os, root_tree);
+
+				utility::http::fillResponseWithHeaders(*response, os.str());
+			}
+		};
+
+		struct GetAudioEncoderConfigurationsHandler : public utility::http::RequestHandlerBase
+		{
+			GetAudioEncoderConfigurationsHandler() : utility::http::RequestHandlerBase(GetAudioEncoderConfigurations, osrv::auth::SECURITY_LEVELS::READ_MEDIA)
+			{}
+
+			OVERLOAD_REQUEST_HANDLER
+			{
+				pt::ptree ae_configs_node;
+
+				pt::ptree request_xml_tree;
+				pt::xml_parser::read_xml(request->content, request_xml_tree);
+				
+				auto fillAEConfig = [](const pt::ptree& in, pt::ptree& out) {
+					out.add("<xmlattr>.token", in.get<std::string>("token"));
+					out.add("tt:Name", in.get<std::string>("Name"));
+					out.add("tt:UseCount", in.get<int>("UseCount"));
+					out.add("tt:Encoding", in.get<std::string>("Encoding"));
+					out.add("tt:Bitrate", in.get<int>("Bitrate"));
+					out.add("tt:SampleRate", in.get<int>("SampleRate"));
+				};
+
+				if (auto requestedToken = exns::find_hierarchy("Envelope.Body.GetAudioEncoderConfigurations.ConfigurationToken", request_xml_tree);
+					!requestedToken.empty()) // response with a specific AE config
+				{
+					auto aeCfg = utility::AudioEncoderReaderByToken(requestedToken, PROFILES_CONFIGS_TREE).AudioEncoder();
+					pt::ptree ae_node;
+					fillAEConfig(aeCfg, ae_node);
+					ae_configs_node.add_child("tr2:Configurations", ae_node);
+				}
+				else if (auto requestedProfile = exns::find_hierarchy("Envelope.Body.GetAudioEncoderConfigurations.ProfileToken", request_xml_tree);
+					!requestedProfile.empty()) // response with a specific profile's AE config
+				{
+					auto aeCfg = utility::AudioEncoderReaderByProfileToken(requestedProfile, PROFILES_CONFIGS_TREE).AudioEncoder();
+					pt::ptree ae_node;
+					fillAEConfig(aeCfg, ae_node);
+					ae_configs_node.add_child("tr2:Configurations", ae_node);
+				}
+				else // response with all existing configs
+				{
+					const auto ae_config_list = PROFILES_CONFIGS_TREE.get_child("AudioEncoderConfigurations");
+					for (const auto& ae_config : ae_config_list)
+					{
+						pt::ptree ae_node;
+						fillAEConfig(ae_config.second, ae_node);
+						ae_configs_node.add_child("tr2:Configurations", ae_node);
+					}
+				}
+				
+				auto env_tree = utility::soap::getEnvelopeTree(XML_NAMESPACES);
+				env_tree.put_child("s:Body.tr2:GetAudioEncoderConfigurationsResponse", ae_configs_node);
+				pt::ptree root_tree;
+				root_tree.put_child("s:Envelope", env_tree);
 
 				std::ostringstream os;
 				pt::write_xml(os, root_tree);
@@ -694,7 +756,7 @@ namespace osrv
 				catch (const std::exception& e)
 				{
 					logger_->Error("A server's error occured in Media2Service while processing: " + method
-						+ ". Info: " + e.what());
+						+ ". What: " + e.what());
 					
 					*response << "HTTP/1.1 500 Server error\r\nContent-Length: " << 0 << "\r\n\r\n";
 				}
@@ -728,6 +790,7 @@ namespace osrv
 
 			handlers.emplace_back(new GetAnalyticsConfigurationsHandler());
 			handlers.emplace_back(new GetAudioDecoderConfigurationsHandler());
+			handlers.emplace_back(new GetAudioEncoderConfigurationsHandler());
 			handlers.emplace_back(new GetProfilesHandler());
 			handlers.emplace_back(new GetServiceCapabilitiesHandler());
 			handlers.emplace_back(new GetVideoEncoderConfigurationsHandler());
