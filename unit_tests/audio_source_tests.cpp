@@ -50,3 +50,12 @@ BOOST_AUTO_TEST_CASE(AudioEncoderReaderByProfileTokenTest)
 	BOOST_TEST(token == aeCfg.get<std::string>("token"));
 }
 
+BOOST_AUTO_TEST_CASE(AudioSourceConfigsReaderTest)
+{
+	pt::ptree configTree;
+	pt::json_parser::read_json(config_file, configTree);
+	const auto token = "AudioSrcCfg0";
+	auto asCfg = utility::AudioSourceConfigsReader(token, configTree).AudioSource();
+	BOOST_TEST(token == asCfg.get<std::string>("token"));
+}
+

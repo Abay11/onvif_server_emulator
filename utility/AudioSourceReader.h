@@ -12,11 +12,12 @@ namespace utility
 	class AudioSourceConfigsReader
 	{
 	public:
-		AudioSourceConfigsReader(const pt::ptree&);
+		AudioSourceConfigsReader(const std::string&, const pt::ptree&);
 
-		//pt::ptree
+		pt::ptree AudioSource();
 
 	private:
+		const std::string& token_;
 		const pt::ptree& cfgs_;
 	};
 

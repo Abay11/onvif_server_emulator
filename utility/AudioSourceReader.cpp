@@ -2,11 +2,6 @@
 
 #include <boost/property_tree/ptree.hpp>
 
-utility::AudioSourceConfigsReader::AudioSourceConfigsReader(const pt::ptree& cfgs)
-	: cfgs_(cfgs)
-{
-}
-
 utility::AudioEncoderReaderByToken::AudioEncoderReaderByToken(const std::string& token, const pt::ptree& cfgs)
 	: token_(token), cfgs_(cfgs) {}
 
@@ -38,4 +33,18 @@ const std::string utility::AudioEncoderReaderByProfileToken::RelatedAudioEncoder
 pt::ptree utility::AudioEncoderReaderByProfileToken::AudioEncoder()
 {
 	return AudioEncoderReaderByToken(RelatedAudioEncoderToken(), cfgs_).AudioEncoder();
+}
+
+utility::AudioSourceConfigsReader::AudioSourceConfigsReader(const std::string& token, const pt::ptree& cfgs)
+	: token_(token), cfgs_(cfgs)
+{
+}
+
+pt::ptree utility::AudioSourceConfigsReader::AudioSource()
+{
+	for (const auto& p : cfgs_.get_child("AudioSourceConfigurations"))
+		if (p.second.get<std::string>("token") == token_)
+			return p.second;
+
+	throw std::runtime_error("No audio source configuration with token: " + token_);
 }
