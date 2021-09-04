@@ -11,7 +11,7 @@ pt::ptree utility::AudioEncoderReaderByToken::AudioEncoder()
 		if (p.second.get<std::string>("token") == token_)
 			return p.second;
 
-	throw std::runtime_error("Not audio encoder configuration with token: " + token_);
+	throw std::runtime_error("Not found audio encoder configuration with token: " + token_);
 }
 
 utility::AudioEncoderReaderByProfileToken::AudioEncoderReaderByProfileToken(const std::string& token, const pt::ptree& cfgs) : profileToken_(token), cfgs_(cfgs)
@@ -46,5 +46,5 @@ pt::ptree utility::AudioSourceConfigsReader::AudioSource()
 		if (p.second.get<std::string>("token") == token_)
 			return p.second;
 
-	throw std::runtime_error("No audio source configuration with token: " + token_);
+	throw std::runtime_error("Not found audio source configuration with token: " + token_);
 }

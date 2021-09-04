@@ -30,6 +30,7 @@ static std::map<std::string, std::string> XML_NAMESPACES;
 //the list of implemented methods
 static const std::string GetAnalyticsConfigurations = "GetAnalyticsConfigurations";
 static const std::string GetAudioEncoderConfigurations = "GetAudioEncoderConfigurations";
+static const std::string GetAudioEncoderConfigurationOptions = "GetAudioEncoderConfigurationOptions";
 static const std::string GetAudioDecoderConfigurations = "GetAudioDecoderConfigurations";
 static const std::string GetProfiles = "GetProfiles";
 static const std::string GetVideoEncoderConfigurations = "GetVideoEncoderConfigurations";
@@ -141,6 +142,53 @@ namespace osrv
 				
 				auto env_tree = utility::soap::getEnvelopeTree(XML_NAMESPACES);
 				env_tree.put_child("s:Body.tr2:GetAudioEncoderConfigurationsResponse", ae_configs_node);
+				pt::ptree root_tree;
+				root_tree.put_child("s:Envelope", env_tree);
+
+				std::ostringstream os;
+				pt::write_xml(os, root_tree);
+
+				utility::http::fillResponseWithHeaders(*response, os.str());
+			}
+		};
+
+		struct GetAudioEncoderConfigurationOptionsHandler : public utility::http::RequestHandlerBase
+		{
+			GetAudioEncoderConfigurationOptionsHandler()
+				: utility::http::RequestHandlerBase(GetAudioEncoderConfigurationOptions, osrv::auth::SECURITY_LEVELS::READ_MEDIA)
+			{}
+
+			OVERLOAD_REQUEST_HANDLER
+			{
+				// TODO: add process options for specific profile or configuration
+
+				auto fillAEOptions= [](const pt::ptree& in, pt::ptree& out) {
+					out.add("tt:Encoding", in.get<std::string>("Encoding"));
+
+					for (auto i : in.get_child("BitrateList"))
+						out.add("tt:BitrateList.tt:Items", i.second.get_value<int>());
+
+					for (auto i : in.get_child("SampleRateList"))
+						out.add("tt:SampleRateList.tt:Items", i.second.get_value<int>());
+				};
+
+				pt::ptree ae_opts_node;
+
+				pt::ptree request_xml_tree;
+				pt::xml_parser::read_xml(request->content, request_xml_tree);
+
+				{
+					const auto ae_config_options_list = PROFILES_CONFIGS_TREE.get_child("AudioEncoderConfigurationOptions");
+					for (const auto& options : ae_config_options_list)
+					{
+						pt::ptree options_node;
+						fillAEOptions(options.second, options_node);
+						ae_opts_node.add_child("tr2:Options", options_node);
+					}
+				}
+
+				auto env_tree = utility::soap::getEnvelopeTree(XML_NAMESPACES);
+				env_tree.put_child("s:Body.tr2:GetAudioEncoderConfigurationOptionsResponse", ae_opts_node);
 				pt::ptree root_tree;
 				root_tree.put_child("s:Envelope", env_tree);
 
@@ -791,6 +839,7 @@ namespace osrv
 			handlers.emplace_back(new GetAnalyticsConfigurationsHandler());
 			handlers.emplace_back(new GetAudioDecoderConfigurationsHandler());
 			handlers.emplace_back(new GetAudioEncoderConfigurationsHandler());
+			handlers.emplace_back(new GetAudioEncoderConfigurationOptionsHandler());
 			handlers.emplace_back(new GetProfilesHandler());
 			handlers.emplace_back(new GetServiceCapabilitiesHandler());
 			handlers.emplace_back(new GetVideoEncoderConfigurationsHandler());
@@ -855,7 +904,7 @@ namespace osrv
 
 					pt::ptree analytics_node;
 					osrv::media::util::fill_analytics_configuration(analytics_node);
-					result.put_child("tr2:Analytics", analytics_node);
+					result.put_child("tr2:Configurations.tr2:Analytics", analytics_node);
 				}
 
 				{ // PTZ
@@ -872,7 +921,39 @@ namespace osrv
 						ptz_node.add("tt:DefaultContinuousZoomVelocitySpace",
 							"http://www.onvif.org/ver10/tptz/ZoomSpaces/VelocityGenericSpace");
 					}
-					result.put_child("tr2:PTZ", ptz_node);
+					result.put_child("tr2:Configurations.tr2:PTZ", ptz_node);
+				}
+
+				{ // Audio source
+					auto as_token = profile_config.get<std::string>("AudioSourceConfiguration", "");
+					if (!as_token.empty())
+					{
+						pt::ptree as_node;
+						auto as_config = utility::AudioSourceConfigsReader(as_token, configs_file).AudioSource();
+						as_node.add("<xmlattr>.token", as_token);
+						as_node.add("tt:Name", as_config.get<std::string>("Name"));
+						as_node.add("tt:UseCount", as_config.get<int>("UseCount"));
+						as_node.add("tt:SourceToken", as_config.get<std::string>("SourceToken"));
+
+						result.put_child("tr2:Configurations.tr2:AudioSource", as_node);
+					}
+				}
+
+				{ // Audio encoder
+					auto ae_token = profile_config.get<std::string>("AudioEncoderConfiguration", "");
+					if (!ae_token.empty())
+					{
+						pt::ptree ae_node;
+						auto ae_config = utility::AudioEncoderReaderByToken(ae_token, configs_file).AudioEncoder();
+						ae_node.add("<xmlattr>.token", ae_token);
+						ae_node.add("tt:Name", ae_config.get<std::string>("Name"));
+						ae_node.add("tt:UseCount", ae_config.get<int>("UseCount"));
+						ae_node.add("tt:Encoding", ae_config.get<std::string>("Encoding"));
+						ae_node.add("tt:Bitrate", ae_config.get<int>("Bitrate"));
+						ae_node.add("tt:SampleRate", ae_config.get<int>("SampleRate"));
+
+						result.put_child("tr2:Configurations.tr2:AudioEncoder", ae_node);
+					}
 				}
 			}
 			
