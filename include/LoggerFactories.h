@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Logger.h"
+#include "../Logger.h"
 
 #include "ConsoleLogger.h"
 #include "FileLogger.h"
@@ -12,7 +12,6 @@ class ILoggerFactory
 public:
 	virtual ILogger* GetLogger(int log_level) = 0;
 };
-
 
 class ConsoleLoggerFactory : public ILoggerFactory
 {
