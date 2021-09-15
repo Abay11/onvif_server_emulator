@@ -4,6 +4,10 @@
 #include "Server.h"
 #include "LoggerFactories.h"
 
+#include "onvif_services/service_configs.h"
+
+#include <string>
+
 static const std::string SERVER_VERSION = "0.1";
 
 static const std::string DEFAULT_CONFIGS_DIR = "./server_configs";
@@ -13,20 +17,34 @@ static const std::string LOG_FILENAME = "OnvifServer.log";
 int main(int argc, char** argv)
 {
 	using namespace std;
-	std::cout << "ONVIF Server Emulator v" + SERVER_VERSION;
-
-	std::shared_ptr<ILogger> logger{ FileLoggerFactory(LOG_FILENAME).GetLogger(ILogger::LVL_DEBUG) };
+	std::cout << "ONVIF Server Emulator v" + SERVER_VERSION << std::endl;
 
 	std::string configs_dir = DEFAULT_CONFIGS_DIR;
 
-	logger->Info("New run");
+	std::stringstream ss;
 
 	if (argc > 1)
 	{
 		configs_dir = argv[1];
-		logger->Info("Command line arguments are found. "
-			"Configuration files will be read from " + configs_dir);
+		ss << "Command line arguments are found. Configs read from " << configs_dir;
 	}
+
+	std::shared_ptr<boost::property_tree::ptree> serverConfigs = osrv::ServiceConfigs("common", configs_dir);
+	std::shared_ptr<ILogger> logger;
+	LoggerConfigs lconfigs(serverConfigs);
+	if (lconfigs.LogOutput() == "console")
+	{
+		logger.reset(ConsoleLoggerFactory().GetLogger(lconfigs.LogLevel()));
+	}
+	else if (lconfigs.LogOutput() == "file")
+	{
+		logger.reset(FileLoggerFactory(LOG_FILENAME).GetLogger(lconfigs.LogLevel()));
+	}
+	else
+		throw std::runtime_error("Could not create logger type: " + lconfigs.LogOutput());
+	
+	logger->Info("New run. " + ss.str());
+	logger->Info("Logging level: " + logger->GetLogLevel());
 
 	try
 	{

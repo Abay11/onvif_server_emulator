@@ -77,19 +77,6 @@ namespace osrv
 		};
 
 		auto configs_dir = configs_path_ + "/";
-		// TODO: as now here we read configs, we can refactor @read_server_configs function and pass ptree 
-		std::ifstream configs_file(configs_dir + COMMON_CONFIGS_NAME);
-		if (configs_file.is_open())
-		{
-			namespace pt = boost::property_tree;
-			pt::ptree configs_tree;
-			pt::read_json(configs_file, configs_tree);
-			auto log_lvl = configs_tree.get<std::string>("loggingLevel", "");
-			if (!log_lvl.empty())
-				logger_->SetLogLevel(ILogger::to_lvl(log_lvl));
-		}
-		logger_->Info("Logging level: " + logger_->GetLogLevel());
-
 		server_configs_ = read_server_configs(configs_dir + COMMON_CONFIGS_NAME);
 
 		http_server_->config.address = server_configs_->ipv4_address_;
