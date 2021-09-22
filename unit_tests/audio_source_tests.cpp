@@ -59,3 +59,39 @@ BOOST_AUTO_TEST_CASE(AudioSourceConfigsReaderTest)
 	BOOST_TEST(token == asCfg.get<std::string>("token"));
 }
 
+
+BOOST_AUTO_TEST_CASE(PcmuSetupTest)
+{
+	auto pcmu = utility::AudioSetupFactory().AudioSetup("PCMU");
+
+	BOOST_TEST("alawenc bitrate=64000" == pcmu->Encoding());
+	BOOST_TEST(0u == pcmu->PayloadNum());
+	BOOST_TEST("rtppcmapay" == pcmu->PayloadPluginName());
+}
+
+BOOST_AUTO_TEST_CASE(PcmaSetupTest)
+{
+	auto pcma = utility::AudioSetupFactory().AudioSetup("PCMA");
+
+	BOOST_TEST("mulawenc bitrate=64000" == pcma->Encoding());
+	BOOST_TEST(8u == pcma->PayloadNum());
+	BOOST_TEST("rtppcmapay" == pcma->PayloadPluginName());
+}
+
+BOOST_AUTO_TEST_CASE(G726SetupTest)
+{
+	auto g726 = utility::AudioSetupFactory().AudioSetup("G726", 16000, 2);
+
+	BOOST_TEST("avenc_g726 bitrate=16000" == g726->Encoding());
+	BOOST_TEST(97u == g726->PayloadNum());
+	BOOST_TEST("rtpg726pay" == g726->PayloadPluginName());
+}
+
+BOOST_AUTO_TEST_CASE(AacSetupTest)
+{
+	auto aac = utility::AudioSetupFactory().AudioSetup("AAC", 44100, 3);
+
+	BOOST_TEST("avenc_aac bitrate=44100" == aac->Encoding());
+	BOOST_TEST(98u == aac->PayloadNum());
+	BOOST_TEST("rtpmp4apay" == aac->PayloadPluginName());
+}

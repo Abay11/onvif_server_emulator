@@ -48,3 +48,53 @@ pt::ptree utility::AudioSourceConfigsReader::AudioSource()
 
 	throw std::runtime_error("Not found audio source configuration with token: " + token_);
 }
+
+unsigned int utility::PcmuSetup::PayloadNum()
+{
+	return 0;
+}
+
+std::string utility::PcmuSetup::PayloadPluginName()
+{
+	return "rtppcmapay";
+}
+
+std::string utility::PcmuSetup::EncoderPluginName()
+{
+	return "alawenc";
+}
+
+unsigned int utility::PcmaSetup::PayloadNum()
+{
+	return 8u;
+}
+
+std::string utility::PcmaSetup::PayloadPluginName()
+{
+	return "rtppcmapay";
+}
+
+std::string utility::PcmaSetup::EncoderPluginName()
+{
+	return "mulawenc";
+}
+
+std::string utility::G726Setup::PayloadPluginName()
+{
+	return "rtpg726pay";
+}
+
+std::string utility::G726Setup::EncoderPluginName()
+{
+	return "avenc_g726";
+}
+
+std::string utility::AacSetup::PayloadPluginName()
+{
+	return "rtpmp4apay";
+}
+
+std::string utility::AacSetup::EncoderPluginName()
+{
+	return "avenc_aac";
+}
