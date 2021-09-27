@@ -56,12 +56,12 @@ unsigned int utility::PcmuSetup::PayloadNum()
 
 std::string utility::PcmuSetup::PayloadPluginName()
 {
-	return "rtppcmapay";
+	return "rtppcmupay";
 }
 
 std::string utility::PcmuSetup::EncoderPluginName()
 {
-	return "alawenc";
+	return "mulawenc";
 }
 
 unsigned int utility::PcmaSetup::PayloadNum()
@@ -76,7 +76,7 @@ std::string utility::PcmaSetup::PayloadPluginName()
 
 std::string utility::PcmaSetup::EncoderPluginName()
 {
-	return "mulawenc";
+	return "alawenc";
 }
 
 std::string utility::G726Setup::PayloadPluginName()

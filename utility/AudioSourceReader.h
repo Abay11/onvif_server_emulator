@@ -96,7 +96,7 @@ namespace utility
 	class G726Setup : public IAudioSetup
 	{
 	public:
-		G726Setup(unsigned int bitrate = 16000u, unsigned int ntrack=96u) : IAudioSetup(bitrate, ntrack) {}
+		G726Setup(unsigned int bitrate = 16000u, unsigned int ntrack=1u) : IAudioSetup(bitrate, ntrack) {}
 		// Inherited via IAudioSetup
 		virtual std::string PayloadPluginName() override;
 		virtual std::string EncoderPluginName() override;
@@ -105,7 +105,7 @@ namespace utility
 	class AacSetup : public IAudioSetup
 	{
 	public:
-		AacSetup(unsigned int bitrate = 16000u, unsigned int ntrack = 96u) : IAudioSetup(bitrate, ntrack) {}
+		AacSetup(unsigned int bitrate = 16000u, unsigned int ntrack = 1u) : IAudioSetup(bitrate, ntrack) {}
 		// Inherited via IAudioSetup
 		virtual std::string PayloadPluginName() override;
 		virtual std::string EncoderPluginName() override;

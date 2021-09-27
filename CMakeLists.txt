@@ -105,6 +105,7 @@ add_library(onvif_server STATIC
 	include/ConsoleLogger.h
 	include/FileLogger.h
 	include/StreamLogger.h
+	include/MediaFormats.h
 )
 
 add_executable(main main.cpp)
