@@ -7,10 +7,12 @@
 #include "../onvif_services/imaging_service.h"
 #include "../onvif_services/ptz_service.h"
 #include "../onvif_services/recording_search_service.h"
+#include "include/onvif_services/service_configs.h"
 
 #include "utility/XmlParser.h"
 #include "utility/AuthHelper.h"
 #include "../onvif_services/physical_components/IDigitalInput.h"
+#include "MediaFormats.h"
 
 #include "Simple-Web-Server/server_http.hpp"
 
@@ -102,7 +104,19 @@ namespace osrv
 		RecordingSearchService()->Run();
 		ReplayControlService()->Run();
 
-		rtspServer_ = new rtsp::Server(&*logger_, *server_configs_);
+		// TODO: impl. logic for multichannel cannel
+		std::shared_ptr<pt::ptree> profiles_config = osrv::ServiceConfigs("media_profiles", configs_dir);
+		auto audio_node = profiles_config->get_child("AudioEncoderConfigurations").front();
+		;
+		audio_node.second.get_value<std::string>("Encoding");
+		audio_node.second.get_value<std::string>("Encoding");
+
+		rtsp::AudioInfo ainfo{audio_node.second.get<std::string>("Encoding"),
+			audio_node.second.get<unsigned int>("Bitrate") * 1000,
+			audio_node.second.get<unsigned int>("SampleRate") * 1000,
+		};
+
+		rtspServer_ = new rtsp::Server(&*logger_, *server_configs_, std::move(ainfo));
 
 		if (auto delay = server_configs_->network_delay_simulation_; delay > 0)
 		{

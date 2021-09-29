@@ -25,12 +25,18 @@ namespace osrv
 		G_END_DECLS
 
 
+		struct AudioInfo
+		{
+			const std::string codec;
+			const unsigned int bitrate;
+			const unsigned int samplerate;
+		};
 
 
 		class Server
 		{
 		public:
-			Server(ILogger* /*logger*/, ServerConfigs& /*server_configs*/);
+			Server(ILogger* /*logger*/, ServerConfigs& /*server_configs*/, AudioInfo&& ainfo);
 			~Server();
 			void run();
 

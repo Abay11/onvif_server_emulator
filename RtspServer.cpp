@@ -2,6 +2,9 @@
 #include "RtspServer.h"
 #include "Logger.h"
 
+#include "../utility/AudioSourceReader.h"
+#include "include/MediaFormats.h"
+
 #include <gst/gst.h>
 #include <gst/rtsp-server/rtsp-server.h>
 
@@ -193,7 +196,7 @@ namespace osrv
 {
 	namespace rtsp
 	{
-		Server::Server(ILogger* logger, ServerConfigs& server_configs)
+		Server::Server(ILogger* logger, ServerConfigs& server_configs, AudioInfo&& ainfo)
 			:logger_(logger),
 			server_configs_(&server_configs)
 		{
@@ -213,9 +216,18 @@ namespace osrv
 			mounts_ = gst_rtsp_server_get_mount_points(server_);
 
 			factoryHighStream_ = gst_rtsp_media_factory_new();
-			gst_rtsp_media_factory_set_launch(factoryHighStream_,
-				"(videotestsrc is-live=1 ! timeoverlay ! video/x-raw,width=640,height=320 ! x264enc ! rtph264pay name=pay0 pt=96 "
-				"audiotestsrc is-live=1 ! audio/x-raw,rate=8000 ! alawenc ! rtppcmapay name=pay1 pt=97 )");
+
+			std::stringstream mediadescr;
+			
+			auto asetup = utility::AudioSetupFactory().AudioSetup(ainfo.codec, ainfo.bitrate, ainfo.samplerate);
+
+			mediadescr << "("
+				<< " videotestsrc is-live=1 ! timeoverlay ! video/x-raw,width=640,height=320 ! x264enc ! rtph264pay name=pay0 pt=97"
+				<< " audiotestsrc is-live=1 ! audioconvert ! audioresample ! audio/x-raw,rate=8000 ! " << asetup->Encoding()
+				<< " ! " << asetup->PayloadPluginName() << " name=pay1 pt= " << std::to_string(asetup->PayloadNum())
+				<< " )";
+
+			gst_rtsp_media_factory_set_launch(factoryHighStream_, mediadescr.str().c_str());
 			gst_rtsp_media_factory_set_shared(factoryHighStream_, TRUE);
 			
 			factoryLowStream_ = gst_rtsp_media_factory_new();

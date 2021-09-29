@@ -126,7 +126,7 @@ namespace utility
 			if (name == "G726")
 				return std::make_shared<G726Setup>(std::forward<Types>(args)...);
 			
-			if (name == "AAC")
+			if (name == "MP4A-LATM")
 				return std::make_shared<AacSetup>(std::forward<Types>(args)...);
 
 			throw std::runtime_error("No audio setup class for " + name);
