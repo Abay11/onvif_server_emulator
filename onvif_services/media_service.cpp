@@ -31,6 +31,7 @@ static std::map<std::string, std::string> XML_NAMESPACES;
 
 //the list of implemented methods
 static const std::string GetAudioDecoderConfigurations = "GetAudioDecoderConfigurations";
+static const std::string GetAudioEncoderConfigurationOptions = "GetAudioEncoderConfigurationOptions";
 static const std::string GetAudioOutputs = "GetAudioOutputs";
 static const std::string GetAudioSourceConfigurations = "GetAudioSourceConfigurations";
 static const std::string GetAudioSources = "GetAudioSources";
@@ -67,6 +68,59 @@ namespace osrv
 				pt::ptree ad_configs;
 				auto envelope_tree = utility::soap::getEnvelopeTree(XML_NAMESPACES);
 				envelope_tree.add_child("s:Body.trt:GetAudioDecoderConfigurationsResponse", ad_configs);
+
+				pt::ptree root_tree;
+				root_tree.put_child("s:Envelope", envelope_tree);
+
+				std::ostringstream os;
+				pt::write_xml(os, root_tree);
+
+				utility::http::fillResponseWithHeaders(*response, os.str());
+			}
+		};
+		
+		struct GetAudioEncoderConfigurationOptionsHandler : public utility::http::RequestHandlerBase
+		{
+			GetAudioEncoderConfigurationOptionsHandler() : utility::http::RequestHandlerBase(GetAudioEncoderConfigurationOptions, osrv::auth::SECURITY_LEVELS::READ_MEDIA)
+			{
+			}
+
+			OVERLOAD_REQUEST_HANDLER
+			{
+				pt::ptree options_tree;
+
+				auto fillAEOptions = [](const pt::ptree& in, pt::ptree& out) {
+
+
+					// NOTE: IN MEDIA1 there is only G711 and AAC encoding
+					// so we need correct name here for PCMU and MP4A-LATM.
+					// PCMA I just skip
+					auto encoding = in.get<std::string>("Encoding");
+					if (encoding == "PCMA") return;
+					if (encoding == "PCMU") encoding = "G711";
+					if (encoding == "MP4A-LATM") encoding = "AAC";
+
+					out.add("tt:Encoding", encoding);
+
+					for (auto i : in.get_child("BitrateList"))
+						out.add("tt:BitrateList.tt:Items", i.second.get_value<int>());
+
+					for (auto i : in.get_child("SampleRateList"))
+						out.add("tt:SampleRateList.tt:Items", i.second.get_value<int>());
+				};
+				
+				//utility::AudioSourceConfigsReader configsReader("AudioSrcCfg0", PROFILES_CONFIGS_TREE); // TODO: hardcoded value
+				auto options = PROFILES_CONFIGS_TREE.get_child("AudioEncoderConfigurationOptions");
+				for (const auto& o : options)
+				{
+					pt::ptree options_node;
+					fillAEOptions(o.second, options_node);
+					options_tree.add_child("tt:Options", options_node);
+				}
+
+
+				auto envelope_tree = utility::soap::getEnvelopeTree(XML_NAMESPACES);
+				envelope_tree.add_child("s:Body.trt:GetAudioEncoderConfigurationOptionsResponse.trt:Options", options_tree);
 
 				pt::ptree root_tree;
 				root_tree.put_child("s:Envelope", envelope_tree);
@@ -136,9 +190,9 @@ namespace osrv
 				pt::ptree asources;
 				
 				pt::ptree source_tree;
-				auto a = utility::AudioSourceConfigsReader("AudioSrcCfg0", PROFILES_CONFIGS_TREE).AudioSource();
+				auto a = utility::AudioSourceConfigsReader("AudioSrcCfg0", PROFILES_CONFIGS_TREE).AudioSource(); // TODO: hardcoded value
 				source_tree.add("<xmlattr>.token", a.get<std::string>("token"));
-				source_tree.add("trt:Channels", 1);
+				source_tree.add("trt:Channels", 1); //TODO: hardcoded value
 				asources.add_child("trt:AudioSource", source_tree);
 
 				auto envelope_tree = utility::soap::getEnvelopeTree(XML_NAMESPACES);
@@ -641,6 +695,7 @@ namespace osrv
 				XML_NAMESPACES.insert({ n.first, n.second.get_value<std::string>() });
 
 			handlers.emplace_back(new GetAudioDecoderConfigurationsHandler);
+			handlers.emplace_back(new GetAudioEncoderConfigurationOptionsHandler);
 			handlers.emplace_back(new GetAudioOutputsHandler);
 			handlers.emplace_back(new GetAudioSourceConfigurationsHandler);
 			handlers.emplace_back(new GetAudioSourcesHandler);
