@@ -4,6 +4,7 @@
 #include "../utility/XmlParser.h"
 #include "../utility/HttpHelper.h"
 #include "../utility/SoapHelper.h"
+#include "../utility/AudioSourceReader.h"
 #include "../Server.h"
 
 #include "../Simple-Web-Server/server_http.hpp"
@@ -133,6 +134,13 @@ namespace osrv
 			OVERLOAD_REQUEST_HANDLER
 			{
 				pt::ptree asources;
+				
+				pt::ptree source_tree;
+				auto a = utility::AudioSourceConfigsReader("AudioSrcCfg0", PROFILES_CONFIGS_TREE).AudioSource();
+				source_tree.add("<xmlattr>.token", a.get<std::string>("token"));
+				source_tree.add("trt:Channels", 1);
+				asources.add_child("trt:AudioSource", source_tree);
+
 				auto envelope_tree = utility::soap::getEnvelopeTree(XML_NAMESPACES);
 				envelope_tree.add_child("s:Body.trt:GetAudioSourcesResponse", asources);
 
