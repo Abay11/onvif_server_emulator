@@ -32,6 +32,7 @@ static std::map<std::string, std::string> XML_NAMESPACES;
 //the list of implemented methods
 static const std::string GetAudioDecoderConfigurations = "GetAudioDecoderConfigurations";
 static const std::string GetAudioEncoderConfigurationOptions = "GetAudioEncoderConfigurationOptions";
+static const std::string GetAudioEncoderConfiguration = "GetAudioEncoderConfiguration";
 static const std::string GetAudioOutputs = "GetAudioOutputs";
 static const std::string GetAudioSourceConfigurations = "GetAudioSourceConfigurations";
 static const std::string GetAudioSources = "GetAudioSources";
@@ -90,8 +91,6 @@ namespace osrv
 				pt::ptree options_tree;
 
 				auto fillAEOptions = [](const pt::ptree& in, pt::ptree& out) {
-
-
 					// NOTE: IN MEDIA1 there is only G711 and AAC encoding
 					// so we need correct name here for PCMU and MP4A-LATM.
 					// PCMA I just skip
@@ -121,6 +120,40 @@ namespace osrv
 
 				auto envelope_tree = utility::soap::getEnvelopeTree(XML_NAMESPACES);
 				envelope_tree.add_child("s:Body.trt:GetAudioEncoderConfigurationOptionsResponse.trt:Options", options_tree);
+
+				pt::ptree root_tree;
+				root_tree.put_child("s:Envelope", envelope_tree);
+
+				std::ostringstream os;
+				pt::write_xml(os, root_tree);
+
+				utility::http::fillResponseWithHeaders(*response, os.str());
+			}
+		};
+		
+		struct GetAudioEncoderConfigurationHandler : public utility::http::RequestHandlerBase
+		{
+			GetAudioEncoderConfigurationHandler() : utility::http::RequestHandlerBase(GetAudioEncoderConfiguration, osrv::auth::SECURITY_LEVELS::READ_MEDIA)
+			{
+			}
+
+			OVERLOAD_REQUEST_HANDLER
+			{
+				pt::ptree request_xml_tree;
+				pt::xml_parser::read_xml(request->content, request_xml_tree);
+				auto requested_config_token = exns::find_hierarchy("GetAudioEncoderConfiguration.ConfigurationToken", request_xml_tree);
+
+				// TODO: REMOVE IT
+				if (requested_config_token.empty())
+					requested_config_token = "AudioEncCfg0";
+
+				auto aeCfg = utility::AudioEncoderReaderByToken(requested_config_token, PROFILES_CONFIGS_TREE).AudioEncoder();
+
+				pt::ptree ae_node;
+				util::fillAEConfig(aeCfg, ae_node);
+				
+				auto envelope_tree = utility::soap::getEnvelopeTree(XML_NAMESPACES);
+				envelope_tree.add_child("s:Body.trt:GetAudioEncoderConfigurationResponse.trt:Configuration", ae_node);
 
 				pt::ptree root_tree;
 				root_tree.put_child("s:Envelope", envelope_tree);
@@ -696,6 +729,7 @@ namespace osrv
 
 			handlers.emplace_back(new GetAudioDecoderConfigurationsHandler);
 			handlers.emplace_back(new GetAudioEncoderConfigurationOptionsHandler);
+			handlers.emplace_back(new GetAudioEncoderConfigurationHandler);
 			handlers.emplace_back(new GetAudioOutputsHandler);
 			handlers.emplace_back(new GetAudioSourceConfigurationsHandler);
 			handlers.emplace_back(new GetAudioSourcesHandler);
@@ -809,8 +843,40 @@ void fill_soap_media_profile(const pt::ptree& json_config, pt::ptree& profile_no
 		profile_node.put("tt:VideoEncoderConfiguration.tt:Multicast.tt:AutoStart",
 			ve_config->second.get<std::string>("Multicast.AutoStart"));
 
-		profile_node.put("tt:VideoEncoderConfiguration.tt:SessionTimeout",
+		profile_node.put("tt:SessionTimeout",
 			ve_config->second.get<std::string>("SessionTimeout"));
+	}
+
+	// Audio source
+	{
+		const std::string as_token = json_config.get<std::string>("AudioSourceConfiguration", "");
+
+		if (!as_token.empty())
+		{
+			pt::ptree as_node;
+
+			auto as_config = utility::AudioSourceConfigsReader(as_token, PROFILES_CONFIGS_TREE).AudioSource();
+			as_node.add("<xmlattr>.token", as_token);
+			as_node.add("tt:Name", as_config.get<std::string>("Name"));
+			as_node.add("tt:UseCount", as_config.get<int>("UseCount"));
+			as_node.add("tt:SourceToken", as_config.get<std::string>("SourceToken"));
+
+			profile_node.put_child("tt:AudioSourceConfiguration", as_node);
+		}
+	}
+
+	// audio encoder
+	{
+		auto ae_token = json_config.get<std::string>("AudioEncoderConfiguration", "");
+		if (!ae_token.empty())
+		{
+			pt::ptree ae_node;
+			auto ae_config = utility::AudioEncoderReaderByToken(ae_token, PROFILES_CONFIGS_TREE).AudioEncoder();
+
+			osrv::media::util::fillAEConfig(ae_config, ae_node);
+
+			profile_node.put_child("tt:AudioEncoderConfiguration", ae_node);
+		}
 	}
 }
 
@@ -854,4 +920,31 @@ std::string osrv::media::util::generate_rtsp_url(const ServerConfigs& server_con
 		<< "/" << profile_stream_url;
 
 	return rtsp_url.str();
+}
+
+void osrv::media::util::fillAEConfig(const pt::ptree& in, pt::ptree& out)
+{
+	out.add("<xmlattr>.token", in.get<std::string>("token"));
+	out.add("tt:Name", in.get<std::string>("Name"));
+	out.add("tt:UseCount", in.get<int>("UseCount"));
+
+	// NOTE: IN MEDIA1 there is only G711 and AAC encoding
+	// so we need correct name here for PCMU, PCMA and MP4A-LATM.
+	auto encoding = in.get<std::string>("Encoding");
+	if (encoding == "PCMU" || encoding == "PCMA") encoding = "G711";
+	if (encoding == "MP4A-LATM") encoding = "AAC";
+	out.add("tt:Encoding", encoding);
+
+	out.add("tt:Bitrate", in.get<int>("Bitrate"));
+	out.add("tt:SampleRate", in.get<int>("SampleRate"));
+
+	// TODO: hardcoded
+	pt::ptree multicast_node;
+	multicast_node.add("tt:Address.tt:Type", "IPv4");
+	multicast_node.add("tt:Port", 0);
+	multicast_node.add("tt:TTL", 0);
+	multicast_node.add("tt:AutoStart", false);
+	out.add_child("tt:Multicast", multicast_node);
+
+	out.add("tt:SessionTimeout", 0);
 }

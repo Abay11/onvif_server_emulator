@@ -24,6 +24,8 @@ namespace osrv
 
 			std::string generate_rtsp_url(const ServerConfigs& /*server_configs*/, const std::string& /*profile_stream_url*/);
 
+			void fillAEConfig(const pt::ptree& /*in*/, pt::ptree& /*out*/);
+
 
 			class MultichannelProfilesNamesConverter
 			{
