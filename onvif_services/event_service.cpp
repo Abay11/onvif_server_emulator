@@ -70,7 +70,7 @@ namespace osrv
 				envelope_tree.add("s:Header.wsa:Action", "http://www.onvif.org/ver10/events/wsdl/EventPortType/CreatePullPointSubscriptionResponse");
 
 				std::string sub_ref = "http://";
-				sub_ref += server_configs->ipv4_address_ + ":" + server_configs->http_port_ + "/";
+				sub_ref += server_configs->ipv4_address_ + ":" + /*server_configs->http_port_*/ + "5550" + "/";
 
 				auto pullpoint = notifications_manager->CreatePullPoint();
 				sub_ref += pullpoint->GetSubscriptionReference();
@@ -415,6 +415,8 @@ namespace osrv
 			log_ = &logger;
 			log_->Info("Initiating Event service...");
 
+			std::unique_ptr<osrv::HttpServer> events_http_server;
+
 			http_server_intance = &srv;
 
 			server_configs = &server_configs_instance;
@@ -490,13 +492,40 @@ namespace osrv
 			
 			//PullPoint handlers
 			handlers.emplace_back(new CreatePullPointSubscriptionHandler{});
-
+			
 			srv.resource["/onvif/event_service"]["POST"] = EventServiceHandler;
 
-			//register a default handler for the Pullpoint requests
-			//NOTE: this path pattern should be match the one generated
-			//in the NotificationsManager for a new subscription
-			srv.resource["/onvif/event_service/s([0-9]+)"]["POST"] = PullPointPortDefaultHandler;
+			bool useOwnPort = true;
+			unsigned short ownPort = 5550;
+			if (useOwnPort)
+			{
+				events_http_server.reset(new osrv::HttpServer());
+				events_http_server->config.address = server_configs_instance.ipv4_address_;
+				events_http_server->config.port = ownPort;
+				//events_http_server->resource["/onvif/event_service"]["POST"] = EventServiceHandler;
+				events_http_server->resource["/onvif/event_service/s([0-9]+)"]["POST"] = PullPointPortDefaultHandler;
+
+				std::thread t([server = std::move(events_http_server), l = log_] () {
+					try {
+						server->start();
+					}
+					catch (const std::exception& e)
+					{
+						l->Error(std::string("Events http server finished with error: ") + e.what());
+					}
+				});
+
+				t.detach();
+			}
+			else
+			{
+
+				//register a default handler for the Pullpoint requests
+				//NOTE: this path pattern should be match the one generated
+				//in the NotificationsManager for a new subscription
+				srv.resource["/onvif/event_service/s([0-9]+)"]["POST"] = PullPointPortDefaultHandler;
+			}
+
 
 		} //init service
 
