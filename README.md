@@ -46,6 +46,8 @@ Each ONVIF service is implemented as a separate instance. Each service may have 
 
 "Timeout" - PullMessages timeout in seconds.
 
+"UseHttpServerPort" - specify this if you want pulling messages via PullPoint on a port differs from a http server's ports
+
  ## Discovery service configs
 
  #### Probe match properties
