@@ -1,5 +1,7 @@
 #pragma once
 
+#include "IOnvifService.h"
+
 #include "../HttpServerFwd.h"
 
 #include <boost/property_tree/ptree_fwd.hpp>
@@ -20,5 +22,16 @@ namespace osrv
 
 		// NOTE: this may not be safe, if this service was not initialized before invocation
 		const boost::property_tree::ptree& get_configs_tree_instance();
+
 	}
+
+	class DeviceService : public IOnvifService
+	{
+	public:
+		DeviceService(const std::string& service_uri,
+			const std::string& service_name, std::shared_ptr<IOnvifServer> srv);
+
+	private:
+	};
+
 }

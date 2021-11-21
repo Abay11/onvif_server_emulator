@@ -2,8 +2,8 @@
 
 #include "../Logger.h"
 
-#include "../include/IOnvifServer.h"
 #include "../Server.h"
+#include "../include/IOnvifServer.h"
 #include "../Simple-Web-Server/server_http.hpp"
 
 #include "onvif_services/service_configs.h"
@@ -151,22 +151,17 @@ void osrv::IOnvifService::Run()
 	if (is_running_)
 		return;
 
-	// TODO: uncomment and use this after DeviceService implementation as OnvifService
-	//const auto dvc_srv_cfg = onvif_server_->DeviceService()->configs_ptree_;;
-
-	auto dvc_srv_cfg = device::get_configs_tree_instance();
-	const auto service_config = dvc_srv_cfg.find("GetServices");
+	const auto dvc_srv_cfg = onvif_server_->DeviceService()->configs_ptree_;
 
 	auto namespaces_tree = configs_ptree_->get_child("Namespaces");
 	for (const auto& n : namespaces_tree)
 		xml_namespaces_.insert({ n.first, n.second.get_value<std::string>() });
 
-	const auto uri = service_uri_;
+	const auto service_config = dvc_srv_cfg->find("GetServices");
 	auto search_configs = std::find_if(service_config->second.begin(), service_config->second.end(),
-		[uri](const pt::ptree::iterator::value_type tree) { return tree.second.get<std::string>("namespace") == uri; });
+		[uri = service_uri_](const pt::ptree::iterator::value_type tree) { return tree.second.get<std::string>("namespace") == uri; });
 
 	std::string search_xaddr = "/" + search_configs->second.get<std::string>("XAddr");
-
 
 	log_->Info("Running " + service_name_ + " service on address: " + search_xaddr);
 

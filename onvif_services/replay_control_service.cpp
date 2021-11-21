@@ -24,8 +24,8 @@ namespace osrv
 	struct GetReplayHandler : public OnvifRequestBase
 	{
 		GetReplayHandler(const std::map<std::string, std::string>& ns,
-			const std::shared_ptr<osrv::ServerConfigs> srv_configs) : OnvifRequestBase(GetReplayUri,
-			auth::SECURITY_LEVELS::READ_MEDIA, ns)
+			const std::shared_ptr<osrv::ServerConfigs> srv_configs, const std::shared_ptr<pt::ptree>& configs)
+			: OnvifRequestBase(GetReplayUri, auth::SECURITY_LEVELS::READ_MEDIA, ns, configs)
 			, srv_configs_(srv_configs)
 		{
 		}
@@ -61,6 +61,6 @@ namespace osrv
 		: IOnvifService(service_uri, service_name, srv)
 
 	{
-		requestHandlers_.push_back(std::make_shared<GetReplayHandler>(xml_namespaces_, srv->ServerConfigs()));
+		requestHandlers_.push_back(std::make_shared<GetReplayHandler>(xml_namespaces_, srv->ServerConfigs(), configs_ptree_));
 	}
 } // osrv

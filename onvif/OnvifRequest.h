@@ -11,13 +11,16 @@
 
 namespace osrv
 {
+	class ServerConfigs;
+
 	struct OnvifRequestBase
 	{
-		OnvifRequestBase(const std::string& name,
-			osrv::auth::SECURITY_LEVELS lvl, const std::map<std::string, std::string>& ns) :
+		OnvifRequestBase(const std::string& name, osrv::auth::SECURITY_LEVELS lvl,
+			const std::map<std::string, std::string>& ns, const std::shared_ptr<pt::ptree>& configs) :
 			name_(name)
 			, security_level_(lvl)
 			, ns_(ns)
+			, service_configs_(configs)
 		{
 		}
 
@@ -41,6 +44,7 @@ namespace osrv
 
 	protected:
 		const std::map<std::string, std::string>& ns_;
+		const std::shared_ptr<pt::ptree>& service_configs_;
 
 	private:
 		//Method name should match the name in the specification

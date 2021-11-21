@@ -1,24 +1,26 @@
 #include "../include/IOnvifServer.h"
 
+#include "../utility/AuthHelper.h"
+
+#include "../Server.h"
+
 #include "../onvif_services/IOnvifService.h"
 
 #include "../Simple-Web-Server/server_http.hpp"
 
+#include "../onvif_services/device_service.h"
 #include "../onvif_services/recording_search_service.h"
-
 #include "../onvif_services/replay_control_service.h"
 
 namespace osrv
 {
-
 	std::shared_ptr<IOnvifService> OnvifServiceFactory::Create(const std::string& service_uri,
 		std::shared_ptr<IOnvifServer> srv)
 	{
 		if (SERVICE_URI::DEVICE == service_uri)
 		{
-			//return std::make_shared<DeviceService>(service_uri, "Recording Search", srv);
+			return std::make_shared<DeviceService>(service_uri, "Device", srv);
 		}
-
 
 		if (SERVICE_URI::SEARCH == service_uri)
 		{
@@ -49,7 +51,7 @@ namespace osrv
 		if (!device_service_)
 		{
 			auto t = shared_from_this();
-			recording_search_service_ = OnvifServiceFactory()
+			device_service_ = OnvifServiceFactory()
 				.Create(SERVICE_URI::DEVICE, t);
 		}
 
@@ -93,4 +95,13 @@ namespace osrv
 		return server_configs_;
 	}
 
+	std::string IOnvifServer::ServerAddress() const
+	{
+		std::string address{ "http:://" };
+		address += http_server_->config.address;
+		address += ":" + std::to_string(server_configs_->enabled_http_port_forwarding ? server_configs_->forwarded_http_port
+			: http_server_->config.port) + "/";
+
+		return address;
+	}
 }

@@ -33,9 +33,6 @@ Each ONVIF service is implemented as a separate instance. Each service may have 
 "Enabled" - boolean value. Can be used to do not include specific service in the response list. If this flag is absent, default value will be true. For example, it will be usefull to enabling/disabling Media2 service.
 
 
-
-
-
 ## Event service configs
 
 "ReadResponseFromFile" - boolean value, specifies whether GetEventProperties response should be read from a file or not.

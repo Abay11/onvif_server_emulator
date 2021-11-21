@@ -32,8 +32,8 @@ namespace osrv
 
 	struct FindRecordingsHandler : public OnvifRequestBase
 	{
-		FindRecordingsHandler(const std::map<std::string, std::string>& xs)
-			: OnvifRequestBase(FindRecordings, auth::SECURITY_LEVELS::READ_MEDIA, xs) {}
+		FindRecordingsHandler(const std::map<std::string, std::string>& xs, const std::shared_ptr<pt::ptree>& configs)
+			: OnvifRequestBase(FindRecordings, auth::SECURITY_LEVELS::READ_MEDIA, xs, configs) {}
 
 		void operator()(std::shared_ptr<HttpServer::Response> response,
 			std::shared_ptr<HttpServer::Request> request) override
@@ -60,8 +60,9 @@ namespace osrv
 	
 	struct FindEventsHandler : public OnvifRequestBase
 	{
-		FindEventsHandler(std::shared_ptr<RecordingsMgr> rec_mgr, const std::map<std::string, std::string>& xs)
-			: OnvifRequestBase(FindEvents, auth::SECURITY_LEVELS::READ_MEDIA, xs)
+		FindEventsHandler(std::shared_ptr<RecordingsMgr> rec_mgr, const std::map<std::string,
+			std::string>& xs, const std::shared_ptr<pt::ptree>& configs)
+			: OnvifRequestBase(FindEvents, auth::SECURITY_LEVELS::READ_MEDIA, xs, configs)
 		, rec_mgr_(rec_mgr) {}
 
 		void operator()(std::shared_ptr<HttpServer::Response> response,
@@ -95,8 +96,8 @@ namespace osrv
 	struct GetEventSearchResultsHandler : public OnvifRequestBase
 	{
 		GetEventSearchResultsHandler(std::shared_ptr<osrv::RecordingsMgr> rec_mgr,
-			std::map<std::string, std::string>& xs)
-			: OnvifRequestBase(GetEventSearchResults, auth::SECURITY_LEVELS::READ_MEDIA, xs)
+			std::map<std::string, std::string>& xs, const std::shared_ptr<pt::ptree>& configs)
+			: OnvifRequestBase(GetEventSearchResults, auth::SECURITY_LEVELS::READ_MEDIA, xs, configs)
 			, rec_mgr_(rec_mgr)
 		{}
 
@@ -162,8 +163,8 @@ namespace osrv
 	struct GetRecordingSearchResultsHandler : public OnvifRequestBase
 	{
 		GetRecordingSearchResultsHandler(std::shared_ptr<osrv::RecordingsMgr> rec_mgr,
-			std::map<std::string, std::string>& xs)
-			: OnvifRequestBase(GetRecordingSearchResults, auth::SECURITY_LEVELS::READ_MEDIA, xs)
+			std::map<std::string, std::string>& xs, const std::shared_ptr<pt::ptree>& configs)
+			: OnvifRequestBase(GetRecordingSearchResults, auth::SECURITY_LEVELS::READ_MEDIA, xs, configs)
 			, rec_mgr_(rec_mgr)
 		{}
 
@@ -219,8 +220,9 @@ namespace osrv
 
 	struct GetServiceCapabilitiesHandler : public OnvifRequestBase
 	{
-		GetServiceCapabilitiesHandler(const std::map<std::string, std::string>& ns) : OnvifRequestBase(GetServiceCapabilities,
-			auth::SECURITY_LEVELS::PRE_AUTH, ns)
+		GetServiceCapabilitiesHandler(const std::map<std::string, std::string>& ns, const std::shared_ptr<pt::ptree>& configs)
+			: OnvifRequestBase(GetServiceCapabilities,
+			auth::SECURITY_LEVELS::PRE_AUTH, ns, configs)
 		{
 		}
 
@@ -239,10 +241,10 @@ namespace osrv
 	{
 		rec_mgr_ = std::make_shared<RecordingsMgr>(ConfigPath(srv->ConfigsPath(), ConfigName(service_name)));
 
-		requestHandlers_.push_back(std::make_shared<FindEventsHandler>(rec_mgr_, xml_namespaces_));
-		requestHandlers_.push_back(std::make_shared<FindRecordingsHandler>(xml_namespaces_));
-		requestHandlers_.push_back(std::make_shared<GetEventSearchResultsHandler>(rec_mgr_, xml_namespaces_));
-		requestHandlers_.push_back(std::make_shared<GetRecordingSearchResultsHandler>(rec_mgr_, xml_namespaces_));
-		requestHandlers_.push_back(std::make_shared<GetServiceCapabilitiesHandler>(xml_namespaces_));
+		requestHandlers_.push_back(std::make_shared<FindEventsHandler>(rec_mgr_, xml_namespaces_, configs_ptree_));
+		requestHandlers_.push_back(std::make_shared<FindRecordingsHandler>(xml_namespaces_, configs_ptree_));
+		requestHandlers_.push_back(std::make_shared<GetEventSearchResultsHandler>(rec_mgr_, xml_namespaces_, configs_ptree_));
+		requestHandlers_.push_back(std::make_shared<GetRecordingSearchResultsHandler>(rec_mgr_, xml_namespaces_, configs_ptree_));
+		requestHandlers_.push_back(std::make_shared<GetServiceCapabilitiesHandler>(xml_namespaces_, configs_ptree_));
 	}
 }

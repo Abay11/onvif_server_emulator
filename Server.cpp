@@ -94,13 +94,15 @@ namespace osrv
 		//TODO: here is the same list is copied into digest_session, although it's already stored in server_configs
 		server_configs_->digest_session_->set_users_list(server_configs_->system_users_);
 
-		device::init_service(*http_server_, *server_configs_, configs_dir, *logger_);
+		//device::init_service(*http_server_, *server_configs_, configs_dir, *logger_);
 		media::init_service(*http_server_, *server_configs_, configs_dir, *logger_);
 		media2::init_service(*http_server_, *server_configs_, configs_dir, *logger_);
 		event::init_service(*http_server_, *server_configs_, configs_dir, *logger_);
 		discovery::init_service(configs_dir, *logger_);
 		imaging::init_service(*http_server_, *server_configs_, configs_dir, *logger_);
 		ptz::init_service(*http_server_, *server_configs_, configs_dir, *logger_);
+
+		DeviceService()->Run();
 		RecordingSearchService()->Run();
 		ReplayControlService()->Run();
 

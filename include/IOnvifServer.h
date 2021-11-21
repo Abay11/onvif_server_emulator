@@ -17,7 +17,7 @@ namespace osrv
 
 	namespace SERVICE_URI
 	{
-		const std::string DEVICE = "http://www.onvif.org/ver10/device/wsdl/devicemgmt/wsdl";
+		const std::string DEVICE = "http://www.onvif.org/ver10/device/wsdl";
 		const std::string SEARCH = "http://www.onvif.org/ver10/search/wsdl";
 		const std::string REPLAY = "http://www.onvif.org/ver10/replay/wsdl";
 	};
@@ -43,6 +43,8 @@ namespace osrv
 		const std::shared_ptr<ILogger> Logger() const;
 		std::shared_ptr<HttpServer> HttpServer();
 		std::shared_ptr<ServerConfigs> ServerConfigs();
+	
+		std::string ServerAddress() const;
 
 	protected:
 		const std::string& configs_path_;
