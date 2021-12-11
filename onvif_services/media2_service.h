@@ -22,6 +22,9 @@ namespace osrv
 
 		namespace util
 		{
+			// TODO: The same function is used in media. Replace it with one
+			std::string generate_rtsp_url(const ServerConfigs& server_configs, const std::string& profile_stream_url);
+
 			using ptree = boost::property_tree::ptree;
 			// functions throw an exception if error occured
 			void profile_to_soap(const ptree& profile_config, const ptree& configs_file, ptree& result);

@@ -94,8 +94,10 @@ namespace osrv
 		//TODO: here is the same list is copied into digest_session, although it's already stored in server_configs
 		server_configs_->digest_session_->set_users_list(server_configs_->system_users_);
 
+		profiles_config_ = osrv::ServiceConfigs("media_profiles", configs_dir);
+
 		//device::init_service(*http_server_, *server_configs_, configs_dir, *logger_);
-		media::init_service(*http_server_, *server_configs_, configs_dir, *logger_);
+		//media::init_service(*http_server_, *server_configs_, configs_dir, *logger_);
 		media2::init_service(*http_server_, *server_configs_, configs_dir, *logger_);
 		event::init_service(*http_server_, *server_configs_, configs_dir, *logger_);
 		discovery::init_service(configs_dir, *logger_);
@@ -103,12 +105,12 @@ namespace osrv
 		ptz::init_service(*http_server_, *server_configs_, configs_dir, *logger_);
 
 		DeviceService()->Run();
+		MediaService()->Run();
 		RecordingSearchService()->Run();
 		ReplayControlService()->Run();
 
 		// TODO: impl. logic for multichannel cannel
-		std::shared_ptr<pt::ptree> profiles_config = osrv::ServiceConfigs("media_profiles", configs_dir);
-		auto audio_node = profiles_config->get_child("AudioEncoderConfigurations").front();
+		auto audio_node = profiles_config_->get_child("AudioEncoderConfigurations").front();
 		;
 		audio_node.second.get_value<std::string>("Encoding");
 		audio_node.second.get_value<std::string>("Encoding");

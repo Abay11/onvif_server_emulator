@@ -635,7 +635,8 @@ namespace osrv
 					throw std::runtime_error("Could not find a stream for the requested Media Profile token=" + requested_token);
 
 				pt::ptree response_node;
-				auto rtsp_url = media::util::generate_rtsp_url(*server_configs, stream_config_it->second.get<std::string>("Uri"));
+				auto rtsp_url = util::generate_rtsp_url(*server_configs, stream_config_it->second.get<std::string>("Uri"));
+				//std::string rtsp_url;
 				response_node.put("tr2:Uri", rtsp_url);
 
 				auto envelope_tree = utility::soap::getEnvelopeTree(XML_NAMESPACES);
@@ -856,6 +857,19 @@ namespace osrv
 
 		namespace util
 		{
+
+			std::string generate_rtsp_url(const ServerConfigs& server_configs, const std::string& profile_stream_url)
+			{
+				std::stringstream rtsp_url;
+				rtsp_url << "rtsp://" << server_configs.ipv4_address_ << ":"
+					<< (server_configs.enabled_rtsp_port_forwarding ? std::to_string(server_configs.forwarded_rtsp_port)
+						: server_configs.rtsp_port_)
+					<< "/" << profile_stream_url;
+
+				return rtsp_url.str();
+			}
+
+
 			using ptree = boost::property_tree::ptree;
 			void profile_to_soap(const ptree& profile_config, const ptree& configs_file, ptree& result)
 			{
