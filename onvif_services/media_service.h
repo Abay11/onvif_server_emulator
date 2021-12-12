@@ -31,7 +31,7 @@ namespace osrv
 			namespace pt = boost::property_tree;
 			void fill_soap_videosource_configuration(const pt::ptree& config_node, pt::ptree& videosource_node);
 
-			void fill_analytics_configuration(/*const pt::ptree& config_node,*/ pt::ptree& result);
+			void fill_analytics_configuration(/*const pt::ptree& config_node,*/ pt::ptree& /*result*/);
 
 			void fillAEConfig(const pt::ptree& /*in*/, pt::ptree& /*out*/);
 
