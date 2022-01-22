@@ -233,7 +233,7 @@ namespace osrv
 			auto a = utility::AudioSourceConfigsReader("AudioSrcCfg0", *profiles_configs_).AudioSource(); // TODO: hardcoded value
 			source_tree.add("<xmlattr>.token", a.get<std::string>("token"));
 			source_tree.add("trt:Channels", 1); //TODO: hardcoded value
-			asources.add_child("trt:AudioSource", source_tree);
+			asources.add_child("trt:AudioSources", source_tree);
 
 			auto envelope_tree = utility::soap::getEnvelopeTree(ns_);
 			envelope_tree.add_child("s:Body.trt:GetAudioSourcesResponse", asources);
