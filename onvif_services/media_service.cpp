@@ -26,6 +26,7 @@ static const std::string GetAudioEncoderConfiguration = "GetAudioEncoderConfigur
 static const std::string GetAudioOutputs = "GetAudioOutputs";
 static const std::string GetAudioSourceConfigurations = "GetAudioSourceConfigurations";
 static const std::string GetAudioSources = "GetAudioSources";
+static const std::string GetCompatibleAudioSourceConfigurations = "GetCompatibleAudioSourceConfigurations";
 static const std::string GetProfile = "GetProfile";
 static const std::string GetProfiles = "GetProfiles";
 static const std::string GetVideoAnalyticsConfigurations = "GetVideoAnalyticsConfigurations";
@@ -237,6 +238,43 @@ namespace osrv
 
 			auto envelope_tree = utility::soap::getEnvelopeTree(ns_);
 			envelope_tree.add_child("s:Body.trt:GetAudioSourcesResponse", asources);
+
+			pt::ptree root_tree;
+			root_tree.put_child("s:Envelope", envelope_tree);
+
+			std::ostringstream os;
+			pt::write_xml(os, root_tree);
+
+			utility::http::fillResponseWithHeaders(*response, os.str());
+		}
+
+	private:
+		const std::shared_ptr<pt::ptree>& profiles_configs_;
+	};
+
+	struct GetCompatibleAudioSourceConfigurationsHandler : public OnvifRequestBase
+	{
+		GetCompatibleAudioSourceConfigurationsHandler(const std::map<std::string, std::string>& xs,
+			const std::shared_ptr<pt::ptree>& configs,
+			const std::shared_ptr<pt::ptree>& profiles_configs)
+			: OnvifRequestBase(GetCompatibleAudioSourceConfigurations, auth::SECURITY_LEVELS::READ_MEDIA, xs, configs)
+			, profiles_configs_(profiles_configs)
+		{
+		}
+
+		void operator()(std::shared_ptr<HttpServer::Response> response,
+			std::shared_ptr<HttpServer::Request> request) override
+		{
+			pt::ptree asources;
+
+			//pt::ptree source_tree;
+			//auto a = utility::AudioSourceConfigsReader("AudioSrcCfg0", *profiles_configs_).AudioSource(); // TODO: hardcoded value
+			//source_tree.add("<xmlattr>.token", a.get<std::string>("token"));
+			//source_tree.add("trt:Channels", 1); //TODO: hardcoded value
+			//asources.add_child("trt:AudioSource", source_tree);
+
+			auto envelope_tree = utility::soap::getEnvelopeTree(ns_);
+			envelope_tree.add_child("s:Body.trt:GetCompatibleAudioSourceConfigurationsResponse", asources);
 
 			pt::ptree root_tree;
 			root_tree.put_child("s:Envelope", envelope_tree);
@@ -658,6 +696,7 @@ namespace osrv
 		requestHandlers_.push_back(std::make_shared<GetAudioOutputsHandler>(xml_namespaces_, configs_ptree_));
 		requestHandlers_.push_back(std::make_shared<GetAudioSourceConfigurationsHandler>(xml_namespaces_, configs_ptree_));
 		requestHandlers_.push_back(std::make_shared<GetAudioSourcesHandler>(xml_namespaces_, configs_ptree_, srv->ProfilesConfig()));
+		requestHandlers_.push_back(std::make_shared<GetCompatibleAudioSourceConfigurationsHandler>(xml_namespaces_, configs_ptree_, srv->ProfilesConfig()));
 		requestHandlers_.push_back(std::make_shared<GetProfileHandler>(xml_namespaces_, configs_ptree_, *srv->ServerConfigs(), srv->ProfilesConfig()));
 		requestHandlers_.push_back(std::make_shared<GetProfilesHandler>(xml_namespaces_, configs_ptree_, *srv->ServerConfigs(), srv->ProfilesConfig()));
 		requestHandlers_.push_back(std::make_shared<GetVideoAnalyticsConfigurationsHandler>(xml_namespaces_, configs_ptree_));
