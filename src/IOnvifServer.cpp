@@ -10,6 +10,7 @@
 
 #include "../onvif_services/device_service.h"
 #include "../onvif_services/media_service.h"
+#include "../onvif_services/media2_service.h"
 #include "../onvif_services/recording_search_service.h"
 #include "../onvif_services/replay_control_service.h"
 
@@ -26,6 +27,11 @@ namespace osrv
 		if (SERVICE_URI::MEDIA == service_uri)
 		{
 			return std::make_shared<MediaService>(service_uri, "Media", srv);
+		}
+
+		if (SERVICE_URI::MEDIA2 == service_uri)
+		{
+			return std::make_shared<Media2Service>(service_uri, "Media2", srv);
 		}
 
 		if (SERVICE_URI::REPLAY == service_uri)
@@ -72,6 +78,17 @@ namespace osrv
 		}
 
 		return media_service_;
+	}
+
+	std::shared_ptr<IOnvifService> IOnvifServer::Media2Service()
+	{
+		if (!media2_service_)
+		{
+			media2_service_ = OnvifServiceFactory()
+				.Create(SERVICE_URI::MEDIA2, shared_from_this());
+		}
+
+		return media2_service_;
 	}
 
 	std::shared_ptr<IOnvifService> IOnvifServer::RecordingSearchService()

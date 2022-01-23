@@ -96,9 +96,6 @@ namespace osrv
 
 		profiles_config_ = osrv::ServiceConfigs("media_profiles", configs_dir);
 
-		//device::init_service(*http_server_, *server_configs_, configs_dir, *logger_);
-		//media::init_service(*http_server_, *server_configs_, configs_dir, *logger_);
-		media2::init_service(*http_server_, *server_configs_, configs_dir, *logger_);
 		event::init_service(*http_server_, *server_configs_, configs_dir, *logger_);
 		discovery::init_service(configs_dir, *logger_);
 		imaging::init_service(*http_server_, *server_configs_, configs_dir, *logger_);
@@ -106,6 +103,7 @@ namespace osrv
 
 		DeviceService()->Run();
 		MediaService()->Run();
+		Media2Service()->Run();
 		RecordingSearchService()->Run();
 		ReplayControlService()->Run();
 

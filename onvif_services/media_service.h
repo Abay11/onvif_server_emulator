@@ -10,7 +10,6 @@ class ILogger;
 
 namespace osrv
 {
-
 	class MediaService : public IOnvifService
 	{
 	public:
