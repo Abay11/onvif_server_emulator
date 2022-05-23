@@ -20,14 +20,10 @@ namespace osrv
 	public:
 		Media2Service(const std::string& service_uri,
 			const std::string& service_name, std::shared_ptr<IOnvifServer> srv);
-
-	private:
 	};
 
 	namespace media2
 	{
-
-
 		const boost::property_tree::ptree& config_instance();
 		
 		void init_service(HttpServer& srv, const ServerConfigs& server_configs_ptr,

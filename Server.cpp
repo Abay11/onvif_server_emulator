@@ -96,20 +96,19 @@ namespace osrv
 
 		profiles_config_ = osrv::ServiceConfigs("media_profiles", configs_dir);
 
-		event::init_service(*http_server_, *server_configs_, configs_dir, *logger_);
-		discovery::init_service(configs_dir, *logger_);
-		imaging::init_service(*http_server_, *server_configs_, configs_dir, *logger_);
-		ptz::init_service(*http_server_, *server_configs_, configs_dir, *logger_);
-
 		DeviceService()->Run();
+		ImagingService()->Run();
 		MediaService()->Run();
 		Media2Service()->Run();
 		RecordingSearchService()->Run();
 		ReplayControlService()->Run();
 
+		event::init_service(*http_server_, *server_configs_, configs_dir, *logger_);
+		discovery::init_service(configs_dir, *logger_);
+		ptz::init_service(*http_server_, *server_configs_, configs_dir, *logger_);
+
 		// TODO: impl. logic for multichannel cannel
 		auto audio_node = profiles_config_->get_child("AudioEncoderConfigurations").front();
-		;
 		audio_node.second.get_value<std::string>("Encoding");
 		audio_node.second.get_value<std::string>("Encoding");
 

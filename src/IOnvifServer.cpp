@@ -9,6 +9,7 @@
 #include "../Simple-Web-Server/server_http.hpp"
 
 #include "../onvif_services/device_service.h"
+#include "../onvif_services/imaging_service.h"
 #include "../onvif_services/media_service.h"
 #include "../onvif_services/media2_service.h"
 #include "../onvif_services/recording_search_service.h"
@@ -22,6 +23,11 @@ namespace osrv
 		if (SERVICE_URI::DEVICE == service_uri)
 		{
 			return std::make_shared<DeviceService>(service_uri, "Device", srv);
+		}
+
+		if (SERVICE_URI::IMAGING == service_uri)
+		{
+			return std::make_shared<ImagingService>(service_uri, "Imaging", srv);
 		}
 
 		if (SERVICE_URI::MEDIA == service_uri)
@@ -67,6 +73,17 @@ namespace osrv
 		}
 
 		return device_service_;
+	}
+
+	std::shared_ptr<IOnvifService> IOnvifServer::ImagingService()
+	{
+		if (!imaging_service_)
+		{
+			imaging_service_ = OnvifServiceFactory()
+				.Create(SERVICE_URI::IMAGING, shared_from_this());
+		}
+
+		return imaging_service_;
 	}
 
 	std::shared_ptr<IOnvifService> IOnvifServer::MediaService()
@@ -118,7 +135,7 @@ namespace osrv
 		return logger_;
 	}
 
-	std::shared_ptr<HttpServer> IOnvifServer::HttpServer()
+	std::shared_ptr<HttpServer> IOnvifServer::HttpServer() const
 	{
 		return http_server_;
 	}
