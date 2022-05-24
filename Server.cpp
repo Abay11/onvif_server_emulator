@@ -100,12 +100,12 @@ namespace osrv
 		ImagingService()->Run();
 		MediaService()->Run();
 		Media2Service()->Run();
+		PTZService()->Run();
 		RecordingSearchService()->Run();
 		ReplayControlService()->Run();
 
 		event::init_service(*http_server_, *server_configs_, configs_dir, *logger_);
 		discovery::init_service(configs_dir, *logger_);
-		ptz::init_service(*http_server_, *server_configs_, configs_dir, *logger_);
 
 		// TODO: impl. logic for multichannel cannel
 		auto audio_node = profiles_config_->get_child("AudioEncoderConfigurations").front();

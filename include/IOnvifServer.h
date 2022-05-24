@@ -25,6 +25,7 @@ namespace osrv
 		const std::string IMAGING = "http://www.onvif.org/ver20/imaging/wsdl";
 		const std::string MEDIA = "http://www.onvif.org/ver10/media/wsdl";
 		const std::string MEDIA2 = "http://www.onvif.org/ver20/media/wsdl";
+		const std::string PTZ = "http://www.onvif.org/ver20/ptz/wsdl";
 		const std::string REPLAY = "http://www.onvif.org/ver10/replay/wsdl";
 		const std::string SEARCH = "http://www.onvif.org/ver10/search/wsdl";
 	};
@@ -47,6 +48,7 @@ namespace osrv
 		std::shared_ptr<IOnvifService> ImagingService();
 		std::shared_ptr<IOnvifService> MediaService();
 		std::shared_ptr<IOnvifService> Media2Service();
+		std::shared_ptr<IOnvifService> PTZService();
 		std::shared_ptr<IOnvifService> RecordingSearchService();
 		std::shared_ptr<IOnvifService> ReplayControlService();
 
@@ -72,6 +74,7 @@ namespace osrv
 		std::shared_ptr<IOnvifService> imaging_service_;
 		std::shared_ptr<IOnvifService> media_service_;
 		std::shared_ptr<IOnvifService> media2_service_;
+		std::shared_ptr<IOnvifService> ptz_service_;
 		std::shared_ptr<IOnvifService> recording_search_service_;
 		std::shared_ptr<IOnvifService> replay_control_service_;
 	};

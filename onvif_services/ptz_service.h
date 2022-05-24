@@ -1,19 +1,19 @@
 #pragma once
 
+#include "IOnvifService.h"
+
 #include "../HttpServerFwd.h"
+
 #include <string>
 
 class ILogger;
 
 namespace osrv
 {
-	struct ServerConfigs;
-
-	namespace ptz
+	class PTZService : public IOnvifService
 	{
-		extern const std::string CONFIGS_FILE;
-
-		void init_service(HttpServer& srv, osrv::ServerConfigs& /*configs*/,
-			const std::string& /*configs_path*/, ILogger& /*logger*/);
-	}
+	public:
+		PTZService(const std::string& service_uri,
+			const std::string& service_name, std::shared_ptr<IOnvifServer> srv);
+	};
 }

@@ -12,6 +12,7 @@
 #include "../onvif_services/imaging_service.h"
 #include "../onvif_services/media_service.h"
 #include "../onvif_services/media2_service.h"
+#include "../onvif_services/ptz_service.h"
 #include "../onvif_services/recording_search_service.h"
 #include "../onvif_services/replay_control_service.h"
 
@@ -38,6 +39,11 @@ namespace osrv
 		if (SERVICE_URI::MEDIA2 == service_uri)
 		{
 			return std::make_shared<Media2Service>(service_uri, "Media2", srv);
+		}
+
+		if (SERVICE_URI::PTZ == service_uri)
+		{
+			return std::make_shared<PTZService>(service_uri, "PTZ", srv);
 		}
 
 		if (SERVICE_URI::REPLAY == service_uri)
@@ -106,6 +112,17 @@ namespace osrv
 		}
 
 		return media2_service_;
+	}
+
+	std::shared_ptr<IOnvifService> IOnvifServer::PTZService()
+	{
+		if (!ptz_service_)
+		{
+			ptz_service_ = OnvifServiceFactory()
+				.Create(SERVICE_URI::PTZ, shared_from_this());
+		}
+
+		return ptz_service_;
 	}
 
 	std::shared_ptr<IOnvifService> IOnvifServer::RecordingSearchService()
