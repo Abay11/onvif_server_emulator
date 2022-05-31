@@ -58,3 +58,10 @@ Each ONVIF service is implemented as a separate instance. Each service may have 
 
  "DataFrom" - The earliest point in time. If not specified is condidered data recorded from 24 hours ago.
  "DataUntil" - The most recent point in time. If not specified is condidered data recorded until now.
+
+
+# Project building tips
+
+## Solve issue with building Simple-Web-Server when using BOOST.Asio version >=1.74
+
+Add definition BOOST_ASIO_USE_TS_EXECUTOR_AS_DEFAULT
