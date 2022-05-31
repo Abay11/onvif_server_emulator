@@ -1,8 +1,8 @@
-# About the project
+# 🌟About the project
 
 Simple Onvif Server is a simulator of an IP device (camera, NVR) compatible with standardized ONVIF interfaces, which can be used for tests purpoces.
 
-# Server execution
+# ▶ Server execution
 
 A configuration's directory may be passed as command line argument.
 As default configurations' directory used "./server_configs".
@@ -60,7 +60,7 @@ Each ONVIF service is implemented as a separate instance. Each service may have 
  "DataUntil" - The most recent point in time. If not specified is condidered data recorded until now.
 
 
-# Project building tips
+# 🛠 The Project building
 
 ## Solve issue with building Simple-Web-Server when using BOOST.Asio version >=1.74
 
