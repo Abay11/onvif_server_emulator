@@ -136,11 +136,11 @@ namespace osrv
 					if (element == "NetworkInterfaces")
 					{
 						//currently implemented only Loopback address
-						element = "tds" + element;
+						element = "tds:" + element;
 					}
 					else
 					{
-						element = "tt" + element;
+						element = "tt:" + element;
 					}
 				}
 			};
