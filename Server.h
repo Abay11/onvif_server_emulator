@@ -52,6 +52,8 @@ namespace osrv
 
 		bool multichannel_enabled_ = false;
 		unsigned char channels_count_ = 0;
+
+		std::string rtsp_streaming_file_;
 	};
 
 	class Server : public IOnvifServer

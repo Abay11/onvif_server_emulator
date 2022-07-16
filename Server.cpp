@@ -222,6 +222,11 @@ std::shared_ptr<ServerConfigs> read_server_configs(const std::string& config_pat
 	read_configs->multichannel_enabled_ = configs_tree.get<bool>("multichannelSimulation.enabled");
 	read_configs->channels_count_ = configs_tree.get<unsigned char>("multichannelSimulation.channelCount");
 
+	if (configs_tree.get<bool>("fileStreaming.enabled"))
+	{
+		read_configs->rtsp_streaming_file_ = configs_tree.get<std::string>("fileStreaming.filePath");
+	}
+
 	return read_configs;
 }
 

@@ -36,11 +36,13 @@ namespace osrv
 		class Server
 		{
 		public:
-			Server(ILogger* /*logger*/, ServerConfigs& /*server_configs*/, AudioInfo&& ainfo);
+			Server(ILogger* /*logger*/, ServerConfigs& /*server_configs*/, const AudioInfo& ainfo);
 			~Server();
 			void run();
 
 		private:
+			ILogger* logger_;
+
 			GMainLoop* loop_;
 			GstRTSPServer* server_;
 			GstRTSPMountPoints* mounts_;
@@ -51,8 +53,6 @@ namespace osrv
 			ServerConfigs* server_configs_ = nullptr;
 
 			std::thread* worker_thread_ = nullptr;
-
-			ILogger* logger_;
 		};
 	}
 }

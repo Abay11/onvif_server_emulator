@@ -60,8 +60,8 @@ namespace osrv
 	}
 
 	IOnvifServer::IOnvifServer(const std::string& configs_path, std::shared_ptr<ILogger> logger)
-		: logger_(logger)
-		, configs_path_(configs_path)
+		: configs_path_(configs_path)
+		, logger_(logger)
 		, http_server_(new osrv::HttpServer())
 	{}
 

@@ -196,11 +196,10 @@ namespace osrv
 {
 	namespace rtsp
 	{
-		Server::Server(ILogger* logger, ServerConfigs& server_configs, AudioInfo&& ainfo)
+		Server::Server(ILogger* logger, ServerConfigs& server_configs, const AudioInfo& ainfo)
 			:logger_(logger),
 			server_configs_(&server_configs)
 		{
-
 			gst_init(NULL, NULL);
 					
 			loop_ = g_main_loop_new(NULL, FALSE);
@@ -221,11 +220,23 @@ namespace osrv
 			
 			auto asetup = utility::AudioSetupFactory().AudioSetup(ainfo.codec, ainfo.bitrate, ainfo.samplerate);
 
-			mediadescr << "("
-				<< " videotestsrc is-live=1 ! timeoverlay ! video/x-raw,width=640,height=320 ! x264enc ! rtph264pay name=pay0 pt=97"
-				<< " audiotestsrc is-live=1 ! audioconvert ! audioresample ! audio/x-raw,rate=8000 ! " << asetup->Encoding()
-				<< " ! " << asetup->PayloadPluginName() << " name=pay1 pt= " << std::to_string(asetup->PayloadNum())
-				<< " )";
+			if (server_configs_->rtsp_streaming_file_.empty())
+			{
+				mediadescr << "("
+					<< " videotestsrc is-live=1 ! timeoverlay ! video/x-raw,width=640,height=320 ! x264enc ! rtph264pay name=pay0 pt=97"
+					<< " audiotestsrc is-live=1 ! audioconvert ! audioresample ! audio/x-raw,rate=8000 ! " << asetup->Encoding()
+					<< " ! " << asetup->PayloadPluginName() << " name=pay1 pt= " << std::to_string(asetup->PayloadNum())
+					<< " )";
+			}
+			else
+			{
+				mediadescr << "("
+					<< " multifilesrc location=\"" << server_configs_->rtsp_streaming_file_ <<  "\" loop=true stop-index=-1 ! decodebin name=demuxer"
+					<< " demuxer. ! autovideoconvert ! x264enc ! rtph264pay name=pay0 pt=96"
+					<< " demuxer. ! audioconvert ! audioresample ! audio/x-raw,rate=8000 ! " << asetup->Encoding()
+					<< " ! " << asetup->PayloadPluginName() << " name=pay1 pt= " << std::to_string(asetup->PayloadNum())
+					<< " )";
+			}
 
 			gst_rtsp_media_factory_set_launch(factoryHighStream_, mediadescr.str().c_str());
 			gst_rtsp_media_factory_set_shared(factoryHighStream_, TRUE);
