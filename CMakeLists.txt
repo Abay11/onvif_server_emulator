@@ -114,6 +114,8 @@ add_executable(main main.cpp)
 set_target_properties(main PROPERTIES VS_DEBUGGER_COMMAND_ARGUMENTS
 	"${CMAKE_CURRENT_SOURCE_DIR}/server_configs")
 
+add_definitions(-DBOOST_ASIO_USE_TS_EXECUTOR_AS_DEFAULT)
+
 IF(WIN32)
 	### JUST HELPS TO AVOID WARNINGS WITH Boost
 	add_definitions(-D_WIN32_WINDOWS)
