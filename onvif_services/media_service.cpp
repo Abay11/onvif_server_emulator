@@ -576,9 +576,9 @@ namespace osrv
 						elements.second.get<std::string>("token"));
 					videosource_node.put("tt:Framerate",
 						elements.second.get<std::string>("Framerate"));
-					videosource_node.put("tt:Resolution.Width",
+					videosource_node.put("tt:Resolution.tt:Width",
 						elements.second.get<std::string>("Resolution.Width"));
-					videosource_node.put("tt:Resolution.Height",
+					videosource_node.put("tt:Resolution.tt:Height",
 						elements.second.get<std::string>("Resolution.Height"));
 
 					response_node.add_child("trt:VideoSources", videosource_node);
@@ -883,7 +883,7 @@ void osrv::media::util::fill_analytics_configuration(pt::ptree& result)
 	result.add("<xmlattr>.token", "analytics_token0");
 	result.add("tt:Name", "Analytics0");
 	result.add("tt:UseCount", 2);
-	result.add("tt:AnalyticsEngineConfgiruation", "");
+	result.add("tt:AnalyticsEngineConfiguration", "");
 	result.add("tt:RuleEngineConfiguration", "");
 }
 

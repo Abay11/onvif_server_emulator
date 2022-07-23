@@ -780,7 +780,7 @@ namespace osrv
 			{
 				result.add("<xmlattr>.token", profile_config.get<std::string>("token"));
 				result.add("<xmlattr>.fixed", profile_config.get<std::string>("fixed"));
-				result.add("Name", profile_config.get<std::string>("Name"));
+				result.add("tr2:Name", profile_config.get<std::string>("Name"));
 
 				//Videosource
 				{
