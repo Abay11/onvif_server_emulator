@@ -569,6 +569,20 @@ namespace osrv
 					option.add("tt:BoundsRange.tt:HeightRange.tt:Max",
 						vs_config.second.get<int>("Options.BoundsRange.HeightRange.Max"));
 
+					pt::ptree rotate;
+					rotate.add("tt:Mode", "OFF");
+					rotate.add("tt:Mode", "ON");
+					rotate.add("tt:Mode", "AUTO");
+					rotate.add("tt:DegreeList.tt:Items", 0);
+
+					pt::ptree extentions_node;
+					extentions_node.add_child("tt:Rotate", rotate);
+
+					// one more inner extention for SceneOrientationMode
+					extentions_node.add("tt:Extention.tt:SceneOrientationMode", "AUTO");
+
+					option.add_child("tt:Extention", extentions_node);
+
 					options_node.put_child("tr2:Options", option);
 				}
 
