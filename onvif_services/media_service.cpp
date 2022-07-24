@@ -747,6 +747,24 @@ void fill_soap_media_profile(const pt::ptree& json_config, pt::ptree& profile_no
 		profile_node.put_child("tt:VideoSourceConfiguration", videosource_configuration);
 	}
 
+	//Audio source
+	{
+		const std::string as_token = json_config.get<std::string>("AudioSourceConfiguration", "");
+
+		if (!as_token.empty())
+		{
+			pt::ptree as_node;
+
+			auto as_config = utility::AudioSourceConfigsReader(as_token, profiles_cfg).AudioSource();
+			as_node.add("<xmlattr>.token", as_token);
+			as_node.add("tt:Name", as_config.get<std::string>("Name"));
+			as_node.add("tt:UseCount", as_config.get<int>("UseCount"));
+			as_node.add("tt:SourceToken", as_config.get<std::string>("SourceToken"));
+
+			profile_node.put_child("tt:AudioSourceConfiguration", as_node);
+		}
+	}
+
 	//VideoEncoder
 	{
 		auto ve_configs_list = profiles_cfg.get_child("VideoEncoderConfigurations");
@@ -762,6 +780,8 @@ void fill_soap_media_profile(const pt::ptree& json_config, pt::ptree& profile_no
 
 		profile_node.put("tt:VideoEncoderConfiguration.<xmlattr>.token",
 			ve_config->second.get<std::string>("token"));
+		profile_node.put("tt:VideoEncoderConfiguration.<xmlattr>.GuaranteedFrameRate",
+			ve_config->second.get<std::string>("GuaranteedFrameRate"));
 		profile_node.put("tt:VideoEncoderConfiguration.tt:Name",
 			ve_config->second.get<std::string>("Name"));
 		profile_node.put("tt:VideoEncoderConfiguration.tt:UseCount",
@@ -779,8 +799,6 @@ void fill_soap_media_profile(const pt::ptree& json_config, pt::ptree& profile_no
 		auto ratecontrol_config_it = ve_config->second.find("RateControl");
 		if (ratecontrol_config_it != ve_config->second.not_found())
 		{
-			profile_node.put("tt:VideoEncoderConfiguration.tt:RateControl.<xmlattr>.GuaranteedFrameRate",
-				ratecontrol_config_it->second.get<std::string>("GuaranteedFrameRate")); // does this should be here ???
 			profile_node.put("tt:VideoEncoderConfiguration.tt:RateControl.tt:FrameRateLimit",
 				ratecontrol_config_it->second.get<std::string>("FrameRateLimit"));
 			profile_node.put("tt:VideoEncoderConfiguration.tt:RateControl.tt:EncodingInterval",
@@ -819,26 +837,8 @@ void fill_soap_media_profile(const pt::ptree& json_config, pt::ptree& profile_no
 		profile_node.put("tt:VideoEncoderConfiguration.tt:Multicast.tt:AutoStart",
 			ve_config->second.get<std::string>("Multicast.AutoStart"));
 
-		profile_node.put("tt:SessionTimeout",
+		profile_node.put("tt:VideoEncoderConfiguration.tt:SessionTimeout",
 			ve_config->second.get<std::string>("SessionTimeout"));
-	}
-
-	//Audio source
-	{
-		const std::string as_token = json_config.get<std::string>("AudioSourceConfiguration", "");
-
-		if (!as_token.empty())
-		{
-			pt::ptree as_node;
-
-			auto as_config = utility::AudioSourceConfigsReader(as_token, profiles_cfg).AudioSource();
-			as_node.add("<xmlattr>.token", as_token);
-			as_node.add("tt:Name", as_config.get<std::string>("Name"));
-			as_node.add("tt:UseCount", as_config.get<int>("UseCount"));
-			as_node.add("tt:SourceToken", as_config.get<std::string>("SourceToken"));
-
-			profile_node.put_child("tt:AudioSourceConfiguration", as_node);
-		}
 	}
 
 	// audio encoder
@@ -906,9 +906,9 @@ void osrv::media::util::fillAEConfig(const pt::ptree& in, pt::ptree& out)
 	// TODO: hardcoded
 	pt::ptree multicast_node;
 	multicast_node.add("tt:Address.tt:Type", "IPv4");
-	multicast_node.add("tt:Address.tt:IPv4Address", "0.0.0.0");
-	multicast_node.add("tt:Port", 0);
-	multicast_node.add("tt:TTL", 0);
+	multicast_node.add("tt:Address.tt:IPv4Address", "239.0.1.0");
+	multicast_node.add("tt:Port", 48000);
+	multicast_node.add("tt:TTL", 3);
 	multicast_node.add("tt:AutoStart", false);
 	out.add_child("tt:Multicast", multicast_node);
 

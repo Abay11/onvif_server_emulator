@@ -24,7 +24,7 @@ BOOST_AUTO_TEST_CASE(profiles_to_soap_func)
 	BOOST_TEST(token == "ProfileToken0");
 	auto isFixed = result_profile_tree.get<bool>("<xmlattr>.fixed");
 	BOOST_TEST(isFixed);
-	auto name = result_profile_tree.get<std::string>("Name");
+	auto name = result_profile_tree.get<std::string>("tr2:Name");
 	BOOST_TEST(name == "MainProfile");
 
 	// VIDEOSOURCE
