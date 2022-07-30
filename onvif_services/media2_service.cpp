@@ -622,8 +622,10 @@ namespace osrv
 				capabilities_node.add("<xmlattr>.Mask", capabilities_config.get<bool>("Mask"));
 				capabilities_node.add("<xmlattr>.SourceMask", capabilities_config.get<bool>("SourceMask"));
 				
-				capabilities_node.add("tr2:ProfileCapabilities.MaximumNumberOfProfiles", capabilities_config.get<int>("ProfileCapabilities.MaximumNumberOfProfiles"));
-				capabilities_node.add("tr2:ProfileCapabilities.ConfigurationsSupported", capabilities_config.get<std::string>("ProfileCapabilities.ConfigurationsSupported"));
+				capabilities_node.add("tr2:ProfileCapabilities.<xmlattr>.MaximumNumberOfProfiles",
+					capabilities_config.get<int>("ProfileCapabilities.MaximumNumberOfProfiles"));
+				capabilities_node.add("tr2:ProfileCapabilities.<xmlattr>.ConfigurationsSupported",
+					capabilities_config.get<std::string>("ProfileCapabilities.ConfigurationsSupported"));
 
 				capabilities_node.add("tr2:StreamingCapabilities.<xmlattr>.RTSPStreaming", capabilities_config.get<bool>("StreamingCapabilities.RTSPStreaming"));
 				capabilities_node.add("tr2:StreamingCapabilities.<xmlattr>.RTPMulticast", capabilities_config.get<bool>("StreamingCapabilities.RTPMulticast"));
@@ -632,7 +634,7 @@ namespace osrv
 				capabilities_node.add("tr2:StreamingCapabilities.<xmlattr>.AutoStartMulticast", capabilities_config.get<bool>("StreamingCapabilities.AutoStartMulticast"));
 
 				auto env_tree = utility::soap::getEnvelopeTree(ns_);
-				env_tree.put_child("s:Body.tr2:GetServiceCapabilitiesResponse", capabilities_node);
+				env_tree.put_child("s:Body.tr2:GetServiceCapabilitiesResponse.tr2:Capabilities", capabilities_node);
 				pt::ptree root_tree;
 				root_tree.put_child("s:Envelope", env_tree);
 
