@@ -632,7 +632,7 @@ namespace osrv
 				capabilities_node.add("tr2:StreamingCapabilities.<xmlattr>.AutoStartMulticast", capabilities_config.get<bool>("StreamingCapabilities.AutoStartMulticast"));
 
 				auto env_tree = utility::soap::getEnvelopeTree(ns_);
-				env_tree.put_child("s:Body.tr2:GetServiceCapabilitiesResponse", capabilities_node);
+				env_tree.put_child("s:Body.tr2:GetServiceCapabilitiesResponse.tr2:Capabilities", capabilities_node);
 				pt::ptree root_tree;
 				root_tree.put_child("s:Envelope", env_tree);
 
