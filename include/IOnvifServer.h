@@ -22,6 +22,7 @@ namespace osrv
 	namespace SERVICE_URI
 	{
 		const std::string DEVICE = "http://www.onvif.org/ver10/device/wsdl";
+		const std::string DEVICEIO = "http://www.onvif.org/ver10/deviceIO/wsdl";
 		const std::string IMAGING = "http://www.onvif.org/ver20/imaging/wsdl";
 		const std::string MEDIA = "http://www.onvif.org/ver10/media/wsdl";
 		const std::string MEDIA2 = "http://www.onvif.org/ver20/media/wsdl";
@@ -45,6 +46,7 @@ namespace osrv
 		const std::string& ConfigsPath() const;
 
 		std::shared_ptr<IOnvifService> DeviceService();
+		std::shared_ptr<IOnvifService> DeviceIOService();
 		std::shared_ptr<IOnvifService> ImagingService();
 		std::shared_ptr<IOnvifService> MediaService();
 		std::shared_ptr<IOnvifService> Media2Service();
@@ -71,6 +73,7 @@ namespace osrv
 
 	private:
 		std::shared_ptr<IOnvifService> device_service_;
+		std::shared_ptr<IOnvifService> deviceio_service_;
 		std::shared_ptr<IOnvifService> imaging_service_;
 		std::shared_ptr<IOnvifService> media_service_;
 		std::shared_ptr<IOnvifService> media2_service_;

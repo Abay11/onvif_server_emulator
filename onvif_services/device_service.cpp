@@ -15,8 +15,6 @@
 #include <boost/property_tree/json_parser.hpp>
 #include <boost/property_tree/ptree.hpp>
 
-static ILogger* logger_ = nullptr;
-
 //List of implemented methods
 const std::string GetCapabilities = "GetCapabilities";
 const std::string GetDeviceInformation = "GetDeviceInformation";

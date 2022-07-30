@@ -568,7 +568,6 @@ namespace osrv
 				auto videosources_config = service_configs_->get_child(GetVideoSources);
 				pt::ptree response_node;
 
-				//here's Services are enumerates as array, so handle them manualy
 				for (auto elements : videosources_config)
 				{
 					pt::ptree videosource_node;

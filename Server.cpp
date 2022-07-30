@@ -97,6 +97,7 @@ namespace osrv
 		profiles_config_ = osrv::ServiceConfigs("media_profiles", configs_dir);
 
 		DeviceService()->Run();
+		DeviceIOService()->Run();
 		ImagingService()->Run();
 		MediaService()->Run();
 		Media2Service()->Run();

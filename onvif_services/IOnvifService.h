@@ -50,6 +50,11 @@ namespace osrv
 			return requestHandlers_;
 		}
 
+		const std::shared_ptr<pt::ptree> Configs() const
+		{
+			return configs_ptree_;
+		}
+
 	protected:
 		const std::string service_uri_;
 		const std::string service_name_;
