@@ -20,6 +20,12 @@ namespace utility::media
 			pt::read_json(filePath_, *configsTreeBackup_);
 			configsTree_ = std::make_unique<pt::ptree>(*configsTreeBackup_);
 		}
+		else
+		{
+			configsTree_.reset();
+			configsTree_ = std::make_unique<pt::ptree>();
+			pt::read_json(filePath_, *configsTree_);
+		}
 	}
 
 	void ConfigsReaderWriter::Save()
@@ -48,6 +54,31 @@ namespace utility::media
 
 	MediaProfilesManager::MediaProfilesManager(const std::string& filePath)
 	{
+		readerWriter_ = std::make_unique<ConfigsReaderWriter>(filePath);
+		readerWriter_->Read();
+	}
+	
+	void MediaProfilesManager::Create(const std::string& profileName) const
+	{
+		auto& mediaProfilesTree = readerWriter_->ConfigsTree().get_child("MediaProfiles");
+		auto generatedToken = newProfileToken(mediaProfilesTree.size());
+
+		pt::ptree newProfileNode;
+		newProfileNode.add("token", generatedToken);
+		newProfileNode.add("fixed", false);
+		newProfileNode.add("Name", profileName);
+
+		//mediaProfilesTree.insert(mediaProfilesTree.end(), make_pair(std::string{}, newProfileNode));
+		mediaProfilesTree.push_back(make_pair(std::string{}, newProfileNode));
+
+		readerWriter_->Save();
+	}
+		
+	std::string MediaProfilesManager::newProfileToken(size_t n) const
+	{
+		auto token = "UserProfileToken" + std::to_string(n);
+		return token;
+	}
 
 	boost::property_tree::ptree& MediaProfilesManager::GetProfileByToken(const std::string& token)
 	{

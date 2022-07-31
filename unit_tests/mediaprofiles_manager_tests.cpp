@@ -126,3 +126,29 @@ BOOST_AUTO_TEST_CASE(MediaProfilesManager_GetProfileByName_test1)
 	// it's not ok, it should not reach here
 	BOOST_ASSERT(false);
 }
+
+BOOST_AUTO_TEST_CASE(MediaProfilesManager_Create_test0)
+{
+	using namespace utility::media;
+
+	const std::string path{ "../../unit_tests/test_data/mediaprofiles_manager_test.config" };
+
+	// Before creating a new profile save profiles count
+	ConfigsReaderWriter readerWriter(path);
+	readerWriter.Read();
+	auto profilesCountBefore = readerWriter.ConfigsTree().get_child("MediaProfiles").size();
+
+	const std::string customProfileName{ "CustomProfileName" };
+	MediaProfilesManager manager(path);
+	manager.Create(customProfileName);
+
+	readerWriter.Read();
+	auto profilesCountAfter = readerWriter.ConfigsTree().get_child("MediaProfiles").size();
+	BOOST_TEST(profilesCountBefore + 1 == profilesCountAfter);
+
+	const auto& customProfileTree = manager.GetProfileByName(customProfileName);
+	BOOST_TEST(customProfileName == customProfileTree.get<std::string>("Name"));
+	BOOST_TEST(false == customProfileTree.get<bool>("fixed"));
+
+	readerWriter.Reset();
+}

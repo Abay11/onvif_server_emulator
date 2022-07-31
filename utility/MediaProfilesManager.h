@@ -45,7 +45,7 @@ namespace utility::media
 	public:
 		explicit MediaProfilesManager(const std::string& filePath);
 
-		void Create(const std::string& profileName);
+		void Create(const std::string& profileName) const;
 		void Delete(const std::string& profileToken);
 
 		boost::property_tree::ptree& GetProfileByToken(const std::string& token);
@@ -55,6 +55,9 @@ namespace utility::media
 
 		void AddConfiguration();
 		void RemoveConfiguration();
+
+	private:
+		std::string newProfileToken(size_t n) const;
 
 	private:
 		std::unique_ptr<ConfigsReaderWriter> readerWriter_;
