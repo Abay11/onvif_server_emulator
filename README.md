@@ -5,6 +5,7 @@ Simple Onvif Server is a simulator of an IP device (camera, NVR) compatible with
 # 🌐 Used 3rd party libraries
 
 [Simple-Web-Server](https://gitlab.com/eidheim/Simple-Web-Server)
+
 [GStreamer](https://github.com/GStreamer/gstreamer)
 
 # ▶ Server execution
