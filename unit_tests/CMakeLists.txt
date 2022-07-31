@@ -18,6 +18,7 @@ add_executable(test_executable
 	event_service_tests.cpp	
 	http_da_tests.cpp
 	media2_tests.cpp
+	mediaprofiles_manager_tests.cpp
 	pull_point_tests.cpp
 	server_tests.cpp	
 	service_configs_tests.cpp

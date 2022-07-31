@@ -86,6 +86,8 @@ FILE (GLOB UTILITY_SRC
 	"utility/DateTime.hpp"
 	"utility/EventService.h"
 	"utility/EventService.cpp"
+	"utility/MediaProfilesManager.h"
+	"utility/MediaProfilesManager.cpp"
 )
 
 source_group("OnvifServices" FILES ${SERVICES_SRC})
