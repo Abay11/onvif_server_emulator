@@ -10,7 +10,7 @@ NOTE: it's expected that the last slash '/' is not added to the passed value.
 Example: "main.exe ./configs".
 
 
-# Server configurations
+# ⚙️ Server configurations
 
 Each ONVIF service is implemented as a separate instance. Each service may have its own configuration file in JSON format. Please note, that some configs may be hardcoded in the code, or may be not fully implemented yet. It's always recommended to check, if a config parameter actually affect to some behaviour.
 
