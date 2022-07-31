@@ -5,8 +5,19 @@
 #include <string>
 #include <memory>
 
+namespace osrv
+{
+	class no_such_profile : public std::exception
+	{
+	public:
+		const char* what() const override { return "No such profile"; }
+	};
+}
+
 namespace utility::media
 {
+	// NOTE, before any operation you should load configuration with Read()
+	// Otherwise correct work not guaranteed
 	class ConfigsReaderWriter
 	{
 	public:
@@ -38,9 +49,9 @@ namespace utility::media
 		void Delete(const std::string& profileToken);
 
 		boost::property_tree::ptree& GetProfileByToken(const std::string& token);
-		const boost::property_tree::ptree& GetProfileByToken(const std::string& token) const;
-		boost::property_tree::ptree& GetProfileByName(const std::string& token);
-		const boost::property_tree::ptree& GetProfileByName(const std::string& token) const;
+		const boost::property_tree::ptree& GetProfileByToken(const std::string& token) const { return GetProfileByToken(token); };
+		boost::property_tree::ptree& GetProfileByName(const std::string& name);
+		const boost::property_tree::ptree& GetProfileByName(const std::string& name) const { return GetProfileByName(name); };
 
 		void AddConfiguration();
 		void RemoveConfiguration();

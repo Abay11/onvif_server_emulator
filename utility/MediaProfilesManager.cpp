@@ -48,5 +48,36 @@ namespace utility::media
 
 	MediaProfilesManager::MediaProfilesManager(const std::string& filePath)
 	{
+
+	boost::property_tree::ptree& MediaProfilesManager::GetProfileByToken(const std::string& token)
+	{
+		auto& profilesTree = readerWriter_->ConfigsTree().get_child("MediaProfiles");
+		auto begin = profilesTree.begin();
+		auto end = profilesTree.end();
+		auto res_it = std::find_if(begin, end,
+			[token](const auto& p) { return token == p.second.get<std::string>("token"); });
+
+		if (res_it == end)
+		{
+			throw osrv::no_such_profile();
+		}
+
+		return res_it->second;
+	}
+		
+	boost::property_tree::ptree& MediaProfilesManager::GetProfileByName(const std::string& name)
+	{
+		auto& profilesTree = readerWriter_->ConfigsTree().get_child("MediaProfiles");
+		auto begin = profilesTree.begin();
+		auto end = profilesTree.end();
+		auto res_it = std::find_if(begin, end,
+			[name](const auto& p) { return name == p.second.get<std::string>("Name"); });
+
+		if (res_it == end)
+		{
+			throw osrv::no_such_profile();
+		}
+
+		return res_it->second;
 	}
 }

@@ -56,3 +56,73 @@ BOOST_AUTO_TEST_CASE(ConfigsReaderWriter_test1)
 	BOOST_ASSERT(it3 != restored_profile0_tree.not_found());
 	BOOST_TEST(it3->second.get_value<std::string>() == expectedOldValue);
 }
+
+BOOST_AUTO_TEST_CASE(MediaProfilesManager_GetProfileByToken_test0)
+{
+	using namespace utility::media;
+
+	const std::string path{ "../../unit_tests/test_data/mediaprofiles_manager_test.config" };
+
+	const std::string profileToken{ "ProfileToken0" };
+	MediaProfilesManager manager(path);
+
+	BOOST_TEST(true == manager.GetProfileByToken(profileToken).get<bool>("fixed"));
+}
+
+BOOST_AUTO_TEST_CASE(MediaProfilesManager_GetProfileByToken_test1)
+{
+	using namespace utility::media;
+
+	const std::string path{ "../../unit_tests/test_data/mediaprofiles_manager_test.config" };
+
+	const std::string profileToken{ "NotExistingProfileWithSuchToken" };
+	MediaProfilesManager manager(path);
+
+	try
+	{
+		manager.GetProfileByToken(profileToken);
+	}
+	catch (const osrv::no_such_profile&)
+	{
+		// it's ok - we expected exception will be thrawn
+		return;
+	}
+
+	// it's not ok, it should not reach here
+	BOOST_ASSERT(false);
+}
+
+BOOST_AUTO_TEST_CASE(MediaProfilesManager_GetProfileByName_test0)
+{
+	using namespace utility::media;
+
+	const std::string path{ "../../unit_tests/test_data/mediaprofiles_manager_test.config" };
+
+	const std::string profileName{ "SecondProfile" };
+	MediaProfilesManager manager(path);
+
+	BOOST_TEST(true == manager.GetProfileByName(profileName).get<bool>("fixed"));
+}
+
+BOOST_AUTO_TEST_CASE(MediaProfilesManager_GetProfileByName_test1)
+{
+	using namespace utility::media;
+
+	const std::string path{ "../../unit_tests/test_data/mediaprofiles_manager_test.config" };
+
+	const std::string profileName{ "NotExistingProfileWithSuchName" };
+	MediaProfilesManager manager(path);
+
+	try
+	{
+		manager.GetProfileByName(profileName);
+	}
+	catch (const osrv::no_such_profile&)
+	{
+		// it's ok - we expected exception will be thrawn
+		return;
+	}
+
+	// it's not ok, it should not reach here
+	BOOST_ASSERT(false);
+}
