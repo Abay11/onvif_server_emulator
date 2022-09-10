@@ -46,7 +46,7 @@ namespace utility::media
 		explicit MediaProfilesManager(const std::string& filePath);
 
 		void Create(const std::string& profileName) const;
-		void Delete(const std::string& profileToken);
+		void Delete(const std::string& profileToken) const;
 
 		boost::property_tree::ptree& GetProfileByToken(const std::string& token);
 		const boost::property_tree::ptree& GetProfileByToken(const std::string& token) const { return GetProfileByToken(token); };
@@ -61,5 +61,15 @@ namespace utility::media
 
 	private:
 		std::unique_ptr<ConfigsReaderWriter> readerWriter_;
+	};
+
+	class ProfileConfigsHelper
+	{
+	public:
+		explicit ProfileConfigsHelper(const boost::property_tree::ptree& profileTree);
+		std::string ProfileToken() const;
+
+	private:
+		const boost::property_tree::ptree& profileTree_;
 	};
 }

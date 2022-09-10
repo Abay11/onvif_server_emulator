@@ -152,3 +152,32 @@ BOOST_AUTO_TEST_CASE(MediaProfilesManager_Create_test0)
 
 	readerWriter.Reset();
 }
+
+BOOST_AUTO_TEST_CASE(MediaProfilesManager_Delete_test0)
+{
+	using namespace utility::media;
+
+	const std::string path{ "../../unit_tests/test_data/mediaprofiles_manager_test.config" };
+
+	// Before creating a new profile save profiles count
+	ConfigsReaderWriter readerWriter(path);
+	readerWriter.Read();
+	auto profilesCountBefore = readerWriter.ConfigsTree().get_child("MediaProfiles").size();
+
+	const std::string customProfileName{ "CustomProfileName" };
+	MediaProfilesManager manager(path);
+	manager.Create(customProfileName);
+
+	// check attributes of a new created profile
+	const auto& customProfileTree = manager.GetProfileByName(customProfileName);
+	BOOST_TEST(customProfileName == customProfileTree.get<std::string>("Name"));
+	BOOST_TEST(false == customProfileTree.get<bool>("fixed"));
+
+	manager.Delete(ProfileConfigsHelper(manager.GetProfileByName(customProfileName)).ProfileToken());
+
+	readerWriter.Read();
+	auto profilesCountAfter = readerWriter.ConfigsTree().get_child("MediaProfiles").size();
+	BOOST_TEST(profilesCountBefore == profilesCountAfter);
+
+	readerWriter.Reset();
+}

@@ -68,8 +68,23 @@ namespace utility::media
 		newProfileNode.add("fixed", false);
 		newProfileNode.add("Name", profileName);
 
-		//mediaProfilesTree.insert(mediaProfilesTree.end(), make_pair(std::string{}, newProfileNode));
 		mediaProfilesTree.push_back(make_pair(std::string{}, newProfileNode));
+
+		readerWriter_->Save();
+	}
+
+	void MediaProfilesManager::Delete(const std::string& profileToken) const
+	{
+		auto& mediaProfilesTree = readerWriter_->ConfigsTree().get_child("MediaProfiles");
+		auto begin = mediaProfilesTree.begin();
+		auto end = mediaProfilesTree.end();
+		auto res_it = std::find_if(begin, end,
+			[profileToken](const auto& p) { return profileToken == p.second.get<std::string>("token"); });
+
+		if (res_it == end)
+			return;
+
+		mediaProfilesTree.erase(res_it);
 
 		readerWriter_->Save();
 	}
@@ -110,5 +125,15 @@ namespace utility::media
 		}
 
 		return res_it->second;
+	}
+		
+	ProfileConfigsHelper::ProfileConfigsHelper(const pt::ptree& profilesTree)
+		: profileTree_(profilesTree)
+	{
+	}
+
+	std::string ProfileConfigsHelper::ProfileToken() const
+	{
+		return profileTree_.get<std::string>("token");
 	}
 }
