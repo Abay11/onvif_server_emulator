@@ -1,6 +1,6 @@
 # 🌟About the project
 
-Simple Onvif Server is a simulator of an IP device (camera, NVR) compatible with standardized ONVIF interfaces, which can be used for tests purpoces.
+Onvif Server Emulator is an emulator of an IP device (camera, NVR) compatible with standardized ONVIF interfaces, which can be used for tests purpoces.
 
 # 🌐 Used 3rd party libraries
 
