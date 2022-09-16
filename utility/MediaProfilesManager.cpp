@@ -126,9 +126,14 @@ namespace utility::media
 
 		return res_it->second;
 	}
+
+	const boost::property_tree::ptree& MediaProfilesManager::Back() const
+	{
+		return readerWriter_->ConfigsTree().get_child("MediaProfiles").back().second;
+	}
 		
-	ProfileConfigsHelper::ProfileConfigsHelper(const pt::ptree& profilesTree)
-		: profileTree_(profilesTree)
+	ProfileConfigsHelper::ProfileConfigsHelper(const pt::ptree& profileTree)
+		: profileTree_(profileTree)
 	{
 	}
 
