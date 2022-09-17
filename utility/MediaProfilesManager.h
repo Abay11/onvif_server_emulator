@@ -4,9 +4,42 @@
 
 #include <string>
 #include <memory>
+#include <array>
 
 namespace osrv
 {
+	using namespace std::string_literals;
+
+	static const std::array CONFIGURATION_ENUMERATION
+	{
+		"All"s,
+		"VideoSource"s,
+		"VideoEncoder"s,
+		"AudioSource"s,
+		"AudioEncoder"s,
+		"AudioOutput"s,
+		"AudioDecoder"s,
+		"Metadata"s,
+		"Analytics"s,
+		"PTZ"s,
+		"Receiver"s
+	};
+
+	enum CONFIGURATION_TYPE : int
+	{
+		ALL = 0,
+		VIDEOSOURCE,
+		VIDEOENCODER,
+		AUDIOSOURCE,
+		AUDIOENCODER,
+		AUDIOOUTPUT,
+		AUDIODECODER,
+		METADATA,
+		ANALYTICS,
+		PTZ,
+		RECEIVER
+	};
+
 	class no_such_profile : public std::exception
 	{
 	public:

@@ -794,7 +794,7 @@ namespace osrv
 				static const std::string DEFAULT_EMPTY_STRING;
 
 				//Videosource
-				const std::string vs_token = profile_config.get<std::string>("VideoSourceConfiguration", DEFAULT_EMPTY_STRING);
+				const std::string vs_token = profile_config.get<std::string>(CONFIGURATION_ENUMERATION[CONFIGURATION_TYPE::VIDEOSOURCE], DEFAULT_EMPTY_STRING);
 				if (!vs_token.empty())
 				{
 					auto vs_configs_list = configs_file.get_child("VideoSourceConfigurations");
@@ -813,7 +813,7 @@ namespace osrv
 				}
 
 				// videoencoder
-				const std::string ve_token = profile_config.get<std::string>("VideoEncoderConfiguration", DEFAULT_EMPTY_STRING);
+				const std::string ve_token = profile_config.get<std::string>(CONFIGURATION_ENUMERATION[CONFIGURATION_TYPE::VIDEOENCODER], DEFAULT_EMPTY_STRING);
 				if (!ve_token.empty())
 				{
 					//TODO: use the same configuartion structure with Media1  --->get_child("VideoEncoderConfigurations2")
@@ -832,7 +832,7 @@ namespace osrv
 				}
 
 				// Videoanalytics
-				const std::string va_token = profile_config.get<std::string>("VideoAnalyticsConfiguration", DEFAULT_EMPTY_STRING);
+				const std::string va_token = profile_config.get<std::string>(CONFIGURATION_ENUMERATION[CONFIGURATION_TYPE::VIDEOENCODER], DEFAULT_EMPTY_STRING);
 				if (!va_token.empty())
 				{
 					// just fill dummy configs
@@ -842,7 +842,7 @@ namespace osrv
 				}
 	
 				// PTZ
-				const std::string ptz_token = profile_config.get<std::string>("PTZConfiguration", DEFAULT_EMPTY_STRING);
+				const std::string ptz_token = profile_config.get<std::string>(CONFIGURATION_ENUMERATION[CONFIGURATION_TYPE::PTZ], DEFAULT_EMPTY_STRING);
 				if (!ptz_token.empty())
 				{ 
 					// TODO: make reading from a profile
@@ -859,7 +859,7 @@ namespace osrv
 				}
 
 				// Audio source
-				auto as_token = profile_config.get<std::string>("AudioSourceConfiguration", DEFAULT_EMPTY_STRING);
+				auto as_token = profile_config.get<std::string>(CONFIGURATION_ENUMERATION[CONFIGURATION_TYPE::AUDIOSOURCE], DEFAULT_EMPTY_STRING);
 				if (!as_token.empty())
 				{
 					pt::ptree as_node;
@@ -872,9 +872,8 @@ namespace osrv
 					result.put_child("tr2:Configurations.tr2:AudioSource", as_node);
 				}
 
-
 				// Audio encoder
-				auto ae_token = profile_config.get<std::string>("AudioEncoderConfiguration", DEFAULT_EMPTY_STRING);
+				auto ae_token = profile_config.get<std::string>(CONFIGURATION_ENUMERATION[CONFIGURATION_TYPE::AUDIOENCODER], DEFAULT_EMPTY_STRING);
 				if (!ae_token.empty())
 				{
 					pt::ptree ae_node;
