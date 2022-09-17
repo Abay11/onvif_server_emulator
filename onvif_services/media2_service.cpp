@@ -16,18 +16,9 @@
 #include <boost/property_tree/json_parser.hpp>
 #include <boost/property_tree/ptree.hpp>
 
-//static ILogger* logger_ = nullptr;
-
-//static const osrv::ServerConfigs* server_configs;
-//static std::shared_ptr<utility::digest::IDigestSession> digest_session;
-
-//static const std::string PROFILES_CONFIGS_PATH = "media_profiles.config";
-//static const std::string MEDIA_SERVICE_CONFIGS_PATH = "media2.config";
+#include <array>
 
 namespace pt = boost::property_tree;
-//static pt::ptree CONFIGS_TREE;
-//static pt::ptree PROFILES_CONFIGS_TREE;
-//static std::map<std::string, std::string> XML_NAMESPACES;
 
 //the list of implemented methods
 static const std::string GetAnalyticsConfigurations = "GetAnalyticsConfigurations";
@@ -43,6 +34,8 @@ static const std::string GetServiceCapabilities = "GetServiceCapabilities";
 static const std::string GetStreamUri = "GetStreamUri";
 static const std::string SetVideoEncoderConfiguration = "SetVideoEncoderConfiguration";
 static const std::string SetVideoSourceConfiguration = "SetVideoSourceConfiguration";
+
+static const std::string CONFIG_PROP_TOKEN{ "token" };
 
 namespace osrv
 {
@@ -794,18 +787,21 @@ namespace osrv
 			using ptree = boost::property_tree::ptree;
 			void profile_to_soap(const ptree& profile_config, const ptree& configs_file, ptree& result)
 			{
-				result.add("<xmlattr>.token", profile_config.get<std::string>("token"));
+				result.add("<xmlattr>.token", profile_config.get<std::string>(CONFIG_PROP_TOKEN));
 				result.add("<xmlattr>.fixed", profile_config.get<std::string>("fixed"));
 				result.add("tr2:Name", profile_config.get<std::string>("Name"));
 
+				static const std::string DEFAULT_EMPTY_STRING;
+
 				//Videosource
+				const std::string vs_token = profile_config.get<std::string>("VideoSourceConfiguration", DEFAULT_EMPTY_STRING);
+				if (!vs_token.empty())
 				{
-					const std::string vs_token = profile_config.get<std::string>("VideoSourceConfiguration");
 					auto vs_configs_list = configs_file.get_child("VideoSourceConfigurations");
 					auto vs_config = std::find_if(vs_configs_list.begin(), vs_configs_list.end(),
 						[vs_token](pt::ptree::value_type vs_obj)
 						{
-							return vs_obj.second.get<std::string>("token") == vs_token;
+							return vs_obj.second.get<std::string>(CONFIG_PROP_TOKEN) == vs_token;
 						});
 
 					if (vs_config == vs_configs_list.end())
@@ -817,14 +813,15 @@ namespace osrv
 				}
 
 				// videoencoder
+				const std::string ve_token = profile_config.get<std::string>("VideoEncoderConfiguration", DEFAULT_EMPTY_STRING);
+				if (!ve_token.empty())
 				{
-					const std::string ve_token = profile_config.get<std::string>("VideoEncoderConfiguration");
 					//TODO: use the same configuartion structure with Media1  --->get_child("VideoEncoderConfigurations2")
 					auto vs_configs_list = configs_file.get_child("VideoEncoderConfigurations2");
 					auto vs_config = std::find_if(vs_configs_list.begin(), vs_configs_list.end(),
 						[ve_token](pt::ptree::value_type vs_obj)
 						{
-							return vs_obj.second.get<std::string>("token") == ve_token;
+							return vs_obj.second.get<std::string>(CONFIG_PROP_TOKEN) == ve_token;
 						});
 
 					if (vs_config == vs_configs_list.end())
@@ -834,61 +831,62 @@ namespace osrv
 					result.put_child("tr2:Configurations.tr2:VideoEncoder", videoencoder_configuration);
 				}
 
-				{ // Videoanalytics
+				// Videoanalytics
+				const std::string va_token = profile_config.get<std::string>("VideoAnalyticsConfiguration", DEFAULT_EMPTY_STRING);
+				if (!va_token.empty())
+				{
 					// just fill dummy configs
-
 					pt::ptree analytics_node;
 					osrv::media::util::fill_analytics_configuration(analytics_node);
 					result.put_child("tr2:Configurations.tr2:Analytics", analytics_node);
 				}
-
-				{ // PTZ
+	
+				// PTZ
+				const std::string ptz_token = profile_config.get<std::string>("PTZConfiguration", DEFAULT_EMPTY_STRING);
+				if (!ptz_token.empty())
+				{ 
 					// TODO: make reading from a profile
-
 					pt::ptree ptz_node;
-					{
-						ptz_node.add("<xmlattr>.token", "PtzConfigToken0");
-						ptz_node.add("tt:Name", "PtzConfig0");
-						ptz_node.add("tt:UseCount", 3);
-						ptz_node.add("tt:NodeToken", "PTZNODE_1");
-						ptz_node.add("tt:DefaultContinuousPanTiltVelocitySpace", 
-							"http://www.onvif.org/ver10/tptz/PanTiltSpaces/VelocityGenericSpace");
-						ptz_node.add("tt:DefaultContinuousZoomVelocitySpace",
-							"http://www.onvif.org/ver10/tptz/ZoomSpaces/VelocityGenericSpace");
-					}
+					ptz_node.add("<xmlattr>.token", "PtzConfigToken0");
+					ptz_node.add("tt:Name", "PtzConfig0");
+					ptz_node.add("tt:UseCount", 3);
+					ptz_node.add("tt:NodeToken", "PTZNODE_1");
+					ptz_node.add("tt:DefaultContinuousPanTiltVelocitySpace", 
+						"http://www.onvif.org/ver10/tptz/PanTiltSpaces/VelocityGenericSpace");
+					ptz_node.add("tt:DefaultContinuousZoomVelocitySpace",
+						"http://www.onvif.org/ver10/tptz/ZoomSpaces/VelocityGenericSpace");
 					result.put_child("tr2:Configurations.tr2:PTZ", ptz_node);
 				}
 
-				{ // Audio source
-					auto as_token = profile_config.get<std::string>("AudioSourceConfiguration", "");
-					if (!as_token.empty())
-					{
-						pt::ptree as_node;
-						auto as_config = utility::AudioSourceConfigsReader(as_token, configs_file).AudioSource();
-						as_node.add("<xmlattr>.token", as_token);
-						as_node.add("tt:Name", as_config.get<std::string>("Name"));
-						as_node.add("tt:UseCount", as_config.get<int>("UseCount"));
-						as_node.add("tt:SourceToken", as_config.get<std::string>("SourceToken"));
+				// Audio source
+				auto as_token = profile_config.get<std::string>("AudioSourceConfiguration", DEFAULT_EMPTY_STRING);
+				if (!as_token.empty())
+				{
+					pt::ptree as_node;
+					auto as_config = utility::AudioSourceConfigsReader(as_token, configs_file).AudioSource();
+					as_node.add("<xmlattr>.token", as_token);
+					as_node.add("tt:Name", as_config.get<std::string>("Name"));
+					as_node.add("tt:UseCount", as_config.get<int>("UseCount"));
+					as_node.add("tt:SourceToken", as_config.get<std::string>("SourceToken"));
 
-						result.put_child("tr2:Configurations.tr2:AudioSource", as_node);
-					}
+					result.put_child("tr2:Configurations.tr2:AudioSource", as_node);
 				}
 
-				{ // Audio encoder
-					auto ae_token = profile_config.get<std::string>("AudioEncoderConfiguration", "");
-					if (!ae_token.empty())
-					{
-						pt::ptree ae_node;
-						auto ae_config = utility::AudioEncoderReaderByToken(ae_token, configs_file).AudioEncoder();
-						ae_node.add("<xmlattr>.token", ae_token);
-						ae_node.add("tt:Name", ae_config.get<std::string>("Name"));
-						ae_node.add("tt:UseCount", ae_config.get<int>("UseCount"));
-						ae_node.add("tt:Encoding", ae_config.get<std::string>("Encoding"));
-						ae_node.add("tt:Bitrate", ae_config.get<int>("Bitrate"));
-						ae_node.add("tt:SampleRate", ae_config.get<int>("SampleRate"));
 
-						result.put_child("tr2:Configurations.tr2:AudioEncoder", ae_node);
-					}
+				// Audio encoder
+				auto ae_token = profile_config.get<std::string>("AudioEncoderConfiguration", DEFAULT_EMPTY_STRING);
+				if (!ae_token.empty())
+				{
+					pt::ptree ae_node;
+					auto ae_config = utility::AudioEncoderReaderByToken(ae_token, configs_file).AudioEncoder();
+					ae_node.add("<xmlattr>.token", ae_token);
+					ae_node.add("tt:Name", ae_config.get<std::string>("Name"));
+					ae_node.add("tt:UseCount", ae_config.get<int>("UseCount"));
+					ae_node.add("tt:Encoding", ae_config.get<std::string>("Encoding"));
+					ae_node.add("tt:Bitrate", ae_config.get<int>("Bitrate"));
+					ae_node.add("tt:SampleRate", ae_config.get<int>("SampleRate"));
+
+					result.put_child("tr2:Configurations.tr2:AudioEncoder", ae_node);
 				}
 			}
 			
