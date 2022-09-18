@@ -97,7 +97,7 @@ namespace osrv
 				pt::xml_parser::read_xml(request->content, request_xml_tree);
 				
 				auto fillAEConfig = [](const pt::ptree& in, pt::ptree& out) {
-					out.add("<xmlattr>.token", in.get<std::string>("token"));
+					out.add("<xmlattr>.token", in.get<std::string>(CONFIG_PROP_TOKEN));
 					out.add("tt:Name", in.get<std::string>("Name"));
 					out.add("tt:UseCount", in.get<int>("UseCount"));
 					out.add("tt:Encoding", in.get<std::string>("Encoding"));
@@ -123,7 +123,7 @@ namespace osrv
 				}
 				else // response with all existing configs
 				{
-					const auto ae_config_list = profiles_configs_->get_child("AudioEncoderConfigurations");
+					const auto ae_config_list = profiles_configs_->get_child(CONFIGURATION_ENUMERATION[CONFIGURATION_TYPE::AUDIOENCODER]);
 					for (const auto& ae_config : ae_config_list)
 					{
 						pt::ptree ae_node;
@@ -329,7 +329,7 @@ namespace osrv
 			void operator()(std::shared_ptr<HttpServer::Response> response,
 				std::shared_ptr<HttpServer::Request> request) override
 			{
-				const auto ve_config_list = profiles_configs_->get_child("VideoEncoderConfigurations2");
+				const auto ve_config_list = profiles_configs_->get_child(CONFIGURATION_ENUMERATION[CONFIGURATION_TYPE::VIDEOENCODER]);
 				pt::ptree ve_configs_node;
 				for (const auto& ve_config : ve_config_list)
 				{
@@ -390,7 +390,7 @@ namespace osrv
 				auto req_profile_config = std::find_if(profiles_configs_list.begin(), profiles_configs_list.end(),
 					[profile_token](const pt::ptree::value_type& it)
 					{
-						return it.second.get<std::string>("token") == profile_token;
+						return it.second.get<std::string>(CONFIG_PROP_TOKEN) == profile_token;
 					});
 
 				if (req_profile_config == profiles_configs_list.end())
@@ -482,7 +482,7 @@ namespace osrv
 			void operator()(std::shared_ptr<HttpServer::Response> response,
 				std::shared_ptr<HttpServer::Request> request) override
 			{
-				auto vs_config_list = profiles_configs_->get_child("VideoSourceConfigurations");
+				auto vs_config_list = profiles_configs_->get_child(CONFIGURATION_ENUMERATION[CONFIGURATION_TYPE::VIDEOSOURCE]);
 				pt::ptree vs_configs_node;
 				for (const auto& vs_config : vs_config_list)
 				{
@@ -535,7 +535,7 @@ namespace osrv
 				// Here we should parse request and generate a response depends on required profile token and videosource
 				// configuration token, but for now it's ignored
 
-				auto vs_config_list = profiles_configs_->get_child("VideoSourceConfigurations");
+				auto vs_config_list = profiles_configs_->get_child(CONFIGURATION_ENUMERATION[CONFIGURATION_TYPE::VIDEOSOURCE]);
 				pt::ptree options_node;
 				for (const auto& vs_config : vs_config_list)
 				{
@@ -674,7 +674,7 @@ namespace osrv
 				auto profile_config = std::find_if(profiles_config_list.begin(), profiles_config_list.end(),
 					[requested_token](const pt::ptree::value_type& vs_obj)
 					{
-						return vs_obj.second.get<std::string>("token") == requested_token;
+						return vs_obj.second.get<std::string>(CONFIG_PROP_TOKEN) == requested_token;
 					});
 
 				if (profile_config == profiles_config_list.end())
@@ -797,7 +797,7 @@ namespace osrv
 				const std::string vs_token = profile_config.get<std::string>(CONFIGURATION_ENUMERATION[CONFIGURATION_TYPE::VIDEOSOURCE], DEFAULT_EMPTY_STRING);
 				if (!vs_token.empty())
 				{
-					auto vs_configs_list = configs_file.get_child("VideoSourceConfigurations");
+					auto vs_configs_list = configs_file.get_child(CONFIGURATION_ENUMERATION[CONFIGURATION_TYPE::VIDEOSOURCE]);
 					auto vs_config = std::find_if(vs_configs_list.begin(), vs_configs_list.end(),
 						[vs_token](pt::ptree::value_type vs_obj)
 						{
@@ -817,9 +817,9 @@ namespace osrv
 				if (!ve_token.empty())
 				{
 					//TODO: use the same configuartion structure with Media1  --->get_child("VideoEncoderConfigurations2")
-					auto vs_configs_list = configs_file.get_child("VideoEncoderConfigurations2");
+					auto vs_configs_list = configs_file.get_child(CONFIGURATION_ENUMERATION[CONFIGURATION_TYPE::VIDEOENCODER]);
 					auto vs_config = std::find_if(vs_configs_list.begin(), vs_configs_list.end(),
-						[ve_token](pt::ptree::value_type vs_obj)
+						[&ve_token](const pt::ptree::value_type& vs_obj)
 						{
 							return vs_obj.second.get<std::string>(CONFIG_PROP_TOKEN) == ve_token;
 						});
@@ -832,7 +832,7 @@ namespace osrv
 				}
 
 				// Videoanalytics
-				const std::string va_token = profile_config.get<std::string>(CONFIGURATION_ENUMERATION[CONFIGURATION_TYPE::VIDEOENCODER], DEFAULT_EMPTY_STRING);
+				const std::string va_token = profile_config.get<std::string>(CONFIGURATION_ENUMERATION[CONFIGURATION_TYPE::ANALYTICS], DEFAULT_EMPTY_STRING);
 				if (!va_token.empty())
 				{
 					// just fill dummy configs
@@ -891,7 +891,7 @@ namespace osrv
 			
 			void fill_video_encoder(const pt::ptree& config_node, pt::ptree& videoencoder_node)
 			{
-				videoencoder_node.add("<xmlattr>.token", config_node.get<std::string>("token"));
+				videoencoder_node.add("<xmlattr>.token", config_node.get<std::string>(CONFIG_PROP_TOKEN));
 				videoencoder_node.add("tt:Name", config_node.get<std::string>("Name"));
 				videoencoder_node.add("tt:UseCount", config_node.get<int>("UseCount"));
 				videoencoder_node.add("<xmlattr>.GovLength", config_node.get<int>("GovLength"));
