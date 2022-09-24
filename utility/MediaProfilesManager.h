@@ -45,6 +45,18 @@ namespace osrv
 	public:
 		const char* what() const override { return "No such profile"; }
 	};
+
+	class invalid_token: public std::exception
+	{
+	public:
+		const char* what() const override { return "No such configuration token"; }
+	};
+	
+	class invalid_config_type: public std::exception
+	{
+	public:
+		const char* what() const override { return "No such configuration type"; }
+	};
 }
 
 namespace utility::media
@@ -65,7 +77,7 @@ namespace utility::media
 		void Reset();
 
 		boost::property_tree::ptree& ConfigsTree() { return *configsTree_; };
-		const boost::property_tree::ptree& ConfigsTree() const { return ConfigsTree(); };
+		const boost::property_tree::ptree& ConfigsTree() const { return *configsTree_; };
 
 	private:
 		const std::string filePath_;
@@ -80,6 +92,8 @@ namespace utility::media
 
 		void Create(const std::string& profileName) const;
 		void Delete(const std::string& profileToken) const;
+		void AddConfiguration(const std::string& profileToken, const std::string& configType, const std::string& configToken) const;
+		void RemoveConfiguration();
 
 		boost::property_tree::ptree& GetProfileByToken(const std::string& token);
 		const boost::property_tree::ptree& GetProfileByToken(const std::string& token) const { return GetProfileByToken(token); };
@@ -88,8 +102,7 @@ namespace utility::media
 		// do not call Back on empty profiles list
 		const boost::property_tree::ptree& Back() const;
 
-		void AddConfiguration();
-		void RemoveConfiguration();
+		const ConfigsReaderWriter* ReaderWriter() const { return readerWriter_.get(); }
 
 	private:
 		std::string newProfileToken(size_t n) const;

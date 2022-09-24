@@ -205,3 +205,93 @@ BOOST_AUTO_TEST_CASE(MediaProfilesManager_Back_test0)
 
 	readerWriter.Reset();
 }
+
+BOOST_AUTO_TEST_CASE(MediaProfilesManager_AddConfiguration_test0)
+{
+	using namespace utility::media;
+
+	const std::string path{ "../../unit_tests/test_data/mediaprofiles_manager_test.config" };
+	
+	ConfigsReaderWriter readerWriter(path);
+	readerWriter.Read();
+
+	MediaProfilesManager manager(path);
+
+	const std::string customProfileName{ "CustomProfileName" };
+	const std::string videoSourceToken = readerWriter.ConfigsTree()
+		.get_child(osrv::CONFIGURATION_ENUMERATION[osrv::CONFIGURATION_TYPE::VIDEOSOURCE]).front()
+		.second.get<std::string>("token");
+	manager.Create(customProfileName);
+	manager.AddConfiguration(utility::media::ProfileConfigsHelper(manager.Back()).ProfileToken(),
+		osrv::CONFIGURATION_ENUMERATION[osrv::VIDEOSOURCE], videoSourceToken);
+
+	readerWriter.Read();
+	auto mediaProfilesTree = readerWriter.ConfigsTree().get_child("MediaProfiles");
+	auto actual = mediaProfilesTree.back().second.get<std::string>(osrv::CONFIGURATION_ENUMERATION[osrv::VIDEOSOURCE], "");
+
+	BOOST_TEST(videoSourceToken == actual);
+
+	readerWriter.Reset();
+}
+
+BOOST_AUTO_TEST_CASE(MediaProfilesManager_AddConfiguration_test1)
+{
+	using namespace utility::media;
+
+	const std::string path{ "../../unit_tests/test_data/mediaprofiles_manager_test.config" };
+
+	ConfigsReaderWriter readerWriter(path);
+	readerWriter.Read();
+
+	MediaProfilesManager manager(path);
+
+	const std::string customProfileName{ "CustomProfileName" };
+	const std::string testVideoSourceToken{ "testVideoSourceToken" };
+	manager.Create(customProfileName);
+
+	const std::string invalidConfigurationType{ "invalidVideoSourceConfigurationType" };
+
+	try
+	{
+		manager.AddConfiguration(utility::media::ProfileConfigsHelper(manager.Back()).ProfileToken(),
+			invalidConfigurationType, testVideoSourceToken);
+	}
+	catch (const osrv::invalid_config_type&)
+	{
+		readerWriter.Reset();
+		return;
+	}
+
+	readerWriter.Reset();
+	BOOST_ASSERT(false);
+}
+
+BOOST_AUTO_TEST_CASE(MediaProfilesManager_AddConfiguration_test2)
+{
+	using namespace utility::media;
+
+	const std::string path{ "../../unit_tests/test_data/mediaprofiles_manager_test.config" };
+
+	ConfigsReaderWriter readerWriter(path);
+	readerWriter.Read();
+
+	MediaProfilesManager manager(path);
+
+	const std::string customProfileName{ "CustomProfileName" };
+	const std::string invalidVideoSourceToken{ "invalidTestVideoSourceToken" };
+	manager.Create(customProfileName);
+
+	try
+	{
+		manager.AddConfiguration(utility::media::ProfileConfigsHelper(manager.Back()).ProfileToken(),
+			osrv::CONFIGURATION_ENUMERATION[osrv::CONFIGURATION_TYPE::VIDEOSOURCE], invalidVideoSourceToken);
+	}
+	catch (const osrv::invalid_token&)
+	{
+		readerWriter.Reset();
+		return;
+	}
+
+	readerWriter.Reset();
+	BOOST_ASSERT(false);
+}
