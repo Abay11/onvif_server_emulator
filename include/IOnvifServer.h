@@ -1,4 +1,3 @@
-
 #pragma once
 
 #include "../HttpServerFwd.h"
@@ -12,6 +11,11 @@
 namespace pt = boost::property_tree;
 
 class ILogger;
+
+namespace utility::media
+{
+	class MediaProfilesManager;
+}
 
 namespace osrv
 {
@@ -61,6 +65,8 @@ namespace osrv
 	
 		std::string ServerAddress() const;
 
+		utility::media::MediaProfilesManager* MediaProfilesManager() { return media_profiles_manager_.get(); };
+
 	protected:
 		const std::string& configs_path_;
 	
@@ -80,5 +86,8 @@ namespace osrv
 		std::shared_ptr<IOnvifService> ptz_service_;
 		std::shared_ptr<IOnvifService> recording_search_service_;
 		std::shared_ptr<IOnvifService> replay_control_service_;
+
+		std::shared_ptr<utility::media::MediaProfilesManager> media_profiles_manager_;
+
 	};
 }

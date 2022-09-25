@@ -8,6 +8,7 @@
 #include "../utility/HttpHelper.h"
 #include "../utility/SoapHelper.h"
 #include "../utility/AudioSourceReader.h"
+#include "../utility/MediaProfilesManager.h"
 #include "../Server.h"
 
 #include "../Simple-Web-Server/server_http.hpp"
@@ -16,11 +17,10 @@
 #include <boost/property_tree/json_parser.hpp>
 #include <boost/property_tree/ptree.hpp>
 
-#include <array>
-
 namespace pt = boost::property_tree;
 
 //the list of implemented methods
+static const std::string CreateProfile = "CreateProfile";
 static const std::string GetAnalyticsConfigurations = "GetAnalyticsConfigurations";
 static const std::string GetAudioEncoderConfigurations = "GetAudioEncoderConfigurations";
 static const std::string GetAudioEncoderConfigurationOptions = "GetAudioEncoderConfigurationOptions";
@@ -41,6 +41,55 @@ namespace osrv
 {
 	namespace media2
 	{
+		struct CreateProfileHandler : public OnvifRequestBase
+		{
+			
+			CreateProfileHandler(const std::map<std::string, std::string>& xs, const std::shared_ptr<pt::ptree>& configs, utility::media::MediaProfilesManager* profiles_mgr)
+				: OnvifRequestBase(CreateProfile, auth::SECURITY_LEVELS::READ_MEDIA, xs, configs)
+				, profiles_mgr_(profiles_mgr)
+			{
+			}
+
+			void operator()(std::shared_ptr<HttpServer::Response> response,
+				std::shared_ptr<HttpServer::Request> request) override
+			{
+				auto envelope_tree = utility::soap::getEnvelopeTree(ns_);
+
+				std::string profile_name;
+				std::string cfg_token;
+				std::string cfg_type;
+
+				auto request_str = request->content.string();
+				std::istringstream is(request_str);
+				pt::ptree xml_tree;
+				pt::xml_parser::read_xml(is, xml_tree);
+				profile_name = exns::find_hierarchy("Envelope.Body.CreateProfile.Name", xml_tree);
+				cfg_type = exns::find_hierarchy("Envelope.Body.CreateProfile.Configuration.Type", xml_tree);
+				cfg_token = exns::find_hierarchy("Envelope.Body.CreateProfile.Configuration.Token", xml_tree);
+
+				profiles_mgr_->Create(profile_name);
+
+				auto created_profile_token = profiles_mgr_->Back().get<std::string>(CONFIG_PROP_TOKEN);
+
+				if (!cfg_type.empty() && !cfg_token.empty())
+					profiles_mgr_->AddConfiguration(created_profile_token, cfg_type, cfg_token);
+
+				envelope_tree.add("s:Body.tr2:CreateProfileResponse.tr2:Token",
+					created_profile_token);
+
+				pt::ptree root_tree;
+				root_tree.put_child("s:Envelope", envelope_tree);
+
+				std::ostringstream os;
+				pt::write_xml(os, root_tree);
+
+				utility::http::fillResponseWithHeaders(*response, os.str());
+			}
+			
+		private:
+			const utility::media::MediaProfilesManager* profiles_mgr_;
+		};
+
 		struct GetAnalyticsConfigurationsHandler : public OnvifRequestBase
 		{
 			GetAnalyticsConfigurationsHandler(const std::map<std::string, std::string>& xs, const std::shared_ptr<pt::ptree>& configs)
@@ -203,15 +252,15 @@ namespace osrv
 		struct GetProfilesHandler : public OnvifRequestBase
 		{
 		private:
-			const std::shared_ptr<pt::ptree>& profiles_configs_;
 			const osrv::ServerConfigs& server_cfg_;
+			utility::media::MediaProfilesManager* profiles_mgr_;
 
 		public:
 
-			GetProfilesHandler(const std::map<std::string, std::string>& xs, const std::shared_ptr<pt::ptree>& configs
-				, const std::shared_ptr<pt::ptree>& profiles_configs, const osrv::ServerConfigs& server_cfg)
+			GetProfilesHandler(const std::map<std::string, std::string>& xs, const std::shared_ptr<pt::ptree>& configs,
+				utility::media::MediaProfilesManager* profiles_mgr, const osrv::ServerConfigs& server_cfg)
 				: OnvifRequestBase(GetProfiles, auth::SECURITY_LEVELS::READ_MEDIA, xs, configs)
-				, profiles_configs_(profiles_configs)
+				, profiles_mgr_(profiles_mgr)
 				, server_cfg_(server_cfg)
 			{
 			}
@@ -221,7 +270,7 @@ namespace osrv
 			{
 				auto envelope_tree = utility::soap::getEnvelopeTree(ns_);
 
-				auto profiles_configs_list = profiles_configs_->get_child("MediaProfiles");
+				const auto& profiles_configs_list = profiles_mgr_->ReaderWriter()->ConfigsTree().get_child("MediaProfiles");
 
 				// extract requested profile token (if there it is) 
 				std::string profile_token;
@@ -236,7 +285,6 @@ namespace osrv
 				pt::ptree response_node;
 				if (profile_token.empty())
 				{
-
 					if (server_cfg_.multichannel_enabled_)
 					{
 						std::string vsToken = profiles_configs_list.front().second.get<std::string>("VideoSourceConfiguration");
@@ -244,16 +292,16 @@ namespace osrv
 						{
 							auto it = profiles_configs_list.begin();
 							while (std::find_if(it, profiles_configs_list.end(),
-								[vsToken](pt::ptree::value_type tree)
+								[vsToken](const pt::ptree::value_type& tree)
 								{
 									return tree.second.get<std::string>("VideoSourceConfiguration") == vsToken;
 								}) != profiles_configs_list.end())
 							{
 								pt::ptree profile_node;
-								media2::util::profile_to_soap(it->second, *profiles_configs_, profile_node);
+								media2::util::profile_to_soap(it->second, profiles_mgr_->ReaderWriter()->ConfigsTree(), profile_node);
 
 								std::string profileToken = std::to_string(i) + "_"
-									+ it->second.get<std::string>("token");
+									+ it->second.get<std::string>(CONFIG_PROP_TOKEN);
 								profile_node.put("<xmlattr>.token", profileToken);
 
 								std::string vsToken = "VideoSource" + std::to_string(i);
@@ -267,10 +315,10 @@ namespace osrv
 					else
 					{
 						// response all media profiles' configs
-						for (auto elements : profiles_configs_list)
+						for (const auto& elements : profiles_configs_list)
 						{
 							pt::ptree profile_node;
-							media2::util::profile_to_soap(elements.second, *profiles_configs_, profile_node);
+							media2::util::profile_to_soap(elements.second, profiles_mgr_->ReaderWriter()->ConfigsTree(), profile_node);
 							response_node.add_child("tr2:Profiles", profile_node);
 						}
 					}
@@ -281,18 +329,10 @@ namespace osrv
 
 					std::string cleanedName = media::util::MultichannelProfilesNamesConverter(profile_token).CleanedName();
 
-					auto profiles_config_it = std::find_if(profiles_configs_list.begin(),
-						profiles_configs_list.end(),
-						[&cleanedName](const pt::ptree::value_type& i)
-						{
-							return i.second.get<std::string>("token") == cleanedName;
-						});
-
-					if (profiles_config_it == profiles_configs_list.end())
-						throw std::runtime_error("Not found a profile with token: " + profile_token);
+					const auto& profile_config = profiles_mgr_->GetProfileByToken(cleanedName);
 
 					pt::ptree profile_node;
-					media2::util::profile_to_soap(profiles_config_it->second, *profiles_configs_, profile_node);
+					media2::util::profile_to_soap(profile_config, profiles_mgr_->ReaderWriter()->ConfigsTree(), profile_node);
 
 					if (server_cfg_.multichannel_enabled_)
 						profile_node.put("<xmlattr>.token", profile_token);
@@ -915,7 +955,8 @@ namespace osrv
 		requestHandlers_.push_back(std::make_shared<media2::GetAnalyticsConfigurationsHandler>(xml_namespaces_, configs_ptree_));
 		requestHandlers_.push_back(std::make_shared<media2::GetAudioEncoderConfigurationsHandler>(xml_namespaces_, configs_ptree_, srv->ProfilesConfig()));
 		requestHandlers_.push_back(std::make_shared<media2::GetAudioEncoderConfigurationOptionsHandler>(xml_namespaces_, configs_ptree_, srv->ProfilesConfig()));
-		requestHandlers_.push_back(std::make_shared<media2::GetProfilesHandler>(xml_namespaces_, configs_ptree_, srv->ProfilesConfig(), *srv->ServerConfigs()));
+		requestHandlers_.push_back(std::make_shared<media2::CreateProfileHandler>(xml_namespaces_, configs_ptree_, srv->MediaProfilesManager()));
+		requestHandlers_.push_back(std::make_shared<media2::GetProfilesHandler>(xml_namespaces_, configs_ptree_, srv->MediaProfilesManager(), *srv->ServerConfigs()));
 		requestHandlers_.push_back(std::make_shared<media2::GetVideoEncoderConfigurationsHandler>(xml_namespaces_, configs_ptree_, srv->ProfilesConfig()));
 		requestHandlers_.push_back(std::make_shared<media2::GetVideoEncoderConfigurationOptionsHandler>(xml_namespaces_, configs_ptree_, srv->ProfilesConfig()));
 		requestHandlers_.push_back(std::make_shared<media2::GetVideoSourceConfigurationsHandler>(xml_namespaces_, configs_ptree_, srv->ProfilesConfig(), *srv->ServerConfigs()));
