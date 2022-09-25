@@ -46,16 +46,22 @@ namespace osrv
 		const char* what() const override { return "No such profile"; }
 	};
 
-	class invalid_token: public std::exception
+	class invalid_token : public std::exception
 	{
 	public:
 		const char* what() const override { return "No such configuration token"; }
 	};
 	
-	class invalid_config_type: public std::exception
+	class invalid_config_type : public std::exception
 	{
 	public:
 		const char* what() const override { return "No such configuration type"; }
+	};
+
+	class deletion_of_fixed_profile : public std::exception
+	{
+	public:
+		const char* what() const override { return "A fixed Profile cannot be deleted"; }
 	};
 }
 

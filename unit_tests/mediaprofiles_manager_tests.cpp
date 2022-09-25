@@ -182,6 +182,26 @@ BOOST_AUTO_TEST_CASE(MediaProfilesManager_Delete_test0)
 	readerWriter.Reset();
 }
 
+BOOST_AUTO_TEST_CASE(MediaProfilesManager_Delete_test1)
+{
+	using namespace utility::media;
+
+	const std::string path{ "../../unit_tests/test_data/mediaprofiles_manager_test.config" };
+
+	MediaProfilesManager manager(path);
+	try
+	{
+		// it's fixed profile so we could not delete it
+		manager.Delete(ProfileConfigsHelper(manager.Back()).ProfileToken());
+	}
+	catch (const osrv::deletion_of_fixed_profile&)
+	{
+		return;
+	}
+
+	BOOST_ASSERT(false);
+}
+
 BOOST_AUTO_TEST_CASE(MediaProfilesManager_Back_test0)
 {
 	using namespace utility::media;

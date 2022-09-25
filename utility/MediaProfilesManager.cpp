@@ -82,7 +82,10 @@ namespace utility::media
 			[profileToken](const auto& p) { return profileToken == p.second.get<std::string>("token"); });
 
 		if (res_it == end)
-			return;
+			throw osrv::no_such_profile();
+
+		if (res_it->second.get<std::string>("fixed") == "true")
+			throw osrv::deletion_of_fixed_profile();
 
 		mediaProfilesTree.erase(res_it);
 
