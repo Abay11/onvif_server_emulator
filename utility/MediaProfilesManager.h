@@ -102,7 +102,7 @@ namespace utility::media
 		void RemoveConfiguration();
 
 		boost::property_tree::ptree& GetProfileByToken(const std::string& token);
-		const boost::property_tree::ptree& GetProfileByToken(const std::string& token) const { return GetProfileByToken(token); };
+		const boost::property_tree::ptree& GetProfileByToken(const std::string& token) const;
 		boost::property_tree::ptree& GetProfileByName(const std::string& name);
 		const boost::property_tree::ptree& GetProfileByName(const std::string& name) const { return GetProfileByName(name); };
 		// do not call Back on empty profiles list

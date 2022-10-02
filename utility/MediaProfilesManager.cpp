@@ -126,7 +126,7 @@ namespace utility::media
 		return token;
 	}
 
-	boost::property_tree::ptree& MediaProfilesManager::GetProfileByToken(const std::string& token)
+	const boost::property_tree::ptree& MediaProfilesManager::GetProfileByToken(const std::string& token) const
 	{
 		auto& profilesTree = readerWriter_->ConfigsTree().get_child("MediaProfiles");
 		auto begin = profilesTree.begin();
@@ -141,7 +141,13 @@ namespace utility::media
 
 		return res_it->second;
 	}
-		
+
+	boost::property_tree::ptree& MediaProfilesManager::GetProfileByToken(const std::string& token)
+	{
+		return const_cast<boost::property_tree::ptree&>(
+			const_cast<MediaProfilesManager const*>(this)->GetProfileByToken(token));
+	}
+
 	boost::property_tree::ptree& MediaProfilesManager::GetProfileByName(const std::string& name)
 	{
 		auto& profilesTree = readerWriter_->ConfigsTree().get_child("MediaProfiles");
