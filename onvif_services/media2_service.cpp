@@ -20,6 +20,7 @@
 namespace pt = boost::property_tree;
 
 //the list of implemented methods
+static const std::string AddConfiguration = "AddConfiguration";
 static const std::string CreateProfile = "CreateProfile";
 static const std::string DeleteProfile = "DeleteProfile";
 static const std::string GetAnalyticsConfigurations = "GetAnalyticsConfigurations";
@@ -42,6 +43,49 @@ namespace osrv
 {
 	namespace media2
 	{
+		struct AddConfigurationHandler : public OnvifRequestBase
+		{
+			AddConfigurationHandler(const std::map<std::string, std::string>& xs, const std::shared_ptr<pt::ptree>& configs, const utility::media::MediaProfilesManager* profiles_mgr)
+				: OnvifRequestBase(AddConfiguration, auth::SECURITY_LEVELS::ACTUATE, xs, configs)
+				, profiles_mgr_(profiles_mgr)
+			{
+			}
+
+			void operator()(std::shared_ptr<HttpServer::Response> response,
+				std::shared_ptr<HttpServer::Request> request) override
+			{
+				auto envelope_tree = utility::soap::getEnvelopeTree(ns_);
+
+				std::string profile_token;
+				std::string cfg_token;
+				std::string cfg_type;
+
+				auto request_str = request->content.string();
+				std::istringstream is(request_str);
+				pt::ptree xml_tree;
+				pt::xml_parser::read_xml(is, xml_tree);
+				profile_token = exns::find_hierarchy("Envelope.Body.AddConfiguration.ProfileToken", xml_tree);
+				cfg_type = exns::find_hierarchy("Envelope.Body.AddConfiguration.Configuration.Type", xml_tree);
+				cfg_token = exns::find_hierarchy("Envelope.Body.AddConfiguration.Configuration.Token", xml_tree);
+
+				auto profileTree = profiles_mgr_->GetProfileByToken(profile_token);
+				profiles_mgr_->AddConfiguration(utility::media::ProfileConfigsHelper(profileTree).ProfileToken(),
+					cfg_type, cfg_token);
+
+				envelope_tree.add("s:Body.tr2:AddConfigurationResponse", "");
+				pt::ptree root_tree;
+				root_tree.put_child("s:Envelope", envelope_tree);
+
+				std::ostringstream os;
+				pt::write_xml(os, root_tree);
+
+				utility::http::fillResponseWithHeaders(*response, os.str());
+			}
+			
+		private:
+			const utility::media::MediaProfilesManager* profiles_mgr_;
+		};
+
 		struct CreateProfileHandler : public OnvifRequestBase
 		{
 			CreateProfileHandler(const std::map<std::string, std::string>& xs, const std::shared_ptr<pt::ptree>& configs, const utility::media::MediaProfilesManager* profiles_mgr)
@@ -988,18 +1032,19 @@ namespace osrv
 		std::shared_ptr<IOnvifServer> srv)
 		: IOnvifService(service_uri, service_name, srv)
 	{
-		requestHandlers_.push_back(std::make_shared<media2::GetAnalyticsConfigurationsHandler>(xml_namespaces_, configs_ptree_));
-		requestHandlers_.push_back(std::make_shared<media2::GetAudioEncoderConfigurationsHandler>(xml_namespaces_, configs_ptree_, srv->ProfilesConfig()));
-		requestHandlers_.push_back(std::make_shared<media2::GetAudioEncoderConfigurationOptionsHandler>(xml_namespaces_, configs_ptree_, srv->ProfilesConfig()));
+		requestHandlers_.push_back(std::make_shared<media2::AddConfigurationHandler>(xml_namespaces_, configs_ptree_, srv->MediaProfilesManager()));
 		requestHandlers_.push_back(std::make_shared<media2::CreateProfileHandler>(xml_namespaces_, configs_ptree_, srv->MediaProfilesManager()));
 		requestHandlers_.push_back(std::make_shared<media2::DeleteProfileHandler>(xml_namespaces_, configs_ptree_, srv->MediaProfilesManager()));
+		requestHandlers_.push_back(std::make_shared<media2::GetAnalyticsConfigurationsHandler>(xml_namespaces_, configs_ptree_));
+		requestHandlers_.push_back(std::make_shared<media2::GetAudioEncoderConfigurationOptionsHandler>(xml_namespaces_, configs_ptree_, srv->ProfilesConfig()));
+		requestHandlers_.push_back(std::make_shared<media2::GetAudioEncoderConfigurationsHandler>(xml_namespaces_, configs_ptree_, srv->ProfilesConfig()));
 		requestHandlers_.push_back(std::make_shared<media2::GetProfilesHandler>(xml_namespaces_, configs_ptree_, srv->MediaProfilesManager(), *srv->ServerConfigs()));
-		requestHandlers_.push_back(std::make_shared<media2::GetVideoEncoderConfigurationsHandler>(xml_namespaces_, configs_ptree_, srv->ProfilesConfig()));
-		requestHandlers_.push_back(std::make_shared<media2::GetVideoEncoderConfigurationOptionsHandler>(xml_namespaces_, configs_ptree_, srv->ProfilesConfig()));
-		requestHandlers_.push_back(std::make_shared<media2::GetVideoSourceConfigurationsHandler>(xml_namespaces_, configs_ptree_, srv->ProfilesConfig(), *srv->ServerConfigs()));
-		requestHandlers_.push_back(std::make_shared<media2::GetVideoSourceConfigurationOptionsHandler>(xml_namespaces_, configs_ptree_, srv->ProfilesConfig()));
 		requestHandlers_.push_back(std::make_shared<media2::GetServiceCapabilitiesHandler>(xml_namespaces_, configs_ptree_));
 		requestHandlers_.push_back(std::make_shared<media2::GetStreamUriHandler>(xml_namespaces_, configs_ptree_, srv->ProfilesConfig(), *srv->ServerConfigs()));
+		requestHandlers_.push_back(std::make_shared<media2::GetVideoEncoderConfigurationOptionsHandler>(xml_namespaces_, configs_ptree_, srv->ProfilesConfig()));
+		requestHandlers_.push_back(std::make_shared<media2::GetVideoEncoderConfigurationsHandler>(xml_namespaces_, configs_ptree_, srv->ProfilesConfig()));
+		requestHandlers_.push_back(std::make_shared<media2::GetVideoSourceConfigurationOptionsHandler>(xml_namespaces_, configs_ptree_, srv->ProfilesConfig()));
+		requestHandlers_.push_back(std::make_shared<media2::GetVideoSourceConfigurationsHandler>(xml_namespaces_, configs_ptree_, srv->ProfilesConfig(), *srv->ServerConfigs()));
 		requestHandlers_.push_back(std::make_shared<media2::SetVideoEncoderConfigurationHandler>(xml_namespaces_, configs_ptree_));
 		requestHandlers_.push_back(std::make_shared<media2::SetVideoSourceConfigurationHandler>(xml_namespaces_, configs_ptree_));
 	}
