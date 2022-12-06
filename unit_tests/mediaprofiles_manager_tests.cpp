@@ -315,3 +315,45 @@ BOOST_AUTO_TEST_CASE(MediaProfilesManager_AddConfiguration_test2)
 	readerWriter.Reset();
 	BOOST_ASSERT(false);
 }
+
+BOOST_AUTO_TEST_CASE(MediaProfilesManager_RemoveConfiguration_test0)
+{
+	using namespace utility::media;
+
+	const std::string path{ "../../unit_tests/test_data/mediaprofiles_manager_test.config" };
+	
+	ConfigsReaderWriter readerWriter(path);
+	readerWriter.Read();
+
+	MediaProfilesManager manager(path);
+
+	// create a new media profile, add a configuration
+	const std::string customProfileName{ "CustomProfileName" };
+	const std::string videoSourceToken = readerWriter.ConfigsTree()
+		.get_child(osrv::CONFIGURATION_ENUMERATION[osrv::CONFIGURATION_TYPE::VIDEOSOURCE]).front()
+		.second.get<std::string>("token");
+	manager.Create(customProfileName);
+	manager.AddConfiguration(utility::media::ProfileConfigsHelper(manager.Back()).ProfileToken(),
+		osrv::CONFIGURATION_ENUMERATION[osrv::VIDEOSOURCE], videoSourceToken);
+
+	// remove the configuration was added
+	manager.RemoveConfiguration(utility::media::ProfileConfigsHelper(manager.Back()).ProfileToken(),
+		osrv::CONFIGURATION_ENUMERATION[osrv::VIDEOSOURCE], videoSourceToken);
+
+	readerWriter.Read();
+	auto mediaProfilesTree = readerWriter.ConfigsTree().get_child("MediaProfiles");
+
+	// expected that if the configuration was removed there were no configuration for the create new profile
+	try
+	{
+		mediaProfilesTree.back().second.get<std::string>(osrv::CONFIGURATION_ENUMERATION[osrv::VIDEOSOURCE]);
+	}
+	catch (const boost::property_tree::ptree_bad_path&)
+	{
+		readerWriter.Reset();
+		return;
+	}
+
+	readerWriter.Reset();
+	BOOST_ASSERT(false); 
+}

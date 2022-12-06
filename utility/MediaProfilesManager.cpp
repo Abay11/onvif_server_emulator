@@ -119,6 +119,34 @@ namespace utility::media
 
 		readerWriter_->Save();
 	}
+
+	void MediaProfilesManager::RemoveConfiguration(std::string_view profileToken, std::string_view configType, std::string_view configToken) const
+	{
+		auto& mediaProfilesTree = readerWriter_->ConfigsTree().get_child("MediaProfiles");
+
+		auto begin = mediaProfilesTree.begin();
+		auto end = mediaProfilesTree.end();
+		auto res_it = std::find_if(begin, end,
+			[&profileToken](const auto& p) { return profileToken == p.second.get<std::string>("token"); });
+
+		if (res_it == end)
+			throw osrv::no_such_profile();
+
+		if (osrv::CONFIGURATION_ENUMERATION.end() ==
+			std::find(osrv::CONFIGURATION_ENUMERATION.begin(), osrv::CONFIGURATION_ENUMERATION.end(), configType))
+			throw osrv::invalid_config_type();
+
+		const auto& config_tree = readerWriter_->ConfigsTree().get_child(configType.data());
+		auto config_tree_res_it = std::find_if(config_tree.begin(), config_tree.end(),
+			[&configToken](const auto& it) { return configToken == it.second.get<std::string>("token"); });
+
+		if (config_tree_res_it == config_tree.end())
+			throw osrv::invalid_token();
+
+		res_it->second.erase(configType.data());
+
+		readerWriter_->Save();
+	}
 		
 	std::string MediaProfilesManager::newProfileToken(size_t n) const
 	{
