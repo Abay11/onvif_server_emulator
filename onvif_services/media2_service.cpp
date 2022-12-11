@@ -34,6 +34,7 @@ static const std::string GetVideoEncoderConfigurationOptions = "GetVideoEncoderC
 static const std::string GetVideoEncoderConfigurations = "GetVideoEncoderConfigurations";
 static const std::string GetVideoSourceConfigurationOptions = "GetVideoSourceConfigurationOptions";
 static const std::string GetVideoSourceConfigurations = "GetVideoSourceConfigurations";
+static const std::string RemoveConfiguration = "RemoveConfiguration";
 static const std::string SetVideoEncoderConfiguration = "SetVideoEncoderConfiguration";
 static const std::string SetVideoSourceConfiguration = "SetVideoSourceConfiguration";
 
@@ -634,6 +635,55 @@ namespace osrv
 			}
 		};
 
+		struct RemoveConfigurationHandler : public OnvifRequestBase
+		{
+		private:
+			utility::media::MediaProfilesManager* profiles_mgr_;
+
+		public:
+
+			RemoveConfigurationHandler(const std::map<std::string, std::string>& xs, const std::shared_ptr<pt::ptree>& configs,
+				utility::media::MediaProfilesManager* prf_mgr)
+				: OnvifRequestBase(RemoveConfiguration, auth::SECURITY_LEVELS::ACTUATE, xs, configs)
+				, profiles_mgr_(prf_mgr)
+			{
+			}
+
+			void operator()(std::shared_ptr<HttpServer::Response> response,
+				std::shared_ptr<HttpServer::Request> request) override
+			{
+				auto envelope_tree = utility::soap::getEnvelopeTree(ns_);
+
+				std::string profile_token;
+				std::string cfg_token;
+				std::string cfg_type;
+
+				auto request_str = request->content.string();
+				std::istringstream is(request_str);
+				pt::ptree xml_tree;
+				pt::xml_parser::read_xml(is, xml_tree);
+				profile_token = exns::find_hierarchy("Envelope.Body.AddConfiguration.ProfileToken", xml_tree);
+				cfg_type = exns::find_hierarchy("Envelope.Body.AddConfiguration.Configuration.Type", xml_tree);
+				cfg_token = exns::find_hierarchy("Envelope.Body.AddConfiguration.Configuration.Token", xml_tree);
+
+				auto profileTree = profiles_mgr_->GetProfileByToken(profile_token);
+				profiles_mgr_->AddConfiguration(utility::media::ProfileConfigsHelper(profileTree).ProfileToken(),
+					cfg_type, cfg_token);
+
+				envelope_tree.add("s:Body.tr2:AddConfigurationResponse", "");
+				pt::ptree root_tree;
+				root_tree.put_child("s:Envelope", envelope_tree);
+
+				std::ostringstream os;
+				pt::write_xml(os, root_tree);
+
+				utility::http::fillResponseWithHeaders(*response, os.str());
+
+			}
+		};
+
+		
+
 		struct GetVideoSourceConfigurationOptionsHandler : public OnvifRequestBase
 		{
 		private:
@@ -1045,6 +1095,7 @@ namespace osrv
 		requestHandlers_.push_back(std::make_shared<media2::GetVideoEncoderConfigurationsHandler>(xml_namespaces_, configs_ptree_, srv->ProfilesConfig()));
 		requestHandlers_.push_back(std::make_shared<media2::GetVideoSourceConfigurationOptionsHandler>(xml_namespaces_, configs_ptree_, srv->ProfilesConfig()));
 		requestHandlers_.push_back(std::make_shared<media2::GetVideoSourceConfigurationsHandler>(xml_namespaces_, configs_ptree_, srv->ProfilesConfig(), *srv->ServerConfigs()));
+		//requestHandlers_.push_back(std::make_shared<media2::RemoveConfigurationHandler>(xml_namespaces_, configs_ptree_));
 		requestHandlers_.push_back(std::make_shared<media2::SetVideoEncoderConfigurationHandler>(xml_namespaces_, configs_ptree_));
 		requestHandlers_.push_back(std::make_shared<media2::SetVideoSourceConfigurationHandler>(xml_namespaces_, configs_ptree_));
 	}
