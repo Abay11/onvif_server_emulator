@@ -99,7 +99,7 @@ namespace utility::media
 		void Create(const std::string& profileName) const;
 		void Delete(const std::string& profileToken) const;
 		void AddConfiguration(const std::string& profileToken, const std::string& configType, const std::string& configToken) const;
-		void RemoveConfiguration(std::string_view profileToken, std::string_view configType, std::string_view configToken) const;
+		void RemoveConfiguration(std::string_view profileToken, std::string_view configType, std::string_view configToken = {}) const;
 
 		boost::property_tree::ptree& GetProfileByToken(const std::string& token);
 		const boost::property_tree::ptree& GetProfileByToken(const std::string& token) const;

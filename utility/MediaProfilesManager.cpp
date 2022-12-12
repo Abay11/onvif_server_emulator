@@ -2,6 +2,8 @@
 
 #include <boost/property_tree/json_parser.hpp>
 
+#include <iostream>
+
 namespace pt = boost::property_tree;
 
 namespace utility::media
@@ -126,24 +128,36 @@ namespace utility::media
 
 		auto begin = mediaProfilesTree.begin();
 		auto end = mediaProfilesTree.end();
-		auto res_it = std::find_if(begin, end,
+		auto profile_it = std::find_if(begin, end,
 			[&profileToken](const auto& p) { return profileToken == p.second.get<std::string>("token"); });
 
-		if (res_it == end)
+		if (profile_it == end)
 			throw osrv::no_such_profile();
+
+		if (!configToken.empty())
+		{
+			auto config_it = std::find_if(profile_it->second.begin(), profile_it->second.end(),
+				[&configToken](const auto& item) { return item.second.get_value<std::string>() == configToken; });
+			if (config_it != profile_it->second.end())
+			{
+				std::cout << config_it->second.get_value<std::string>() << std::endl;
+			}
+		}
+
+
 
 		if (osrv::CONFIGURATION_ENUMERATION.end() ==
 			std::find(osrv::CONFIGURATION_ENUMERATION.begin(), osrv::CONFIGURATION_ENUMERATION.end(), configType))
 			throw osrv::invalid_config_type();
 
-		const auto& config_tree = readerWriter_->ConfigsTree().get_child(configType.data());
-		auto config_tree_res_it = std::find_if(config_tree.begin(), config_tree.end(),
-			[&configToken](const auto& it) { return configToken == it.second.get<std::string>("token"); });
+		//const auto& config_tree = readerWriter_->ConfigsTree().get_child(configType.data());
+		//auto config_tree_res_it = std::find_if(config_tree.begin(), config_tree.end(),
+		//	[&configToken](const auto& it) { return configToken == it.second.get<std::string>("token"); });
 
-		if (config_tree_res_it == config_tree.end())
-			throw osrv::invalid_token();
+		//if (config_tree_res_it == config_tree.end())
+		//	throw osrv::invalid_token();
 
-		res_it->second.erase(configType.data());
+		profile_it->second.erase(configType.data());
 
 		readerWriter_->Save();
 	}

@@ -357,3 +357,70 @@ BOOST_AUTO_TEST_CASE(MediaProfilesManager_RemoveConfiguration_test0)
 	readerWriter.Reset();
 	BOOST_ASSERT(false); 
 }
+
+BOOST_AUTO_TEST_CASE(MediaProfilesManager_RemoveConfiguration_test1)
+{
+	using namespace utility::media;
+
+	const std::string path{ "../../unit_tests/test_data/mediaprofiles_manager_test.config" };
+
+	ConfigsReaderWriter readerWriter(path);
+	readerWriter.Read();
+
+	MediaProfilesManager manager(path);
+
+	// create a new media profile, add a configuration
+	const std::string customProfileName{ "CustomProfileName" };
+	const std::string videoSourceToken = readerWriter.ConfigsTree()
+		.get_child(osrv::CONFIGURATION_ENUMERATION[osrv::CONFIGURATION_TYPE::VIDEOSOURCE]).front()
+		.second.get<std::string>("token");
+	const std::string videoEncoderToken = readerWriter.ConfigsTree()
+		.get_child(osrv::CONFIGURATION_ENUMERATION[osrv::CONFIGURATION_TYPE::VIDEOENCODER]).front()
+		.second.get<std::string>("token");
+
+	manager.Create(customProfileName);
+
+	manager.AddConfiguration(utility::media::ProfileConfigsHelper(manager.Back()).ProfileToken(),
+		osrv::CONFIGURATION_ENUMERATION[osrv::VIDEOSOURCE], videoSourceToken);
+	manager.AddConfiguration(utility::media::ProfileConfigsHelper(manager.Back()).ProfileToken(),
+		osrv::CONFIGURATION_ENUMERATION[osrv::VIDEOENCODER], videoEncoderToken);
+
+	// remove the configuratin by token
+	manager.RemoveConfiguration(utility::media::ProfileConfigsHelper(manager.Back()).ProfileToken(),
+		osrv::CONFIGURATION_ENUMERATION[osrv::VIDEOSOURCE], videoSourceToken);
+
+	// just check configuration file still is readable and could be parsed
+	readerWriter.Read();
+	auto mediaProfilesTree = readerWriter.ConfigsTree().get_child("MediaProfiles");
+
+	readerWriter.Reset();
+}
+
+BOOST_AUTO_TEST_CASE(MediaProfilesManager_RemoveConfiguration_test2)
+{
+	using namespace utility::media;
+
+	const std::string path{ "../../unit_tests/test_data/mediaprofiles_manager_test.config" };
+
+	ConfigsReaderWriter readerWriter(path);
+	readerWriter.Read();
+
+	MediaProfilesManager manager(path);
+
+	// create a new media profile, add a configuration
+	const std::string customProfileName{ "CustomProfileName" };
+	const std::string videoSourceToken = readerWriter.ConfigsTree()
+		.get_child(osrv::CONFIGURATION_ENUMERATION[osrv::CONFIGURATION_TYPE::VIDEOSOURCE]).front()
+		.second.get<std::string>("token");
+	manager.Create(customProfileName);
+
+	// remove non-existing configuration. expected it just should be ignored, no exception and etc
+	manager.RemoveConfiguration(utility::media::ProfileConfigsHelper(manager.Back()).ProfileToken(),
+		osrv::CONFIGURATION_ENUMERATION[osrv::VIDEOSOURCE], videoSourceToken);
+
+	// just check configuration file still is readable and could be parsed
+	readerWriter.Read();
+	auto mediaProfilesTree = readerWriter.ConfigsTree().get_child("MediaProfiles");
+
+	readerWriter.Reset();
+}
