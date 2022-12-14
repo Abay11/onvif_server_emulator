@@ -662,15 +662,15 @@ namespace osrv
 				std::istringstream is(request_str);
 				pt::ptree xml_tree;
 				pt::xml_parser::read_xml(is, xml_tree);
-				profile_token = exns::find_hierarchy("Envelope.Body.AddConfiguration.ProfileToken", xml_tree);
-				cfg_type = exns::find_hierarchy("Envelope.Body.AddConfiguration.Configuration.Type", xml_tree);
-				cfg_token = exns::find_hierarchy("Envelope.Body.AddConfiguration.Configuration.Token", xml_tree);
+				profile_token = exns::find_hierarchy("Envelope.Body.RemoveConfiguration.ProfileToken", xml_tree);
+				cfg_type = exns::find_hierarchy("Envelope.Body.RemoveConfiguration.Configuration.Type", xml_tree);
+				cfg_token = exns::find_hierarchy("Envelope.Body.RemoveConfiguration.Configuration.Token", xml_tree);
 
 				auto profileTree = profiles_mgr_->GetProfileByToken(profile_token);
-				profiles_mgr_->AddConfiguration(utility::media::ProfileConfigsHelper(profileTree).ProfileToken(),
+				profiles_mgr_->RemoveConfiguration(utility::media::ProfileConfigsHelper(profileTree).ProfileToken(),
 					cfg_type, cfg_token);
 
-				envelope_tree.add("s:Body.tr2:AddConfigurationResponse", "");
+				envelope_tree.add("s:Body.tr2:RemoveConfigurationResponse", "");
 				pt::ptree root_tree;
 				root_tree.put_child("s:Envelope", envelope_tree);
 
@@ -678,7 +678,6 @@ namespace osrv
 				pt::write_xml(os, root_tree);
 
 				utility::http::fillResponseWithHeaders(*response, os.str());
-
 			}
 		};
 
@@ -1095,7 +1094,7 @@ namespace osrv
 		requestHandlers_.push_back(std::make_shared<media2::GetVideoEncoderConfigurationsHandler>(xml_namespaces_, configs_ptree_, srv->ProfilesConfig()));
 		requestHandlers_.push_back(std::make_shared<media2::GetVideoSourceConfigurationOptionsHandler>(xml_namespaces_, configs_ptree_, srv->ProfilesConfig()));
 		requestHandlers_.push_back(std::make_shared<media2::GetVideoSourceConfigurationsHandler>(xml_namespaces_, configs_ptree_, srv->ProfilesConfig(), *srv->ServerConfigs()));
-		//requestHandlers_.push_back(std::make_shared<media2::RemoveConfigurationHandler>(xml_namespaces_, configs_ptree_));
+		requestHandlers_.push_back(std::make_shared<media2::RemoveConfigurationHandler>(xml_namespaces_, configs_ptree_, srv->MediaProfilesManager()));
 		requestHandlers_.push_back(std::make_shared<media2::SetVideoEncoderConfigurationHandler>(xml_namespaces_, configs_ptree_));
 		requestHandlers_.push_back(std::make_shared<media2::SetVideoSourceConfigurationHandler>(xml_namespaces_, configs_ptree_));
 	}
