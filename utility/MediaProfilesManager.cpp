@@ -134,28 +134,34 @@ namespace utility::media
 		if (profile_it == end)
 			throw osrv::no_such_profile();
 
+		// if config token is provided, remove by config token
 		if (!configToken.empty())
 		{
 			auto config_it = std::find_if(profile_it->second.begin(), profile_it->second.end(),
-				[&configToken](const auto& item) { return item.second.get_value<std::string>() == configToken; });
+				[&configToken](const auto& item)
+				{
+					auto key = item.first;
+
+					static const std::vector INSTANCES_ALLOWED_TO_REMOVE (osrv::CONFIGURATION_ENUMERATION.begin() + 1,
+						osrv::CONFIGURATION_ENUMERATION.end());
+
+					bool isConfig = std::any_of( INSTANCES_ALLOWED_TO_REMOVE.begin(), INSTANCES_ALLOWED_TO_REMOVE.end(),
+						[&key](auto configType) { return key == configType; });
+					
+					return isConfig && configToken == item.second.get_value<std::string>();
+				});
+
 			if (config_it != profile_it->second.end())
 			{
-				std::cout << config_it->second.get_value<std::string>() << std::endl;
+				profile_it->second.erase(config_it);
+				readerWriter_->Save();
+				return;
 			}
 		}
-
-
 
 		if (osrv::CONFIGURATION_ENUMERATION.end() ==
 			std::find(osrv::CONFIGURATION_ENUMERATION.begin(), osrv::CONFIGURATION_ENUMERATION.end(), configType))
 			throw osrv::invalid_config_type();
-
-		//const auto& config_tree = readerWriter_->ConfigsTree().get_child(configType.data());
-		//auto config_tree_res_it = std::find_if(config_tree.begin(), config_tree.end(),
-		//	[&configToken](const auto& it) { return configToken == it.second.get<std::string>("token"); });
-
-		//if (config_tree_res_it == config_tree.end())
-		//	throw osrv::invalid_token();
 
 		profile_it->second.erase(configType.data());
 

@@ -338,7 +338,7 @@ BOOST_AUTO_TEST_CASE(MediaProfilesManager_RemoveConfiguration_test0)
 
 	// remove the configuration was added
 	manager.RemoveConfiguration(utility::media::ProfileConfigsHelper(manager.Back()).ProfileToken(),
-		osrv::CONFIGURATION_ENUMERATION[osrv::VIDEOSOURCE], videoSourceToken);
+		osrv::CONFIGURATION_ENUMERATION[osrv::VIDEOSOURCE]);
 
 	readerWriter.Read();
 	auto mediaProfilesTree = readerWriter.ConfigsTree().get_child("MediaProfiles");
@@ -346,7 +346,7 @@ BOOST_AUTO_TEST_CASE(MediaProfilesManager_RemoveConfiguration_test0)
 	// expected that if the configuration was removed there were no configuration for the create new profile
 	try
 	{
-		mediaProfilesTree.back().second.get<std::string>(osrv::CONFIGURATION_ENUMERATION[osrv::VIDEOSOURCE]);
+		auto t = mediaProfilesTree.back().second.get<std::string>(osrv::CONFIGURATION_ENUMERATION[osrv::VIDEOSOURCE]);
 	}
 	catch (const boost::property_tree::ptree_bad_path&)
 	{
@@ -385,13 +385,15 @@ BOOST_AUTO_TEST_CASE(MediaProfilesManager_RemoveConfiguration_test1)
 	manager.AddConfiguration(utility::media::ProfileConfigsHelper(manager.Back()).ProfileToken(),
 		osrv::CONFIGURATION_ENUMERATION[osrv::VIDEOENCODER], videoEncoderToken);
 
-	// remove the configuratin by token
+	// remove one configuratin by token
 	manager.RemoveConfiguration(utility::media::ProfileConfigsHelper(manager.Back()).ProfileToken(),
-		osrv::CONFIGURATION_ENUMERATION[osrv::VIDEOSOURCE], videoSourceToken);
+		osrv::CONFIGURATION_ENUMERATION[osrv::VIDEOENCODER], videoEncoderToken);
 
-	// just check configuration file still is readable and could be parsed
 	readerWriter.Read();
-	auto mediaProfilesTree = readerWriter.ConfigsTree().get_child("MediaProfiles");
+	auto customMediaProfile = readerWriter.ConfigsTree().get_child("MediaProfiles").back();
+
+	BOOST_TEST(customMediaProfile.second.size() == 4);
+	BOOST_TEST(customMediaProfile.second.get<std::string>(osrv::CONFIGURATION_ENUMERATION[osrv::VIDEOSOURCE]) == videoSourceToken);
 
 	readerWriter.Reset();
 }
@@ -416,7 +418,7 @@ BOOST_AUTO_TEST_CASE(MediaProfilesManager_RemoveConfiguration_test2)
 
 	// remove non-existing configuration. expected it just should be ignored, no exception and etc
 	manager.RemoveConfiguration(utility::media::ProfileConfigsHelper(manager.Back()).ProfileToken(),
-		osrv::CONFIGURATION_ENUMERATION[osrv::VIDEOSOURCE], videoSourceToken);
+		osrv::CONFIGURATION_ENUMERATION[osrv::VIDEOSOURCE]);
 
 	// just check configuration file still is readable and could be parsed
 	readerWriter.Read();
