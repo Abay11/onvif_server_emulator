@@ -81,8 +81,8 @@ namespace osrv
 				pt::ptree response_node;
 				response_node.add("tet:SubscriptionReference.wsa:Address", sub_ref);
 				
-				response_node.add("tet:SubscriptionReference.wsnt:CurrentTime", pullpoint->GetLastRenew());
-				response_node.add("tet:SubscriptionReference.wsnt:TerminationTime", pullpoint->GetTerminationTime());
+				response_node.add("wsnt:CurrentTime", pullpoint->GetLastRenew());
+				response_node.add("wsnt:TerminationTime", pullpoint->GetTerminationTime());
 
 				envelope_tree.add_child("s:Body.tet:CreatePullPointSubscriptionResponse", response_node);
 
