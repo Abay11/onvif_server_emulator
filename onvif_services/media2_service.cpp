@@ -849,7 +849,7 @@ namespace osrv
 				if (profile_config == profiles_config_list.end())
 					throw std::runtime_error("Can't find a proper URI: the media profile does not exist. token=" + requested_token);
 
-				auto encoder_token = profile_config->second.get<std::string>("VideoEncoderConfiguration");
+				auto encoder_token = profile_config->second.get<std::string>(CONFIGURATION_ENUMERATION[CONFIGURATION_TYPE::VIDEOENCODER]);
 
 				auto stream_configs_list = service_configs_->get_child("GetStreamUri");
 				auto stream_config_it = std::find_if(stream_configs_list.begin(), stream_configs_list.end(),
