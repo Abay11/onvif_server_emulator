@@ -166,15 +166,15 @@ namespace osrv
 
 			envelope_tree.add("s:Header.wsa:MessageID", header_msg_id);
 			envelope_tree.add("s:Header.wsa:To", "http://www.w3.org/2005/08/addressing/anonymous");
-			envelope_tree.add("s:Header.wsa:Action", "http://www.onvif.org/ver10/events/wsdl/PullPointSubscription/PullMessagesResponse");
+			envelope_tree.add("s:Header.wsa:Action", "http://docs.oasis-open.org/wsn/bw-2/SubscriptionManager/RenewResponse");
 
 			pt::ptree response_node;
-			response_node.add("wsnt:CurrentTime", utility::datetime::system_utc_datetime());
 			response_node.add("wsnt:TerminationTime",
 				utility::datetime::posix_datetime_to_utc(boost::posix_time::microsec_clock::universal_time()
 					+ boost::posix_time::seconds(60)));
-
+			response_node.add("wsnt:CurrentTime", utility::datetime::system_utc_datetime());
 			envelope_tree.add_child("s:Body.wsnt:RenewResponse", response_node);
+
 			pt::ptree root_tree;
 			root_tree.put_child("s:Envelope", envelope_tree);
 
@@ -255,6 +255,16 @@ namespace osrv
 			namespace pt = boost::property_tree;
 			pt::ptree result;
 
+			namespace ptime = boost::posix_time;
+			result.add("tet:CurrentTime", utility::datetime::system_utc_datetime());
+
+			auto ttime = ptime::microsec_clock::universal_time();
+			ttime += ptime::seconds(60);
+
+			auto t = utility::datetime::posix_datetime_to_utc(ttime);
+			result.add("tet:TerminationTime",
+				t);
+
 			while(!msgs.empty())
 			{
 				auto msg = msgs.front();
@@ -284,16 +294,6 @@ namespace osrv
 								
 				result.add_child("wsnt:NotificationMessage", msg_node);
 			}
-
-			namespace ptime = boost::posix_time;
-			result.add("tet:CurrentTime", utility::datetime::system_utc_datetime());
-
-			auto ttime = ptime::microsec_clock::universal_time();
-			ttime += ptime::seconds(60);
-
-			auto t = utility::datetime::posix_datetime_to_utc(ttime);
-			result.add("tet:TerminationTime",
-				t);
 
 			return result;
 		}
