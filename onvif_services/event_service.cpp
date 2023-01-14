@@ -229,17 +229,20 @@ namespace osrv
 					
 					{ // DI properties
 						StringPairsList_t source_props = { {"InputToken", "tt:ReferenceToken"} };
-						StringPairsList_t data_props = { {"LogicalState", "xs:boolean"} };
+						StringPairsList_t data_props = { {"LogicalState", "xsd:boolean"} };
 						EventPropertiesSerializer serializer(EVENT_CONFIGS_TREE.get<std::string>("DigitalInputsAlarm.Topic"),
 							source_props, data_props);
 
 						response_tree.add_child("wstop:TopicSet." + serializer.Path(),
 							serializer.Ptree());
+						// TODO: check if this attr are required and move them into serializer impl
+						//response_tree.add("wstop:TopicSet.tns1:Device.Trigger.<xmlattr>.wstop:topic", "true");
+						//response_tree.add("wstop:TopicSet.tns1:Device.<xmlattr>.wstop:topic", "true");
 					}
 
 					{ // Motion alarm
 						StringPairsList_t source_props = { {"Source", "tt:ReferenceToken"} };
-						StringPairsList_t data_props = { {"State", "xs:boolean"} };
+						StringPairsList_t data_props = { {"State", "xsd:boolean"} };
 						EventPropertiesSerializer serializer(EVENT_CONFIGS_TREE.get<std::string>("MotionAlarm.Topic"),
 							source_props, data_props);
 
@@ -254,10 +257,10 @@ namespace osrv
 							"tt:ReferenceToken"));
 						source_props.push_back(std::make_pair(EVENT_CONFIGS_TREE.get<std::string>("CellMotion.VideoAnalyticsConfigurationToken"),
 							"tt:ReferenceToken"));
-						source_props.push_back(std::make_pair(EVENT_CONFIGS_TREE.get<std::string>("CellMotion.Rule"), "xs:string"));
+						source_props.push_back(std::make_pair(EVENT_CONFIGS_TREE.get<std::string>("CellMotion.Rule"), "xsd:string"));
 
 						StringPairsList_t data_props;
-						data_props.push_back(std::make_pair(EVENT_CONFIGS_TREE.get<std::string>("CellMotion.DataItemName"), "xs:boolean"));
+						data_props.push_back(std::make_pair(EVENT_CONFIGS_TREE.get<std::string>("CellMotion.DataItemName"), "xsd:boolean"));
 
 						EventPropertiesSerializer serializer(EVENT_CONFIGS_TREE.get<std::string>("CellMotion.Topic"),
 							source_props, data_props);
@@ -273,10 +276,10 @@ namespace osrv
 							"tt:ReferenceToken"));
 						source_props.push_back(std::make_pair(EVENT_CONFIGS_TREE.get<std::string>("AudioDetection.AnalyticsConfigurationToken"),
 							"tt:ReferenceToken"));
-						source_props.push_back(std::make_pair(EVENT_CONFIGS_TREE.get<std::string>("AudioDetection.Rule"), "xs:string"));
+						source_props.push_back(std::make_pair(EVENT_CONFIGS_TREE.get<std::string>("AudioDetection.Rule"), "xsd:string"));
 
 						StringPairsList_t data_props;
-						data_props.push_back(std::make_pair(EVENT_CONFIGS_TREE.get<std::string>("AudioDetection.DataItemName"), "xs:boolean"));
+						data_props.push_back(std::make_pair(EVENT_CONFIGS_TREE.get<std::string>("AudioDetection.DataItemName"), "xsd:boolean"));
 
 						EventPropertiesSerializer serializer(EVENT_CONFIGS_TREE.get<std::string>("AudioDetection.Topic"),
 							source_props, data_props);
@@ -284,12 +287,18 @@ namespace osrv
 						response_tree.add_child("wstop:TopicSet." + serializer.Path(),
 							serializer.Ptree());
 					}
+					
+					response_tree.add("wsnt:TopicExpressionDialect", "http://www.onvif.org/ver10/tev/topicExpression/ConcreteSet");
+					response_tree.add("wsnt:TopicExpressionDialect", "http://docs.oasis-open.org/wsnt/t-1/TopicExpression/ConcreteSet");
+					response_tree.add("wsnt:TopicExpressionDialect", "http://docs.oasis-open.org/wsn/t-1/TopicExpression/Concrete");
+					response_tree.add("tet:MessageContentFilterDialect", "http://www.onvif.org/ver10/tev/messageContentFilter/ItemFilter");
+					response_tree.add("tet:MessageContentSchemaLocation", "http://www.onvif.org/onvif/ver10/schema/onvif.xsd");
 
 					envelope_tree.add_child("s:Body.tet:GetEventPropertiesResponse", response_tree);
 
 					pt::ptree root_tree;
 					root_tree.put_child("s:Envelope", envelope_tree);
-
+	
 					std::ostringstream os;
 					pt::write_xml(os, root_tree);
 					response_body = os.str();
