@@ -12,6 +12,8 @@
 
 #include "../utility/XmlParser.h"
 #include "../utility/HttpHelper.h"
+#include "../utility/MediaProfilesManager.h"
+#include "../utility/SoapHelper.h"
 
 #include "../onvif/OnvifRequest.h"
 
@@ -28,9 +30,11 @@ namespace osrv
 	struct RequestHandler
 	{
 	public:
-		RequestHandler(std::shared_ptr<IOnvifService> service, std::shared_ptr<ILogger> log)
+		RequestHandler(std::shared_ptr<IOnvifService> service, std::shared_ptr<ILogger> log,
+			const std::map<std::string, std::string>& xml_ns)
 			: service_(service)
 			, log_(log)
+			, xml_ns_(xml_ns)
 		{}
 
 		void operator()(std::shared_ptr<HttpServer::Response> response,
@@ -106,6 +110,26 @@ namespace osrv
 						<< utility::http::HEADER_WWW_AUTHORIZATION << ": " << srv_cfg->digest_session_->generateDigest().to_string() << "\r\n"
 						<< "\r\n";
 				}
+				catch (const osrv::no_such_profile&)
+				{
+					auto envelope_tree = utility::soap::getEnvelopeTree(xml_ns_);
+
+					boost::property_tree::ptree code_node;
+					code_node.add("s:Value", "s:Sender");
+					code_node.add("s:Subcode.s:Value", "ter:InvalidArgVal");
+					code_node.add("s:Subcode.s:Subcode.s:Value", "ter:NoProfile");
+					envelope_tree.add_child("s:Body.s:Fault.s:Code", code_node);
+					envelope_tree.put("s:Body.s:Fault.s:Reason.s:Text", "Profile Not Exist");
+					envelope_tree.put("s:Body.s:Fault.s:Reason.s:Text.<xmlattr>.xml:lang", "en");
+
+					pt::ptree root_tree;
+					root_tree.put_child("s:Envelope", envelope_tree);
+
+					std::ostringstream os;
+					pt::write_xml(os, root_tree);
+
+					utility::http::fillResponseWithHeaders(*response, os.str(), utility::http::ClientErrorDefaultWriter);
+				}
 				catch (const std::exception& e)
 				{
 					std::ostringstream oss;
@@ -128,6 +152,7 @@ namespace osrv
 	private:
 		std::shared_ptr<IOnvifService> service_;
 		std::shared_ptr<ILogger> log_;
+		const std::map<std::string, std::string>& xml_ns_;
 	};
 }
 
@@ -167,7 +192,7 @@ void osrv::IOnvifService::Run()
 
 	http_server_->resource[search_xaddr]["POST"] = [this](std::shared_ptr<HttpServer::Response> response,
 		std::shared_ptr<HttpServer::Request> request) {
-			RequestHandler(shared_from_this(), log_)(response, request);
+			RequestHandler(shared_from_this(), log_, xml_namespaces_)(response, request);
 	};
 
 	is_running_ = true;

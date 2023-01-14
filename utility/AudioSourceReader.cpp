@@ -1,5 +1,7 @@
 #include "AudioSourceReader.h"
 
+#include "MediaProfilesManager.h"
+
 #include <boost/property_tree/ptree.hpp>
 
 utility::AudioEncoderReaderByToken::AudioEncoderReaderByToken(const std::string& token, const pt::ptree& cfgs)
@@ -7,7 +9,7 @@ utility::AudioEncoderReaderByToken::AudioEncoderReaderByToken(const std::string&
 
 pt::ptree utility::AudioEncoderReaderByToken::AudioEncoder()
 {
-	for (const auto& p : cfgs_.get_child("AudioEncoderConfigurations"))
+	for (const auto& p : cfgs_.get_child(osrv::CONFIGURATION_ENUMERATION[osrv::CONFIGURATION_TYPE::AUDIOENCODER]))
 		if (p.second.get<std::string>("token") == token_)
 			return p.second;
 
@@ -24,7 +26,7 @@ const std::string utility::AudioEncoderReaderByProfileToken::RelatedAudioEncoder
 	for (const auto& p : profiles)
 	{
 		if (p.second.get<std::string>("token") == profileToken_)
-			return p.second.get<std::string>("AudioEncoderConfiguration");
+			return p.second.get<std::string>("AudioEncoder");
 	}
 
 	throw std::runtime_error("Not found profile token: " + profileToken_);
@@ -42,7 +44,7 @@ utility::AudioSourceConfigsReader::AudioSourceConfigsReader(const std::string& t
 
 pt::ptree utility::AudioSourceConfigsReader::AudioSource()
 {
-	for (const auto& p : cfgs_.get_child("AudioSourceConfigurations"))
+	for (const auto& p : cfgs_.get_child(osrv::CONFIGURATION_ENUMERATION[osrv::CONFIGURATION_TYPE::AUDIOSOURCE]))
 		if (p.second.get<std::string>("token") == token_)
 			return p.second;
 

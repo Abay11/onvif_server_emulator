@@ -1,12 +1,15 @@
 #include "../include/IOnvifServer.h"
 
 #include "../utility/AuthHelper.h"
+#include "../utility/MediaProfilesManager.h"
 
 #include "../Server.h"
 
 #include "../onvif_services/IOnvifService.h"
 
 #include "../Simple-Web-Server/server_http.hpp"
+
+#include "onvif_services/service_configs.h"
 
 #include "../onvif_services/device_service.h"
 #include "../onvif_services/deviceio_service.h"
@@ -16,6 +19,8 @@
 #include "../onvif_services/ptz_service.h"
 #include "../onvif_services/recording_search_service.h"
 #include "../onvif_services/replay_control_service.h"
+
+static const std::string PROFILES_CONFIG_FILE{ "media_profiles" };
 
 namespace osrv
 {
@@ -69,6 +74,8 @@ namespace osrv
 		: configs_path_(configs_path)
 		, logger_(logger)
 		, http_server_(new osrv::HttpServer())
+		, media_profiles_manager_(std::make_shared<utility::media::MediaProfilesManager>(ConfigPath(configs_path_,
+			ConfigName(PROFILES_CONFIG_FILE))))
 	{}
 
 	const std::string& IOnvifServer::ConfigsPath() const

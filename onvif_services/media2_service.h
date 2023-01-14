@@ -24,11 +24,6 @@ namespace osrv
 
 	namespace media2
 	{
-		const boost::property_tree::ptree& config_instance();
-		
-		void init_service(HttpServer& srv, const ServerConfigs& server_configs_ptr,
-			const std::string& configs_path, ILogger& logger);
-
 		namespace util
 		{
 			// TODO: The same function is used in media. Replace it with one

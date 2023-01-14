@@ -62,9 +62,6 @@ FILE(GLOB SERVICES_SRC
 	"onvif_services/replay_control_service.h"
 	"onvif_services/replay_control_service.cpp"
 
-	"include/onvif_services/service_configs.h"
-	"src/onvif_services/service_configs.cpp"
-
 	"onvif/Recording.h"
 	"onvif/Recording.cpp"
 	"onvif/OnvifRequest.h"	
@@ -86,6 +83,8 @@ FILE (GLOB UTILITY_SRC
 	"utility/DateTime.hpp"
 	"utility/EventService.h"
 	"utility/EventService.cpp"
+	"utility/MediaProfilesManager.h"
+	"utility/MediaProfilesManager.cpp"
 )
 
 source_group("OnvifServices" FILES ${SERVICES_SRC})
@@ -100,6 +99,8 @@ add_library(onvif_server STATIC
 	Server.h
 	RtspServer.cpp
 	RtspServer.h
+	include/onvif_services/service_configs.h
+    src/onvif_services/service_configs.cpp
 	"${SERVICES_SRC}"
 	"${UTILITY_SRC}"
 

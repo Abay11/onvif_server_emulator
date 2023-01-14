@@ -7,17 +7,18 @@
 #include "../onvif_services/imaging_service.h"
 #include "../onvif_services/ptz_service.h"
 #include "../onvif_services/recording_search_service.h"
+#include "../onvif_services/physical_components/IDigitalInput.h"
 #include "include/onvif_services/service_configs.h"
 
-#include "utility/XmlParser.h"
 #include "utility/AuthHelper.h"
-#include "../onvif_services/physical_components/IDigitalInput.h"
+#include "utility/MediaProfilesManager.h"
+#include "utility/XmlParser.h"
+
 #include "MediaFormats.h"
 
 #include "Simple-Web-Server/server_http.hpp"
 
 #include <boost/property_tree/json_parser.hpp>
-
 #include <boost/asio/io_context.hpp>
 
 #include <string>
@@ -109,7 +110,7 @@ namespace osrv
 		discovery::init_service(configs_dir, *logger_);
 
 		// TODO: impl. logic for multichannel cannel
-		auto audio_node = profiles_config_->get_child("AudioEncoderConfigurations").front();
+		auto audio_node = profiles_config_->get_child(CONFIGURATION_ENUMERATION[CONFIGURATION_TYPE::AUDIOENCODER]).front();
 		audio_node.second.get_value<std::string>("Encoding");
 		audio_node.second.get_value<std::string>("Encoding");
 
