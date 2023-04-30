@@ -2,6 +2,8 @@
 
 #include <boost/property_tree/ptree_fwd.hpp>
 
+#include <stdexcept>
+
 namespace
 {
 	namespace pt = boost::property_tree;

@@ -2,32 +2,69 @@ cmake_minimum_required(VERSION 3.16)
 
 project(OnvifServerEmulator)
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
+
+if (NOT CMAKE_BUILD_TYPE)
+    set(CMAKE_BUILD_TYPE Debug)
+    message(STATUS "CMAKE_BUILD_TYPE is undefined. Set default build type ${CMAKE_BUILD_TYPE}.")
+endif()
+
+add_executable(main main.cpp)
+
+if (MSVC)
+	if ("${CMAKE_TOOLCHAIN_FILE}" STREQUAL "")
+		message( FATAL_ERROR "Please install vcpkg and set the path! Ex.:  -DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake" )
+	endif()
+endif()
 
 find_package(Boost REQUIRED
 	system
 	date_time
 	regex
 )
+include_directories(${Boost_INCLUDE_DIRS})
+add_definitions(-DBOOST_ASIO_USE_TS_EXECUTOR_AS_DEFAULT)
+if (MSVC)
+	if (WIN32)
+		add_definitions(-D_WIN32_WINDOWS=0x0601) # helps to supress BOOST warnings
+	endif()
+endif()
+add_definitions(-DBOOST_ASIO_USE_TS_EXECUTOR_AS_DEFAULT)
 
-IF(NOT Boost_FOUND)
-	message(FATAL_ERROR "Not found Boost")
-ELSE()
-	message("+++ Boost INCLUDE_DIR is ${Boost_INCLUDE_DIRS}")
-	include_directories(${Boost_INCLUDE_DIRS})
-ENDIF()	
-
-#TODO: getting values from a user
-set(PKG_CONFIG_INSTALLATION_PATH "C:/dev/pkg-config-lite-0.28-1_bin-win32/pkg-config-lite-0.28-1/bin")
-set(GST_INSTALLATION_PATH "C:/dev")
-set(PKG_CONFIG_EXECUTABLE "${PKG_CONFIG_INSTALLATION_PATH}/pkg-config.exe" CACHE FILEPATH "")
-set(ENV{PKG_CONFIG_PATH} "${GST_INSTALLATION_PATH}/gstreamer/1.0/x86_64/lib/pkgconfig")
 
 find_package(PkgConfig REQUIRED)
+pkg_check_modules(GSTREAMER REQUIRED gstreamer-rtsp-server-1.0)
+message(STATUS "gstreamer lib dir: ${GSTREAMER_LIBRARY_DIRS}")
+message(STATUS "gstreamer include dir ${GSTREAMER_INCLUDE_DIRS}")
+include_directories(${GSTREAMER_INCLUDE_DIRS})
+target_link_directories(main PRIVATE ${GSTREAMER_LIBRARY_DIRS})
 
-pkg_check_modules(GST REQUIRED gstreamer-1.0 gstreamer-rtsp-server-1.0)
+set(SimpleWebServerDir "${PROJECT_SOURCE_DIR}/Simple-Web-Server")
+if(NOT EXISTS "${SimpleWebServerDir}/CMakeLists.txt")
+	find_package(Git QUIET)
+	if(GIT_FOUND AND EXISTS "${PROJECT_SOURCE_DIR}/.git")
+		option(GIT_SUBMODULE "Check submodules during build" ON)
+		if(GIT_SUBMODULE)
+			message(STATUS "Submodule update")
+			
+			execute_process(COMMAND ${GIT_EXECUTABLE} submodule update --init --recursive "${SimpleWebServerDir}"
+							WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+							RESULT_VARIABLE GIT_SUBMOD_RESULT)
+			
+			if(NOT GIT_SUBMOD_RESULT EQUAL "0")
+				message(FATAL_ERROR "git submodule update --init --recursive failed with ${GIT_SUBMOD_RESULT}, please checkout submodules")
+			endif()
+		endif()
+	endif()
+endif()
+
+if(NOT EXISTS "${SimpleWebServerDir}/CMakeLists.txt")
+    message(FATAL_ERROR "The submodules were not downloaded! GIT_SUBMODULE was turned off or failed. Please update submodules and try again.")
+endif()
 
 add_subdirectory(Simple-Web-Server)
+
+
 
 FILE(GLOB SERVICES_SRC
 	"onvif_services/IOnvifService.h"
@@ -111,43 +148,32 @@ add_library(onvif_server STATIC
 	include/MediaFormats.h
 )
 
-add_executable(main main.cpp)
-
 #pass application CONFIGS_FILES directory as command line arguments
 set_target_properties(main PROPERTIES VS_DEBUGGER_COMMAND_ARGUMENTS
 	"${CMAKE_CURRENT_SOURCE_DIR}/server_configs")
 
-add_definitions(-DBOOST_ASIO_USE_TS_EXECUTOR_AS_DEFAULT)
-
-IF(WIN32)
-	### JUST HELPS TO AVOID WARNINGS WITH Boost
-	add_definitions(-D_WIN32_WINDOWS)
-ENDIF()
-
-set(THIRD_LIBS_DIR
-	"${CMAKE_CURRENT_SOURCE_DIR}/third"
-)
-
-include_directories(
-	"${THIRD_LIBS_DIR}"
-)
-
 include_directories(main
 	"${CMAKE_CURRENT_SOURCE_DIR}/include"
-	"${GST_INCLUDE_DIRS}"
-	"${CMAKE_CURRENT_SOURCE_DIR}/Simple-Web-Server")
+	"${CMAKE_CURRENT_SOURCE_DIR}/Simple-Web-Server"
+	"${GSTREAMER_INCLUDE_DIRS}"
+)
 	
-target_compile_options(main PUBLIC "${GST_CFLAGS}")
-target_link_directories(main PUBLIC "${GST_INSTALLATION_PATH}/gstreamer/1.0/x86_64/lib")
-target_link_libraries(main
+target_compile_options(main PUBLIC "${GSTREAMER_CFLAGS}")
+target_link_libraries(main PUBLIC
 	onvif_server
-	"${GST_LIBRARIES}"
+	${GSTREAMER_LIBRARIES}
 	Boost::date_time
-	)
+)
 
-set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT main)
+if (MSVC)
+	set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT main)
+endif()
 
-add_subdirectory(unit_tests)
+option(ENABLE_UNIT_TESTS OFF)
+
+if(ENABLE_UNIT_TESTS)
+	add_subdirectory(unit_tests)
+endif()
 
 #copy config files to the same folder with the execution for standalone running .exe outside IDE
 execute_process(COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_CURRENT_SOURCE_DIR}/server_configs"
