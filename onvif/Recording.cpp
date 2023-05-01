@@ -67,7 +67,7 @@ std::shared_ptr<osrv::IEventsSearchSession> osrv::RecordingEvents::NewSearchSess
 	return NewSearchSession(bptime::from_iso_string(stringUTCFrom), bptime::from_iso_string(stringUTCUntil), factory);
 }
 
-std::shared_ptr<osrv::IEventsSearchSession> osrv::RecordingEvents::NewSearchSession(osrv::EventsSearchSessionFactory& factory)
+std::shared_ptr<osrv::IEventsSearchSession> osrv::RecordingEvents::NewSearchSession(osrv::EventsSearchSessionFactory&& factory)
 {
 	return NewSearchSession(relatedRecording_->DateFrom(), relatedRecording_->DateUntil(), factory);
 }

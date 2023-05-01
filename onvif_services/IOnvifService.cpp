@@ -20,6 +20,7 @@
 #include <boost/property_tree/ptree.hpp>
 #include <boost/property_tree/xml_parser.hpp>
 
+#include <sstream>
 #include <exception>
 
 namespace pt = boost::property_tree;
@@ -44,7 +45,8 @@ namespace osrv
 			pt::ptree* tree = new exns::Parser();
 			try
 			{
-				pt::xml_parser::read_xml(std::istringstream(request->content.string()), *tree);
+				std::istringstream is(request->content.string());
+				pt::xml_parser::read_xml(is, *tree);
 				auto* ptr = static_cast<exns::Parser*>(tree);
 				method = static_cast<exns::Parser*>(tree)->___getMethod();
 			}

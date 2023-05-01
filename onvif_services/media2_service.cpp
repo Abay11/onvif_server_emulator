@@ -827,7 +827,8 @@ namespace osrv
 				std::shared_ptr<HttpServer::Request> request) override
 			{
 				pt::ptree request_xml;
-				pt::xml_parser::read_xml(std::istringstream{ request->content.string() }, request_xml);
+				std::istringstream is(request->content.string());
+				pt::xml_parser::read_xml(is, request_xml);
 
 				std::string requested_token = exns::find_hierarchy("Envelope.Body.GetStreamUri.ProfileToken", request_xml);
 
@@ -891,7 +892,8 @@ namespace osrv
 				std::shared_ptr<HttpServer::Request> request) override
 			{
 				pt::ptree request_xml;
-				pt::xml_parser::read_xml(std::istringstream{ request->content.string() }, request_xml);
+				std::istringstream is(request->content.string());
+				pt::xml_parser::read_xml(is, request_xml);
 
 				// TODO: add impmlementation
 
@@ -923,7 +925,8 @@ namespace osrv
 				std::shared_ptr<HttpServer::Request> request) override
 			{
 				pt::ptree request_xml;
-				pt::xml_parser::read_xml(std::istringstream{ request->content.string() }, request_xml);
+				std::istringstream is(request->content.string());
+				pt::xml_parser::read_xml(is, request_xml);
 
 				// TODO: add implementation
 

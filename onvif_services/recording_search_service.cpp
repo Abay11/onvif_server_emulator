@@ -109,7 +109,8 @@ namespace osrv
 
 			pt::ptree request_xml;
 			auto s = request->content.string();
-			pt::xml_parser::read_xml(std::istringstream{ request->content.string() }, request_xml);
+			std::istringstream is(request->content.string());
+			pt::xml_parser::read_xml(is, request_xml);
 			auto searchToken = exns::find_hierarchy("Envelope.Body.GetEventSearchResults.SearchToken", request_xml);
 			auto searchSession = rec_mgr_->Recordings().front()->RecordingEvents()->SearchSession(searchToken);
 

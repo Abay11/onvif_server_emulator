@@ -69,7 +69,8 @@ namespace osrv::rtsp
 			*src,
 			*timestampOSD,
 			*enc;
-		GstPad* ghost;
+		GstPad* ghost = nullptr;
+		GstPad* padTmp = nullptr;
 
 		ret = replay_bin_new();
 		if (!gst_bin_add(GST_BIN(parent), ret)) {
@@ -84,7 +85,7 @@ namespace osrv::rtsp
 		static const int RUNNING_TIME = 2;
 		g_object_set(timestampOSD, "time-mode", RUNNING_TIME, NULL);
 
-		auto* padTmp = gst_element_get_static_pad(enc, "src");
+		padTmp = gst_element_get_static_pad(enc, "src");
 		if (!gst_element_add_pad(ret, gst_ghost_pad_new("src", padTmp)))
 			goto fail;
 		gst_object_unref(padTmp);

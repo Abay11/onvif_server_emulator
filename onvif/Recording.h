@@ -100,7 +100,7 @@ namespace osrv
 
 		std::shared_ptr<IEventsSearchSession> NewSearchSession(boost::posix_time::ptime from, boost::posix_time::ptime until, EventsSearchSessionFactory& factory);
 		std::shared_ptr<IEventsSearchSession> NewSearchSession(std::string stringUTCFrom, std::string stringUTCUntil, EventsSearchSessionFactory& factory);
-		std::shared_ptr<IEventsSearchSession> NewSearchSession(EventsSearchSessionFactory& factory);
+		std::shared_ptr<IEventsSearchSession> NewSearchSession(EventsSearchSessionFactory&& factory);
 		std::shared_ptr<IEventsSearchSession> SearchSession(std::string searchToken);
 
 

@@ -4,9 +4,11 @@ Onvif Server Emulator is an emulator of an IP device (camera, NVR) compatible wi
 
 # 🌐 Used 3rd party libraries
 
-[Simple-Web-Server](https://gitlab.com/eidheim/Simple-Web-Server)
+[Boost](https://www.boost.org/)
 
 [GStreamer](https://github.com/GStreamer/gstreamer)
+
+[Simple-Web-Server](https://gitlab.com/eidheim/Simple-Web-Server)
 
 # ▶ Server execution
 
@@ -65,9 +67,6 @@ Each ONVIF service is implemented as a separate instance. Each service may have 
  "DataFrom" - The earliest point in time. If not specified is condidered data recorded from 24 hours ago.
  "DataUntil" - The most recent point in time. If not specified is condidered data recorded until now.
 
+# 🛠 Building
 
-# 🛠 The Project building
-
-## Solve issue with building Simple-Web-Server when using BOOST.Asio version >=1.74
-
-Add definition BOOST_ASIO_USE_TS_EXECUTOR_AS_DEFAULT
+Please review [BUILD.md](BUILD.md) for how to setup OnvifServerEmulator on your local machine for development and testing purposes.
