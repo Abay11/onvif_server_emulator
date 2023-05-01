@@ -16,6 +16,8 @@
 #include <boost/property_tree/xml_parser.hpp>
 #include <boost/property_tree/json_parser.hpp>
 #include <boost/property_tree/ptree.hpp>
+#include <boost/algorithm/string.hpp>
+
 
 namespace pt = boost::property_tree;
 
@@ -353,15 +355,20 @@ namespace osrv
 
 				const auto& profiles_configs_list = profiles_mgr_->ReaderWriter()->ConfigsTree().get_child("MediaProfiles");
 
+				pt::ptree xml_tree;
+				auto request_str = request->content.string();
+				std::istringstream is(request_str);
+				pt::xml_parser::read_xml(is, xml_tree);
+
 				// extract requested profile token (if there it is) 
 				std::string profile_token;
-				{
-					auto request_str = request->content.string();
-					std::istringstream is(request_str);
-					pt::ptree xml_tree;
-					pt::xml_parser::read_xml(is, xml_tree);
-					profile_token = exns::find_hierarchy("Envelope.Body.GetProfiles.Token", xml_tree);
-				}
+				profile_token = exns::find_hierarchy("Envelope.Body.GetProfiles.Token", xml_tree);
+
+				// TODO: move this into separate helper function
+				std::vector<std::string> configsType;
+				boost::algorithm::split(configsType,
+					exns::find_hierarchy("Envelope.Body.GetProfiles.Type", xml_tree),
+					boost::is_any_of(",\s,\t"));
 
 				pt::ptree response_node;
 				if (profile_token.empty())
@@ -396,10 +403,11 @@ namespace osrv
 					else
 					{
 						// response all media profiles' configs
-						for (const auto& elements : profiles_configs_list)
+						for (const auto& [name, tree] : profiles_configs_list)
 						{
 							pt::ptree profile_node;
-							media2::util::profile_to_soap(elements.second, profiles_mgr_->ReaderWriter()->ConfigsTree(), profile_node);
+							media2::util::profile_to_soap(profiles_mgr_->GetProfileByToken(tree.get<std::string>("token"), configsType),
+								profiles_mgr_->ReaderWriter()->ConfigsTree(), profile_node);
 							response_node.add_child("tr2:Profiles", profile_node);
 						}
 					}

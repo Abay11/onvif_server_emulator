@@ -208,6 +208,7 @@ namespace utility::media
 			if (name == "token"
 				|| name == "fixed"
 				|| name == "Name"
+				|| std::ranges::find(configs, "All") != configs.end()
 				|| std::ranges::find(configs, name) != configs.end())
 			{
 				profileWithFilteredConfigs.put(name, tree.data());

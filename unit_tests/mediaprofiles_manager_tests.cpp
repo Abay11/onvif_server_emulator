@@ -100,7 +100,7 @@ BOOST_AUTO_TEST_CASE(MediaProfilesManager_GetProfileByToken_test2)
 	const std::string path{ "../../unit_tests/test_data/mediaprofiles_manager_test.config" };
 
 	const std::string profileToken{ "ProfileToken0" };
-	const std::vector<std::string> requiredProfilesConfigs{ "" };
+	const std::vector<std::string> requiredProfilesConfigs{};
 	MediaProfilesManager manager(path);
 
 	auto actualProfileConfig = manager.GetProfileByToken(profileToken, requiredProfilesConfigs);
