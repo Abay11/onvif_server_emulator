@@ -196,6 +196,27 @@ namespace utility::media
 			const_cast<MediaProfilesManager const*>(this)->GetProfileByToken(token));
 	}
 
+	boost::property_tree::ptree MediaProfilesManager::GetProfileByToken(const std::string& token, const std::vector<std::string>& configs) const
+	{
+
+		pt::ptree profileWithFilteredConfigs;
+		
+
+		for (const auto& profileConfig = GetProfileByToken(token);
+			const auto& [name, tree] : profileConfig)
+		{
+			if (name == "token"
+				|| name == "fixed"
+				|| name == "Name"
+				|| std::ranges::find(configs, name) != configs.end())
+			{
+				profileWithFilteredConfigs.put(name, tree.data());
+			}
+		}
+
+		return profileWithFilteredConfigs;
+	}
+
 	boost::property_tree::ptree& MediaProfilesManager::GetProfileByName(const std::string& name)
 	{
 		auto& profilesTree = readerWriter_->ConfigsTree().get_child("MediaProfiles");

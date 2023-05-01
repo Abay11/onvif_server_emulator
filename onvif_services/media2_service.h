@@ -4,12 +4,11 @@
 
 #include "../HttpServerFwd.h"
 
-
-class ILogger;
+#include <boost/property_tree/ptree_fwd.hpp>
 
 #include <string>
 
-#include <boost/property_tree/ptree_fwd.hpp>
+class ILogger;
 
 namespace osrv
 {

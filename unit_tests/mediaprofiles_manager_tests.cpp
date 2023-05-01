@@ -92,6 +92,59 @@ BOOST_AUTO_TEST_CASE(MediaProfilesManager_GetProfileByToken_test1)
 	BOOST_ASSERT(false);
 }
 
+BOOST_AUTO_TEST_CASE(MediaProfilesManager_GetProfileByToken_test2)
+{
+	// here we try to get media profile with only requested configuration
+	using namespace utility::media;
+
+	const std::string path{ "../../unit_tests/test_data/mediaprofiles_manager_test.config" };
+
+	const std::string profileToken{ "ProfileToken0" };
+	const std::vector<std::string> requiredProfilesConfigs{ "" };
+	MediaProfilesManager manager(path);
+
+	auto actualProfileConfig = manager.GetProfileByToken(profileToken, requiredProfilesConfigs);
+	BOOST_TEST(3 == actualProfileConfig.size());
+	BOOST_TEST("ProfileToken0" == actualProfileConfig.get<std::string>("token"));
+	BOOST_TEST(true == actualProfileConfig.get<bool>("fixed"));
+	BOOST_TEST("MainProfile" == actualProfileConfig.get<std::string>("Name"));
+}
+
+BOOST_AUTO_TEST_CASE(MediaProfilesManager_GetProfileByToken_test3)
+{
+	// here we try to get media profile with only requested configuration
+	using namespace utility::media;
+
+	const std::string path{ "../../unit_tests/test_data/mediaprofiles_manager_test.config" };
+
+	const std::string profileToken{ "ProfileToken1" };
+	const std::vector<std::string> requiredProfilesConfigs{ "VideoSource", "VideoEncoder" };
+	MediaProfilesManager manager(path);
+
+	auto actualProfileConfig = manager.GetProfileByToken(profileToken, requiredProfilesConfigs);
+	BOOST_TEST(5 == actualProfileConfig.size());
+	BOOST_TEST("ProfileToken1", actualProfileConfig.get<std::string>("token"));
+	BOOST_TEST(true, actualProfileConfig.get<bool>("fixed"));
+	BOOST_TEST("SecondProfile", actualProfileConfig.get<std::string>("Name"));
+	BOOST_TEST("VideoSrcConfigToken0", actualProfileConfig.get<std::string>("VideoSource"));
+	BOOST_TEST("VideoEncoderToken1", actualProfileConfig.get<std::string>("VideoEncoder"));
+}
+
+BOOST_AUTO_TEST_CASE(MediaProfilesManager_GetProfileByToken_test4)
+{
+	// here we try to get media profile with only requested configuration
+	using namespace utility::media;
+
+	const std::string path{ "../../unit_tests/test_data/mediaprofiles_manager_test.config" };
+
+	const std::string profileToken{ "ProfileToken1" };
+	const std::vector<std::string> requiredProfilesConfigs{ "AudioSource", "AudioEncoder" }; // non existing configs in the profile, check there wont be exeptions
+	MediaProfilesManager manager(path);
+
+	auto actualProfileConfig = manager.GetProfileByToken(profileToken, requiredProfilesConfigs);
+	BOOST_TEST(3 == actualProfileConfig.size());
+}
+
 BOOST_AUTO_TEST_CASE(MediaProfilesManager_GetProfileByName_test0)
 {
 	using namespace utility::media;
