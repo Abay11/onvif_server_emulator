@@ -7,6 +7,7 @@
 #include "onvif_services/service_configs.h"
 
 #include <string>
+#include <cstdlib>
 
 static const std::string TITLE = R"(
    ___  _   ___     _____ _____   ____                             _____                 _       _             
@@ -27,7 +28,7 @@ int main(int argc, char** argv)
 	using namespace std;
 	std::cout << TITLE << std::endl;
 	std::cout << "Application version: " << SERVER_VERSION << std::endl;
-
+	
 	std::string configs_dir = DEFAULT_CONFIGS_DIR;
 
 	std::stringstream ss;
@@ -55,10 +56,21 @@ int main(int argc, char** argv)
 	logger->Info("New run. " + ss.str());
 	logger->Info("Logging level: " + logger->GetLogLevel());
 
+	if (auto env_gst_plugin_path = std::string(std::getenv("GST_PLUGIN_PATH"));
+		env_gst_plugin_path.empty())
+	{
+		std::cerr << "For proper work please install required GStreamer plugins and add the GST_PLUGIN_PATH environment variable to point at the installation directory!";
+		return -1;
+	}
+	else
+	{
+		logger->Debug("Used GStreamer plugins directory: " + env_gst_plugin_path);
+	}
+
 	try
 	{
 		//std::shared_ptr<osrv::IOnvifServer> server = std::make_shared<osrv::Server>(configs_dir, logger);
-		std::shared_ptr<osrv::Server> server{ new osrv::Server{configs_dir, logger} };
+		std::shared_ptr<osrv::Server> server{ std::make_shared<osrv::Server>(configs_dir, logger) };
 		server->init();
 		server->run();
 	}
@@ -71,6 +83,6 @@ int main(int argc, char** argv)
 
 	logger->Info("Server is stopped");
 
-	cout << "\n\nPress any key to exit";
+	std::cout << "\n\nPress any key to exit";
 	getchar();
 }

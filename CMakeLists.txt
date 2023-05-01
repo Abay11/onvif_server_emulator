@@ -23,7 +23,7 @@ find_package(Boost REQUIRED
 	regex
 )
 include_directories(${Boost_INCLUDE_DIRS})
-add_definitions(-DBOOST_ASIO_USE_TS_EXECUTOR_AS_DEFAULT)
+add_definitions(-DBOOST_ASIO_USE_TS_EXECUTOR_AS_DEFAULT) # helps to solve errors while building Simple-Web-Server with BOOST.Asio version greater or equal 1.74
 if (MSVC)
 	if (WIN32)
 		add_definitions(-D_WIN32_WINDOWS=0x0601) # helps to supress BOOST warnings
