@@ -2,7 +2,7 @@
 
 #include <boost/property_tree/json_parser.hpp>
 
-#include <iostream>
+#include <format>
 
 namespace pt = boost::property_tree;
 
@@ -30,7 +30,7 @@ namespace utility::media
 		}
 	}
 
-	void ConfigsReaderWriter::Save()
+	void ConfigsReaderWriter::Save() const
 	{
 		if (!configsTree_)
 		{
@@ -81,7 +81,7 @@ namespace utility::media
 		auto begin = mediaProfilesTree.begin();
 		auto end = mediaProfilesTree.end();
 		auto res_it = std::find_if(begin, end,
-			[profileToken](const auto& p) { return profileToken == p.second.get<std::string>("token"); });
+			[&profileToken](const auto& p) { return profileToken == p.second.get<std::string>("token"); });
 
 		if (res_it == end)
 			throw osrv::no_such_profile();
@@ -101,21 +101,22 @@ namespace utility::media
 		auto begin = mediaProfilesTree.begin();
 		auto end = mediaProfilesTree.end();
 		auto res_it = std::find_if(begin, end,
-			[profileToken](const auto& p) { return profileToken == p.second.get<std::string>("token"); });
+			[&profileToken](const auto& p) { return profileToken == p.second.get<std::string>("token"); });
 
 		if (res_it == end)
 			throw osrv::no_such_profile();
 
 		if (osrv::CONFIGURATION_ENUMERATION.end() ==
-			std::find(osrv::CONFIGURATION_ENUMERATION.begin(), osrv::CONFIGURATION_ENUMERATION.end(), configType))
-			throw osrv::invalid_config_type();
+			std::ranges::find(osrv::CONFIGURATION_ENUMERATION, configType))
+				throw osrv::invalid_config_type();
 
 		const auto& config_tree = readerWriter_->ConfigsTree().get_child(configType);
-		auto config_tree_res_it = std::find_if(config_tree.begin(), config_tree.end(),
+		if (auto config_tree_res_it = std::ranges::find_if(config_tree,
 			[&configToken](const auto& it) { return configToken == it.second.get<std::string>("token"); });
-
-		if (config_tree_res_it == config_tree.end())
-			throw osrv::invalid_token();
+				config_tree_res_it == config_tree.end())
+				{
+					throw osrv::invalid_token();
+				}
 
 		res_it->second.add(configType, configToken);
 
@@ -137,16 +138,15 @@ namespace utility::media
 		// if config token is provided, remove by config token
 		if (!configToken.empty())
 		{
-			auto config_it = std::find_if(profile_it->second.begin(), profile_it->second.end(),
-				[&configToken](const auto& item)
+			auto config_it = std::ranges::find_if(profile_it->second, [&configToken](const auto& item)
 				{
 					auto key = item.first;
 
 					static const std::vector INSTANCES_ALLOWED_TO_REMOVE (osrv::CONFIGURATION_ENUMERATION.begin() + 1,
 						osrv::CONFIGURATION_ENUMERATION.end());
 
-					bool isConfig = std::any_of( INSTANCES_ALLOWED_TO_REMOVE.begin(), INSTANCES_ALLOWED_TO_REMOVE.end(),
-						[&key](auto configType) { return key == configType; });
+					bool isConfig = std::ranges::any_of( INSTANCES_ALLOWED_TO_REMOVE,
+						[&key](auto cfg_type) { return key == cfg_type; });
 					
 					return isConfig && configToken == item.second.get_value<std::string>();
 				});
@@ -160,7 +160,7 @@ namespace utility::media
 		}
 
 		if (osrv::CONFIGURATION_ENUMERATION.end() ==
-			std::find(osrv::CONFIGURATION_ENUMERATION.begin(), osrv::CONFIGURATION_ENUMERATION.end(), configType))
+			std::ranges::find(osrv::CONFIGURATION_ENUMERATION, configType))
 			throw osrv::invalid_config_type();
 
 		profile_it->second.erase(configType.data());
@@ -170,8 +170,7 @@ namespace utility::media
 		
 	std::string MediaProfilesManager::newProfileToken(size_t n) const
 	{
-		auto token = "UserProfileToken" + std::to_string(n);
-		return token;
+		return std::format("UserProfileToken{}", n);
 	}
 
 	const boost::property_tree::ptree& MediaProfilesManager::GetProfileByToken(const std::string& token) const
@@ -180,7 +179,7 @@ namespace utility::media
 		auto begin = profilesTree.begin();
 		auto end = profilesTree.end();
 		auto res_it = std::find_if(begin, end,
-			[token](const auto& p) { return token == p.second.get<std::string>("token"); });
+			[&token](const auto& p) { return token == p.second.get<std::string>("token"); });
 
 		if (res_it == end)
 		{
@@ -224,7 +223,7 @@ namespace utility::media
 		auto begin = profilesTree.begin();
 		auto end = profilesTree.end();
 		auto res_it = std::find_if(begin, end,
-			[name](const auto& p) { return name == p.second.get<std::string>("Name"); });
+			[&name](const auto& p) { return name == p.second.get<std::string>("Name"); });
 
 		if (res_it == end)
 		{

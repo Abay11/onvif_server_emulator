@@ -77,7 +77,7 @@ namespace utility::media
 		// read configs from JSON file 
 		void Read();
 		// save current configs into a file
-		void Save();
+		void Save() const;
 		// reset all changes to the initial state how it was at the first Read() using backup instance.
 		// it also writes backup instance state into a file calling Save() automatically.
 		void Reset();
