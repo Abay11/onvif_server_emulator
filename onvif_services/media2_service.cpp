@@ -60,21 +60,25 @@ namespace osrv
 			{
 				auto envelope_tree = utility::soap::getEnvelopeTree(ns_);
 
-				std::string profile_token;
-				std::string cfg_token;
-				std::string cfg_type;
-
 				auto request_str = request->content.string();
 				std::istringstream is(request_str);
 				pt::ptree xml_tree;
 				pt::xml_parser::read_xml(is, xml_tree);
-				profile_token = exns::find_hierarchy("Envelope.Body.AddConfiguration.ProfileToken", xml_tree);
-				cfg_type = exns::find_hierarchy("Envelope.Body.AddConfiguration.Configuration.Type", xml_tree);
-				cfg_token = exns::find_hierarchy("Envelope.Body.AddConfiguration.Configuration.Token", xml_tree);
 
-				auto profileTree = profiles_mgr_->GetProfileByToken(profile_token);
-				profiles_mgr_->AddConfiguration(utility::media::ProfileConfigsHelper(profileTree).ProfileToken(),
-					cfg_type, cfg_token);
+				auto profile_token = exns::find_hierarchy("Envelope.Body.AddConfiguration.ProfileToken", xml_tree);
+				for (auto configsToAdd = exns::find_hierarchy_elements("Envelope.Body.AddConfiguration.Configuration",
+					xml_tree);
+					auto c : configsToAdd)
+				{
+					auto cfg_type = c->second.get<std::string>("Type");
+					auto cfg_token = c->second.get<std::string>("Token");
+					if (cfg_type.empty() || cfg_token.empty())
+						continue;
+
+					auto profileTree = profiles_mgr_->GetProfileByToken(profile_token);
+					profiles_mgr_->AddConfiguration(utility::media::ProfileConfigsHelper(profileTree).ProfileToken(),
+						cfg_type, cfg_token);
+				}
 
 				envelope_tree.add("s:Body.tr2:AddConfigurationResponse", "");
 				pt::ptree root_tree;
