@@ -44,3 +44,6 @@ ${Boost_UNIT_TEST_FRAMEWORK_LIBRARY}
 
 # declares a test with our executable
 add_test(NAME test1 COMMAND test_executable)
+
+set_target_properties(main PROPERTIES VS_DEBUGGER_COMMAND_ARGUMENTS
+	"--run_test=* --detect_memory_leaks=0 --log_level=all")
