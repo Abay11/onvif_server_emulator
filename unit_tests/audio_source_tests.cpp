@@ -51,15 +51,24 @@ BOOST_AUTO_TEST_CASE(AudioEncoderReaderByProfileTokenTest)
 	BOOST_TEST(token == aeCfg.get<std::string>("token"));
 }
 
-BOOST_AUTO_TEST_CASE(AudioSourceConfigsReaderTest)
+BOOST_AUTO_TEST_CASE(AudioSourceConfigsReaderByTokenTest)
 {
 	pt::ptree configTree;
 	pt::json_parser::read_json(config_file, configTree);
 	const auto token = "AudioSrcCfg0";
-	auto asCfg = utility::AudioSourceConfigsReader(token, configTree).AudioSource();
+	auto asCfg = utility::AudioSourceConfigsReaderByToken(token, configTree).AudioSource();
 	BOOST_TEST(token == asCfg.get<std::string>("token"));
 }
 
+BOOST_AUTO_TEST_CASE(AudioSourceConfigsReaderByProfileTokenTest)
+{
+	pt::ptree configTree;
+	pt::json_parser::read_json(config_file, configTree);
+	const auto profileToken = "ProfileToken0";
+	auto asCfg = utility::AudioSourceConfigsReaderByProfileToken(profileToken, configTree).AudioSource();
+	const auto token = "AudioSrcCfg0";
+	BOOST_TEST(token == asCfg.get<std::string>("token"));
+}
 
 BOOST_AUTO_TEST_CASE(PcmuSetupTest)
 {

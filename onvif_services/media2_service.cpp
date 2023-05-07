@@ -29,6 +29,7 @@ static const std::string GetAnalyticsConfigurations = "GetAnalyticsConfiguration
 static const std::string GetAudioDecoderConfigurations = "GetAudioDecoderConfigurations";
 static const std::string GetAudioEncoderConfigurationOptions = "GetAudioEncoderConfigurationOptions";
 static const std::string GetAudioEncoderConfigurations = "GetAudioEncoderConfigurations";
+static const std::string GetAudioSourceConfigurations = "GetAudioSourceConfigurations";
 static const std::string GetProfiles = "GetProfiles";
 static const std::string GetServiceCapabilities = "GetServiceCapabilities";
 static const std::string GetStreamUri = "GetStreamUri";
@@ -266,6 +267,76 @@ namespace osrv
 				
 				auto env_tree = utility::soap::getEnvelopeTree(ns_);
 				env_tree.put_child("s:Body.tr2:GetAudioEncoderConfigurationsResponse", ae_configs_node);
+				pt::ptree root_tree;
+				root_tree.put_child("s:Envelope", env_tree);
+
+				std::ostringstream os;
+				pt::write_xml(os, root_tree);
+
+				utility::http::fillResponseWithHeaders(*response, os.str());
+			}
+		};
+		
+		struct GetAudioSourceConfigurationsHandler : public OnvifRequestBase
+		{
+		private:
+			const std::shared_ptr<pt::ptree>& profiles_configs_;
+
+		public:
+
+			GetAudioSourceConfigurationsHandler(
+                      const std::map<std::string, std::string> &xs,
+                      const std::shared_ptr<pt::ptree> &configs
+				, const std::shared_ptr<pt::ptree>& profiles_configs)
+				: OnvifRequestBase(GetAudioSourceConfigurations, auth::SECURITY_LEVELS::READ_MEDIA, xs, configs)
+				, profiles_configs_(profiles_configs)
+			{
+			}
+
+			void operator()(std::shared_ptr<HttpServer::Response> response,
+				std::shared_ptr<HttpServer::Request> request) override
+			{
+				pt::ptree as_configs_node;
+
+				pt::ptree request_xml_tree;
+				pt::xml_parser::read_xml(request->content, request_xml_tree);
+				
+				auto fillASConfig = [](const pt::ptree& in, pt::ptree& out) {
+					out.add("<xmlattr>.token", in.get<std::string>(CONFIG_PROP_TOKEN));
+					out.add("tt:Name", in.get<std::string>("Name"));
+					out.add("tt:UseCount", in.get<int>("UseCount"));
+					out.add("tt:SourceToken", in.get<std::string>("SourceToken"));
+				};
+
+				if (auto requestedToken = exns::find_hierarchy("Envelope.Body.GetAudioSourceConfigurations.ConfigurationToken", request_xml_tree);
+					!requestedToken.empty()) // response with a specific AS config
+				{
+					auto asCfg = utility::AudioSourceConfigsReaderByToken(requestedToken, *profiles_configs_).AudioSource();
+					pt::ptree as_node;
+					fillASConfig(asCfg, as_node);
+					as_configs_node.add_child("tr2:Configurations", as_node);
+				}
+				else if (auto requestedProfile = exns::find_hierarchy("Envelope.Body.GetAudioSourceConfigurations.ProfileToken", request_xml_tree);
+					!requestedProfile.empty()) // response with a specific profile's AE config
+				{
+					auto asCfg = utility::AudioSourceConfigsReaderByProfileToken(requestedProfile, *profiles_configs_).AudioSource();
+					pt::ptree as_node;
+					fillASConfig(asCfg, as_node);
+					as_configs_node.add_child("tr2:Configurations", as_node);
+				}
+				else // response with all existing configs
+				{
+					const auto as_config_list = profiles_configs_->get_child(CONFIGURATION_ENUMERATION[CONFIGURATION_TYPE::AUDIOSOURCE]);
+					for (const auto& [name, tree] : as_config_list)
+					{
+						pt::ptree as_node;
+						fillASConfig(tree, as_node);
+						as_configs_node.add_child("tr2:Configurations", as_node);
+					}
+				}
+				
+				auto env_tree = utility::soap::getEnvelopeTree(ns_);
+				env_tree.put_child("s:Body.tr2:GetAudioSourceConfigurationsResponse", as_configs_node);
 				pt::ptree root_tree;
 				root_tree.put_child("s:Envelope", env_tree);
 
@@ -1043,7 +1114,7 @@ namespace osrv
 				if (!as_token.empty())
 				{
 					pt::ptree as_node;
-					auto as_config = utility::AudioSourceConfigsReader(as_token, configs_file).AudioSource();
+					auto as_config = utility::AudioSourceConfigsReaderByToken(as_token, configs_file).AudioSource();
 					as_node.add("<xmlattr>.token", as_token);
 					as_node.add("tt:Name", as_config.get<std::string>("Name"));
 					as_node.add("tt:UseCount", as_config.get<int>("UseCount"));
@@ -1098,6 +1169,7 @@ namespace osrv
 		requestHandlers_.push_back(std::make_shared<media2::GetAnalyticsConfigurationsHandler>(xml_namespaces_, configs_ptree_));
 		requestHandlers_.push_back(std::make_shared<media2::GetAudioEncoderConfigurationOptionsHandler>(xml_namespaces_, configs_ptree_, srv->ProfilesConfig()));
 		requestHandlers_.push_back(std::make_shared<media2::GetAudioEncoderConfigurationsHandler>(xml_namespaces_, configs_ptree_, srv->ProfilesConfig()));
+		requestHandlers_.push_back(std::make_shared<media2::GetAudioSourceConfigurationsHandler>(xml_namespaces_, configs_ptree_, srv->ProfilesConfig()));
 		requestHandlers_.push_back(std::make_shared<media2::GetProfilesHandler>(xml_namespaces_, configs_ptree_, srv->MediaProfilesManager(), *srv->ServerConfigs()));
 		requestHandlers_.push_back(std::make_shared<media2::GetServiceCapabilitiesHandler>(xml_namespaces_, configs_ptree_));
 		requestHandlers_.push_back(std::make_shared<media2::GetStreamUriHandler>(xml_namespaces_, configs_ptree_, srv->ProfilesConfig(), *srv->ServerConfigs()));

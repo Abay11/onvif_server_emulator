@@ -11,15 +11,29 @@ namespace
 
 namespace utility
 {
-	class AudioSourceConfigsReader
+	class AudioSourceConfigsReaderByToken
 	{
 	public:
-		AudioSourceConfigsReader(const std::string&, const pt::ptree&);
-
+		AudioSourceConfigsReaderByToken(const std::string &configToken,
+			const pt::ptree &configs);
 		pt::ptree AudioSource();
 
 	private:
 		const std::string& token_;
+		const pt::ptree& cfgs_;
+	};
+
+	// todo: fix if profile has not required configuration
+	class AudioSourceConfigsReaderByProfileToken
+	{
+	public:
+		AudioSourceConfigsReaderByProfileToken(const std::string &profileToken,
+			const pt::ptree &configs);
+		pt::ptree AudioSource() const;
+		std::string RelatedAudioSourceToken() const;
+
+	private:
+		const std::string& profileToken_;
 		const pt::ptree& cfgs_;
 	};
 
@@ -40,7 +54,7 @@ namespace utility
 	public:
 		AudioEncoderReaderByProfileToken(const std::string&, const pt::ptree&);
 
-		const std::string RelatedAudioEncoderToken();
+		std::string RelatedAudioEncoderToken();
 
 		pt::ptree AudioEncoder();
 

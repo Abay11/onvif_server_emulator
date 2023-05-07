@@ -233,7 +233,7 @@ namespace osrv
 				pt::ptree asources;
 
 				pt::ptree source_tree;
-				auto a = utility::AudioSourceConfigsReader("AudioSrcCfg0", *profiles_configs_).AudioSource(); // TODO: hardcoded value
+				auto a = utility::AudioSourceConfigsReaderByToken("AudioSrcCfg0", *profiles_configs_).AudioSource(); // TODO: hardcoded value
 				source_tree.add("<xmlattr>.token", a.get<std::string>("token"));
 				source_tree.add("trt:Channels", 1); //TODO: hardcoded value
 				asources.add_child("trt:AudioSources", source_tree);
@@ -757,7 +757,7 @@ void fill_soap_media_profile(const pt::ptree& json_config, pt::ptree& profile_no
 		{
 			pt::ptree as_node;
 
-			auto as_config = utility::AudioSourceConfigsReader(as_token, profiles_cfg).AudioSource();
+			auto as_config = utility::AudioSourceConfigsReaderByToken(as_token, profiles_cfg).AudioSource();
 			as_node.add("<xmlattr>.token", as_token);
 			as_node.add("tt:Name", as_config.get<std::string>("Name"));
 			as_node.add("tt:UseCount", as_config.get<int>("UseCount"));
