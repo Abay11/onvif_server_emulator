@@ -125,15 +125,7 @@ namespace utility::media
 
 	void MediaProfilesManager::RemoveConfiguration(std::string_view profileToken, std::string_view configType, std::string_view configToken) const
 	{
-		auto& mediaProfilesTree = readerWriter_->ConfigsTree().get_child("MediaProfiles");
-
-		auto begin = mediaProfilesTree.begin();
-		auto end = mediaProfilesTree.end();
-		auto profile_it = std::find_if(begin, end,
-			[&profileToken](const auto& p) { return profileToken == p.second.get<std::string>("token"); });
-
-		if (profile_it == end)
-			throw osrv::no_such_profile();
+		auto profile_it = getProfileNode(profileToken);
 
 		// if config token is provided, remove by config token
 		if (!configToken.empty())
@@ -163,7 +155,40 @@ namespace utility::media
 			std::ranges::find(osrv::CONFIGURATION_ENUMERATION, configType))
 			throw osrv::invalid_config_type();
 
-		profile_it->second.erase(configType.data());
+		if (configType == osrv::CONFIGURATION_ENUMERATION[osrv::CONFIGURATION_TYPE::ALL])
+		{
+			// spin in the cycle while we do not erase all instances from a tree
+			// and do reinit of \profile_it because after erasion it looks like it invalidate
+
+			while(true)
+			{
+				auto profile_it = getProfileNode(profileToken); // read again, looks like after erase prev it invalidate
+				auto b = profile_it->second.begin();
+				auto e = profile_it->second.end();
+				auto doBreak = false;
+				for(auto it = b; it != e; ++it)
+				{
+					static const std::vector INSTANCES_ALLOWED_TO_REMOVE(osrv::CONFIGURATION_ENUMERATION.begin() + 1,
+							osrv::CONFIGURATION_ENUMERATION.end());
+					bool isConfig = std::ranges::any_of(INSTANCES_ALLOWED_TO_REMOVE,
+						[key = it->first](auto cfg_type) { return key == cfg_type; });
+					if (isConfig)
+					{
+						profile_it->second.erase(it);
+						break;
+					}
+
+					doBreak = std::next(it) == e;
+				}
+
+				if (doBreak)
+					break;
+			}
+		}
+		else
+		{
+			profile_it->second.erase(configType.data());
+		}
 
 		readerWriter_->Save();
 	}
@@ -171,6 +196,20 @@ namespace utility::media
 	std::string MediaProfilesManager::newProfileToken(size_t n) const
 	{
 		return std::format("UserProfileToken{}", n);
+	}
+
+	pt::ptree::iterator MediaProfilesManager::getProfileNode(std::string_view profileToken) const
+	{
+		auto& mediaProfilesTree = readerWriter_->ConfigsTree().get_child("MediaProfiles");
+		auto begin = mediaProfilesTree.begin();
+		auto end = mediaProfilesTree.end();
+		auto profile_it = std::find_if(begin, end,
+			[&profileToken](const auto& p) { return profileToken == p.second.get<std::string>("token"); });
+
+			if (profile_it == end)
+				throw osrv::no_such_profile();
+
+		return profile_it;
 	}
 
 	const boost::property_tree::ptree& MediaProfilesManager::GetProfileByToken(const std::string& token) const

@@ -115,8 +115,8 @@ namespace utility::media
 
 	private:
 		std::string newProfileToken(size_t n) const;
+		boost::property_tree::ptree::iterator getProfileNode (std::string_view profileToken) const;
 
-	private:
 		std::unique_ptr<ConfigsReaderWriter> readerWriter_;
 	};
 

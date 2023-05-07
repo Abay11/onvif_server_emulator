@@ -479,3 +479,74 @@ BOOST_AUTO_TEST_CASE(MediaProfilesManager_RemoveConfiguration_test2)
 
 	readerWriter.Reset();
 }
+
+BOOST_AUTO_TEST_CASE(MediaProfilesManager_RemoveConfiguration_test3)
+{
+	using namespace utility::media;
+
+	const std::string path{ "../../unit_tests/test_data/mediaprofiles_manager_test.config" };
+	
+	ConfigsReaderWriter readerWriter(path);
+	readerWriter.Read();
+
+	MediaProfilesManager manager(path);
+
+	// create a new media profile, add a configuration
+	const std::string customProfileName{ "CustomProfileName" };
+	const std::string videoSourceToken = readerWriter.ConfigsTree()
+		.get_child(osrv::CONFIGURATION_ENUMERATION[osrv::CONFIGURATION_TYPE::VIDEOSOURCE]).front()
+		.second.get<std::string>("token");
+	const std::string videoEncoderToken = readerWriter.ConfigsTree()
+		.get_child(osrv::CONFIGURATION_ENUMERATION[osrv::CONFIGURATION_TYPE::VIDEOENCODER]).front()
+		.second.get<std::string>("token");
+	const std::string audioSourceToken = readerWriter.ConfigsTree()
+		.get_child(osrv::CONFIGURATION_ENUMERATION[osrv::CONFIGURATION_TYPE::AUDIOSOURCE]).front()
+		.second.get<std::string>("token");
+	const std::string audioEncoderToken = readerWriter.ConfigsTree()
+		.get_child(osrv::CONFIGURATION_ENUMERATION[osrv::CONFIGURATION_TYPE::AUDIOENCODER]).front()
+		.second.get<std::string>("token");
+
+
+
+	manager.Create(customProfileName);
+	manager.AddConfiguration(utility::media::ProfileConfigsHelper(manager.Back()).ProfileToken(),
+		osrv::CONFIGURATION_ENUMERATION[osrv::VIDEOSOURCE], videoSourceToken);
+	manager.AddConfiguration(utility::media::ProfileConfigsHelper(manager.Back()).ProfileToken(),
+		osrv::CONFIGURATION_ENUMERATION[osrv::VIDEOENCODER], videoEncoderToken);
+	manager.AddConfiguration(utility::media::ProfileConfigsHelper(manager.Back()).ProfileToken(),
+		osrv::CONFIGURATION_ENUMERATION[osrv::AUDIOSOURCE], audioSourceToken);
+	manager.AddConfiguration(utility::media::ProfileConfigsHelper(manager.Back()).ProfileToken(),
+		osrv::CONFIGURATION_ENUMERATION[osrv::AUDIOENCODER], audioEncoderToken);
+
+	// remove all configurations was added
+	manager.RemoveConfiguration(utility::media::ProfileConfigsHelper(manager.Back()).ProfileToken(),
+		osrv::CONFIGURATION_ENUMERATION[osrv::ALL]);
+
+	readerWriter.Read();
+	auto mediaProfilesTree = readerWriter.ConfigsTree().get_child("MediaProfiles");
+
+	// expected that if the configuration was removed there were no configuration for the create new profile
+	try
+	{
+		std::string defaultValueOnEmptyItem = "defaultValueOnEmptyItem";
+		BOOST_CHECK_EQUAL(mediaProfilesTree.back().second
+			.get<std::string>(osrv::CONFIGURATION_ENUMERATION[osrv::VIDEOSOURCE],
+			defaultValueOnEmptyItem), defaultValueOnEmptyItem);
+		BOOST_CHECK_EQUAL(mediaProfilesTree.back().second
+			.get<std::string>(osrv::CONFIGURATION_ENUMERATION[osrv::VIDEOENCODER],
+			defaultValueOnEmptyItem), defaultValueOnEmptyItem);
+		BOOST_CHECK_EQUAL(mediaProfilesTree.back().second
+			.get<std::string>(osrv::CONFIGURATION_ENUMERATION[osrv::AUDIOENCODER],
+			defaultValueOnEmptyItem), defaultValueOnEmptyItem);
+		BOOST_CHECK_EQUAL(mediaProfilesTree.back().second
+			.get<std::string>(osrv::CONFIGURATION_ENUMERATION[osrv::AUDIOSOURCE],
+			defaultValueOnEmptyItem), defaultValueOnEmptyItem);
+	}
+	catch (const boost::property_tree::ptree_bad_path&)
+	{
+		readerWriter.Reset();
+		return;
+	}
+
+	readerWriter.Reset();
+}
