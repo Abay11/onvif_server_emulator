@@ -102,6 +102,52 @@ namespace exns
 
 		return {};
 	}
+
+	std::vector<pt::ptree::const_iterator> find_hierarchy_elements(std::string_view path, const pt::ptree& root)
+	{
+		std::vector<pt::ptree::const_iterator> result;
+
+		if (root.empty())
+			return result;
+
+		std::vector<std::string> tokens;
+		boost::split(tokens, path, boost::is_any_of("."));
+
+		int lvl = 0;
+		auto begin = root.begin();
+		auto end = root.end();
+		for (auto it = begin; it != end; )
+		{
+			if (lvl >= tokens.size())
+			{
+				break;
+			}
+
+			const auto no_ns_node = get_element_without_ns(it->first);
+			if (boost::iequals(tokens[lvl], no_ns_node))
+			{
+				if (lvl == tokens.size() - 1)
+				{
+					result.push_back(it);
+					++it;
+				}
+				else
+				{
+					// need move in depth
+					// note: we process the first match children
+					++lvl;
+					end = it->second.end();
+					it = it->second.begin();
+				}
+			}
+			else
+			{
+				++it;
+			}
+		}
+
+		return result;
+	}
 	
 	pt::ptree to_ptree(const std::string& str)
 	{

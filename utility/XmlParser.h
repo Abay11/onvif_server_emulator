@@ -115,5 +115,9 @@ namespace exns
 	// Expected format is same as the way in Boost::Property_tree - childs is dot separated:  ex: "el1.el2.el3"
 	std::string find_hierarchy(const std::string& /*path*/, const pt::ptree& /*node*/);
 
+	// same as \find_hierarchy, but this version could be used to get multiple childrens with the same name.
+	// return empty list if could not find any elements 
+	std::vector<pt::ptree::const_iterator> find_hierarchy_elements(std::string_view /*path*/, const pt::ptree& /*root*/);
+
 	pt::ptree to_ptree(const std::string& str);
 }
