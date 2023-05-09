@@ -2,11 +2,13 @@
 
 #include "../utility/HttpDigestHelper.h"
 
-
 BOOST_AUTO_TEST_CASE(search_value_func)
 {
 
-	const std::string request_str = "Digest username=\"admin\", realm=\"iPolis\", qop=\"auth\", algorithm=\"MD5\", uri=\"/onvif/media_service\", nonce=\"5ecdfd69d931557bfa21\", nc=00000001, cnonce=\"5ece0b10ca539fe0e61c\", response=\"85aa20294f742f042f89489cd9fc0ea8\", opaque=\"9652e1db\"";
+	const std::string request_str =
+			"Digest username=\"admin\", realm=\"iPolis\", qop=\"auth\", algorithm=\"MD5\", uri=\"/onvif/media_service\", "
+			"nonce=\"5ecdfd69d931557bfa21\", nc=00000001, cnonce=\"5ece0b10ca539fe0e61c\", "
+			"response=\"85aa20294f742f042f89489cd9fc0ea8\", opaque=\"9652e1db\"";
 
 	std::string username_expected = "admin";
 	std::string realm_expected = "iPolis";
@@ -34,7 +36,10 @@ BOOST_AUTO_TEST_CASE(search_value_func)
 
 BOOST_AUTO_TEST_CASE(extract_DA_func)
 {
-	const std::string request_str = "Digest username=\"admin\", realm=\"iPolis\", qop=\"auth\", algorithm=\"MD5\", uri=\"/onvif/media_service\", nonce=\"5ecdfd69d931557bfa21\", nc=00000001, cnonce=\"5ece0b10ca539fe0e61c\", response=\"85aa20294f742f042f89489cd9fc0ea8\", opaque=\"9652e1db\"";
+	const std::string request_str =
+			"Digest username=\"admin\", realm=\"iPolis\", qop=\"auth\", algorithm=\"MD5\", uri=\"/onvif/media_service\", "
+			"nonce=\"5ecdfd69d931557bfa21\", nc=00000001, cnonce=\"5ece0b10ca539fe0e61c\", "
+			"response=\"85aa20294f742f042f89489cd9fc0ea8\", opaque=\"9652e1db\"";
 
 	using namespace utility::digest;
 	DigestRequestHeader expected_result;

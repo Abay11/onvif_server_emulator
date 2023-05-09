@@ -4,10 +4,9 @@
 
 namespace osrv
 {
-	class DeviceIOService : public IOnvifService
-	{
-	public:
-		DeviceIOService(const std::string& service_uri,
-			const std::string& service_name, std::shared_ptr<IOnvifServer> srv);
-	};
-}
+class DeviceIOService : public IOnvifService
+{
+public:
+	DeviceIOService(const std::string& service_uri, const std::string& service_name, std::shared_ptr<IOnvifServer> srv);
+};
+} // namespace osrv

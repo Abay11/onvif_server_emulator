@@ -3,8 +3,8 @@
 #include "../Server.h"
 #include "../onvif_services/physical_components/IDigitalInput.h"
 
-#include <boost/property_tree/ptree.hpp>
 #include <boost/property_tree/json_parser.hpp>
+#include <boost/property_tree/ptree.hpp>
 
 #include <memory>
 
@@ -13,7 +13,8 @@ BOOST_AUTO_TEST_CASE(read_server_configs_func)
 {
 	const std::string server_configs_path = "../../unit_tests/test_data/system_users_list_test.config";
 	std::shared_ptr<osrv::ServerConfigs> actual_configs;
-	try {
+	try
+	{
 		actual_configs = osrv::read_server_configs(server_configs_path);
 	}
 	catch (const std::exception& e)
@@ -21,12 +22,12 @@ BOOST_AUTO_TEST_CASE(read_server_configs_func)
 		BOOST_TEST("" == e.what());
 		BOOST_ASSERT(false);
 	}
-	
+
 	auto expected_auth_scheme = osrv::AUTH_SCHEME::DIGEST;
 	BOOST_TEST(true == (actual_configs->auth_scheme_ == expected_auth_scheme));
 
 	auto actual_system_users = actual_configs->system_users_;
-	
+
 	BOOST_TEST(3 == actual_system_users.size());
 
 	auto admin = actual_system_users.at(0);
@@ -51,7 +52,7 @@ BOOST_AUTO_TEST_CASE(read_server_configs_func)
 BOOST_AUTO_TEST_CASE(read_digital_inputs_func)
 {
 	const std::string config_example =
-		R"(
+			R"(
 			{
 				"DigitalInputs":
 				[
@@ -80,5 +81,4 @@ BOOST_AUTO_TEST_CASE(read_digital_inputs_func)
 	auto di1 = result[1];
 	BOOST_TEST("digital_input1" == di1->GetToken());
 	BOOST_TEST(false == di1->IsEnabled());
-	
 }

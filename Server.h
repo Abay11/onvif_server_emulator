@@ -1,7 +1,7 @@
 #pragma once
 
-#include "IOnvifServer.h"
 #include "HttpServerFwd.h"
+#include "IOnvifServer.h"
 #include "Logger.h"
 #include "RtspServer.h"
 
@@ -14,76 +14,76 @@
 
 #include <memory>
 
-//namespace onvif server
+// namespace onvif server
 namespace osrv
 {
-	enum class AUTH_SCHEME
-	{
-		NONE = 0,
-		WSS,
-		DIGEST,
-		DIGEST_WSS,
-	};
+enum class AUTH_SCHEME
+{
+	NONE = 0,
+	WSS,
+	DIGEST,
+	DIGEST_WSS,
+};
 
-	using socket_t = boost::asio::basic_stream_socket<boost::asio::ip::tcp>;
-	using HttpServer = SimpleWeb::Server<socket_t>;
+using socket_t = boost::asio::basic_stream_socket<boost::asio::ip::tcp>;
+using HttpServer = SimpleWeb::Server<socket_t>;
 
-	struct ServerConfigs
-	{
-		std::string ipv4_address_;
-		std::string http_port_;
-		std::string rtsp_port_;
+struct ServerConfigs
+{
+	std::string ipv4_address_;
+	std::string http_port_;
+	std::string rtsp_port_;
 
-		bool enabled_http_port_forwarding;
-		unsigned short forwarded_http_port;
-		bool enabled_rtsp_port_forwarding;
-		unsigned short forwarded_rtsp_port;
+	bool enabled_http_port_forwarding;
+	unsigned short forwarded_http_port;
+	bool enabled_rtsp_port_forwarding;
+	unsigned short forwarded_rtsp_port;
 
-		std::vector<osrv::auth::UserAccount> system_users_;
-		AUTH_SCHEME auth_scheme_{};
-		std::shared_ptr<utility::digest::IDigestSession> digest_session_;
+	std::vector<osrv::auth::UserAccount> system_users_;
+	AUTH_SCHEME auth_scheme_{};
+	std::shared_ptr<utility::digest::IDigestSession> digest_session_;
 
-		DigitalInputsList digital_inputs_;
-		
-		std::shared_ptr<boost::asio::io_context> io_context_;
+	DigitalInputsList digital_inputs_;
 
-		// milliseconds
-		unsigned short network_delay_simulation_ = 0;
+	std::shared_ptr<boost::asio::io_context> io_context_;
 
-		bool multichannel_enabled_ = false;
-		unsigned char channels_count_ = 0;
+	// milliseconds
+	unsigned short network_delay_simulation_ = 0;
 
-		std::string rtsp_streaming_file_;
-	};
+	bool multichannel_enabled_ = false;
+	unsigned char channels_count_ = 0;
 
-	class Server : public IOnvifServer
-	{
-	public:
-		Server(const std::string& /*configs_dir*/, std::shared_ptr<ILogger> /*log*/);
-		Server(const ILogger&) = delete;
-		Server(ILogger&&) = delete;
-		~Server();
+	std::string rtsp_streaming_file_;
+};
 
-		void init();
+class Server : public IOnvifServer
+{
+public:
+	Server(const std::string& /*configs_dir*/, std::shared_ptr<ILogger> /*log*/);
+	Server(const ILogger&) = delete;
+	Server(ILogger&&) = delete;
+	~Server();
 
-		//throws exceptions in error
-		void run();
+	void init();
 
-	private:
-		//ILogger& logger_;
+	// throws exceptions in error
+	void run();
 
-		//std::shared_ptr<osrv::HttpServer> http_server_instance_ = nullptr;
+private:
+	// ILogger& logger_;
 
-		//osrv::ServerConfigs server_configs_;
+	// std::shared_ptr<osrv::HttpServer> http_server_instance_ = nullptr;
 
-		rtsp::Server* rtspServer_ = nullptr;
+	// osrv::ServerConfigs server_configs_;
 
-		std::shared_ptr<boost::asio::io_context> io_context_;
-		std::shared_ptr<boost::asio::io_context::work> io_context_work_;
-		std::shared_ptr<std::thread> io_context_thread_;
-	};
-	
-	std::shared_ptr<ServerConfigs> read_server_configs(const std::string& /*config_path*/);
+	rtsp::Server* rtspServer_ = nullptr;
 
-	DigitalInputsList read_digital_inputs(const boost::property_tree::ptree& /*config_node*/);
-}
+	std::shared_ptr<boost::asio::io_context> io_context_;
+	std::shared_ptr<boost::asio::io_context::work> io_context_work_;
+	std::shared_ptr<std::thread> io_context_thread_;
+};
+
+std::shared_ptr<ServerConfigs> read_server_configs(const std::string& /*config_path*/);
+
+DigitalInputsList read_digital_inputs(const boost::property_tree::ptree& /*config_node*/);
+} // namespace osrv

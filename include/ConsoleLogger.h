@@ -5,8 +5,7 @@
 class ConsoleLogger : public StreamLogger
 {
 public:
-	ConsoleLogger(int loggingLevel = LVL_INFO)
-		: StreamLogger(std::cout, loggingLevel)
+	ConsoleLogger(int loggingLevel = LVL_INFO) : StreamLogger(std::cout, loggingLevel)
 	{
 	}
 };

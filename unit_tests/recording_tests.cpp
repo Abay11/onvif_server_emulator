@@ -4,8 +4,8 @@
 
 #include <boost/property_tree/json_parser.hpp>
 #include <fstream>
-#include <sstream>
 #include <iostream>
+#include <sstream>
 #include <string>
 
 using namespace std::string_literals;
@@ -60,12 +60,9 @@ BOOST_AUTO_TEST_CASE(RecordingReaderFromConfig0)
 
 	BOOST_TEST(true == ("Recording_0"s == recordings[0]->Token()));
 	BOOST_TEST(true == ("VideoTrack_0"s == recordings[0]->VideoTrackToken()));
-	BOOST_TEST(true
-		== (boost::posix_time::from_iso_string("20210523T000000") == recordings[0]->DateFrom()));
-	BOOST_TEST(true
-		== (boost::posix_time::from_iso_string("20210523T060000") == recordings[0]->DateUntil()));
+	BOOST_TEST(true == (boost::posix_time::from_iso_string("20210523T000000") == recordings[0]->DateFrom()));
+	BOOST_TEST(true == (boost::posix_time::from_iso_string("20210523T060000") == recordings[0]->DateUntil()));
 }
-
 
 BOOST_AUTO_TEST_CASE(RecordingManager0)
 {
@@ -115,7 +112,7 @@ BOOST_AUTO_TEST_CASE(EventsSearchSession0)
 	std::string from{"20210523T000000"};
 	std::string until{"20210523T060000"};
 
-	auto  r = std::make_shared<osrv::Recording>("rtoken0", "vtoken", from, until);
+	auto r = std::make_shared<osrv::Recording>("rtoken0", "vtoken", from, until);
 	auto re = r->RecordingEvents();
 	EventsSearchSessionFactory factory("SimpleEventsSearchSession");
 
@@ -124,16 +121,16 @@ BOOST_AUTO_TEST_CASE(EventsSearchSession0)
 
 	auto searchSession = re->NewSearchSession(searchStartPoint, searchEndPoint, factory);
 	auto searchToken = searchSession->SearchToken();
-	
+
 	std::string expected = "SearchToken0";
 	BOOST_TEST(searchToken == expected);
 
 	auto resultEvents = searchSession->Events();
-	
+
 	BOOST_TEST(2 == resultEvents.size());
 	BOOST_TEST(true == resultEvents[0].isDataPresent);
 	BOOST_TEST(boost::posix_time::from_iso_string(from) == resultEvents[0].utcTime);
-	
+
 	BOOST_TEST(false == resultEvents[1].isDataPresent);
 	BOOST_TEST(boost::posix_time::from_iso_string(until) == resultEvents[1].utcTime);
 }
@@ -145,7 +142,7 @@ BOOST_AUTO_TEST_CASE(EventsSearchSession1)
 	std::string from{"20210523T000000"};
 	std::string until{"20210523T060000"};
 
-	auto  r = std::make_shared<osrv::Recording>("rtoken0", "vtoken", from, until);
+	auto r = std::make_shared<osrv::Recording>("rtoken0", "vtoken", from, until);
 	auto re = r->RecordingEvents();
 	EventsSearchSessionFactory factory("SimpleEventsSearchSession");
 
@@ -154,16 +151,16 @@ BOOST_AUTO_TEST_CASE(EventsSearchSession1)
 
 	auto searchSession = re->NewSearchSession(searchStartPoint, searchEndPoint, factory);
 	auto searchToken = searchSession->SearchToken();
-	
+
 	std::string expected = "SearchToken0";
 	BOOST_TEST(searchToken == expected);
 
 	auto resultEvents = searchSession->Events();
-	
+
 	BOOST_TEST(2 == resultEvents.size());
 	BOOST_TEST(true == resultEvents[0].isDataPresent);
 	BOOST_TEST(boost::posix_time::from_iso_string(searchStartPoint) == resultEvents[0].utcTime);
-	
+
 	BOOST_TEST(false == resultEvents[1].isDataPresent);
 	BOOST_TEST(boost::posix_time::from_iso_string(searchEndPoint) == resultEvents[1].utcTime);
 }
@@ -175,7 +172,7 @@ BOOST_AUTO_TEST_CASE(EventsSearchSession2)
 	std::string from{"20210523T000000"};
 	std::string until{"20210523T060000"};
 
-	auto  r = std::make_shared<osrv::Recording>("rtoken0", "vtoken", from, until);
+	auto r = std::make_shared<osrv::Recording>("rtoken0", "vtoken", from, until);
 	auto re = r->RecordingEvents();
 	EventsSearchSessionFactory factory("SimpleEventsSearchSession");
 
@@ -187,7 +184,7 @@ BOOST_AUTO_TEST_CASE(EventsSearchSession2)
 	auto searchToken = searchSession->SearchToken();
 
 	auto ss = re->SearchSession(searchToken);
-	
+
 	BOOST_ASSERT(!ss->Events().empty());
 	BOOST_TEST(ss->SearchToken() == searchToken);
 }

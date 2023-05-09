@@ -5,7 +5,9 @@
 #include <boost/property_tree/ptree.hpp>
 
 utility::AudioEncoderReaderByToken::AudioEncoderReaderByToken(const std::string& token, const pt::ptree& cfgs)
-	: token_(token), cfgs_(cfgs) {}
+		: token_(token), cfgs_(cfgs)
+{
+}
 
 pt::ptree utility::AudioEncoderReaderByToken::AudioEncoder()
 {
@@ -16,7 +18,9 @@ pt::ptree utility::AudioEncoderReaderByToken::AudioEncoder()
 	throw std::runtime_error("Not found audio encoder configuration with token: " + token_);
 }
 
-utility::AudioEncoderReaderByProfileToken::AudioEncoderReaderByProfileToken(const std::string& token, const pt::ptree& cfgs) : profileToken_(token), cfgs_(cfgs)
+utility::AudioEncoderReaderByProfileToken::AudioEncoderReaderByProfileToken(const std::string& token,
+																																						const pt::ptree& cfgs)
+		: profileToken_(token), cfgs_(cfgs)
 {
 }
 
@@ -37,13 +41,14 @@ pt::ptree utility::AudioEncoderReaderByProfileToken::AudioEncoder()
 	return AudioEncoderReaderByToken(RelatedAudioEncoderToken(), cfgs_).AudioEncoder();
 }
 
-utility::AudioSourceConfigsReaderByToken::AudioSourceConfigsReaderByToken(
-    const std::string &token, const pt::ptree &cfgs)
-	: token_(token), cfgs_(cfgs)
+utility::AudioSourceConfigsReaderByToken::AudioSourceConfigsReaderByToken(const std::string& token,
+																																					const pt::ptree& cfgs)
+		: token_(token), cfgs_(cfgs)
 {
 }
 
-pt::ptree utility::AudioSourceConfigsReaderByToken::AudioSource() {
+pt::ptree utility::AudioSourceConfigsReaderByToken::AudioSource()
+{
 	for (const auto& p : cfgs_.get_child(osrv::CONFIGURATION_ENUMERATION[osrv::CONFIGURATION_TYPE::AUDIOSOURCE]))
 		if (p.second.get<std::string>("token") == token_)
 			return p.second;
@@ -51,10 +56,9 @@ pt::ptree utility::AudioSourceConfigsReaderByToken::AudioSource() {
 	throw std::runtime_error("Not found audio source configuration with token: " + token_);
 }
 
-utility::AudioSourceConfigsReaderByProfileToken::AudioSourceConfigsReaderByProfileToken(
-	const std::string &profileToken, const pt::ptree &configs)
-	: profileToken_(profileToken)
-	, cfgs_(configs)
+utility::AudioSourceConfigsReaderByProfileToken::AudioSourceConfigsReaderByProfileToken(const std::string& profileToken,
+																																												const pt::ptree& configs)
+		: profileToken_(profileToken), cfgs_(configs)
 {
 }
 
@@ -63,16 +67,16 @@ pt::ptree utility::AudioSourceConfigsReaderByProfileToken::AudioSource() const
 	return AudioSourceConfigsReaderByToken(RelatedAudioSourceToken(), cfgs_).AudioSource();
 }
 
-std::string
-utility::AudioSourceConfigsReaderByProfileToken::RelatedAudioSourceToken()
-    const {
-        auto profiles = cfgs_.find("MediaProfiles")->second;
-        for (const auto &p : profiles) {
-                if (p.second.get<std::string>("token") == profileToken_)
-                        return p.second.get<std::string>("AudioSource");
-        }
+std::string utility::AudioSourceConfigsReaderByProfileToken::RelatedAudioSourceToken() const
+{
+	auto profiles = cfgs_.find("MediaProfiles")->second;
+	for (const auto& p : profiles)
+	{
+		if (p.second.get<std::string>("token") == profileToken_)
+			return p.second.get<std::string>("AudioSource");
+	}
 
-        throw std::runtime_error("Not found profile token: " + profileToken_);
+	throw std::runtime_error("Not found profile token: " + profileToken_);
 }
 
 unsigned int utility::PcmuSetup::PayloadNum()

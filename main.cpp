@@ -1,13 +1,13 @@
 #include <iostream>
 
 #include "Logger.h"
-#include "Server.h"
 #include "LoggerFactories.h"
+#include "Server.h"
 
 #include "onvif_services/service_configs.h"
 
-#include <string>
 #include <cstdlib>
+#include <string>
 
 static const std::string TITLE = R"(
    ___  _   ___     _____ _____   ____                             _____                 _       _             
@@ -16,7 +16,7 @@ static const std::string TITLE = R"(
  | |_| | |\  | \ V /  | ||  _|    ___) |  __/ |   \ V /  __/ |    | |___| | | | | | |_| | | (_| | || (_) | |   
   \___/|_| \_|  \_/  |___|_|     |____/ \___|_|    \_/ \___|_|    |_____|_| |_| |_|\__,_|_|\__,_|\__\___/|_|   
 )";
- 
+
 static const std::string SERVER_VERSION = "0.1";
 
 static const std::string DEFAULT_CONFIGS_DIR = "./server_configs";
@@ -28,7 +28,7 @@ int main(int argc, char** argv)
 	using namespace std;
 	std::cout << TITLE << std::endl;
 	std::cout << "Application version: " << SERVER_VERSION << std::endl;
-	
+
 	std::string configs_dir = DEFAULT_CONFIGS_DIR;
 
 	std::stringstream ss;
@@ -52,14 +52,14 @@ int main(int argc, char** argv)
 	}
 	else
 		throw std::runtime_error("Could not create logger type: " + lconfigs.LogOutput());
-	
+
 	logger->Info("New run. " + ss.str());
 	logger->Info("Logging level: " + logger->GetLogLevel());
 
-	if (auto env_gst_plugin_path = std::string(std::getenv("GST_PLUGIN_PATH"));
-		env_gst_plugin_path.empty())
+	if (auto env_gst_plugin_path = std::string(std::getenv("GST_PLUGIN_PATH")); env_gst_plugin_path.empty())
 	{
-		std::cerr << "For proper work please install required GStreamer plugins and add the GST_PLUGIN_PATH environment variable to point at the installation directory!";
+		std::cerr << "For proper work please install required GStreamer plugins and add the GST_PLUGIN_PATH environment "
+								 "variable to point at the installation directory!";
 		return -1;
 	}
 	else
@@ -69,8 +69,8 @@ int main(int argc, char** argv)
 
 	try
 	{
-		//std::shared_ptr<osrv::IOnvifServer> server = std::make_shared<osrv::Server>(configs_dir, logger);
-		std::shared_ptr<osrv::Server> server{ std::make_shared<osrv::Server>(configs_dir, logger) };
+		// std::shared_ptr<osrv::IOnvifServer> server = std::make_shared<osrv::Server>(configs_dir, logger);
+		std::shared_ptr<osrv::Server> server{std::make_shared<osrv::Server>(configs_dir, logger)};
 		server->init();
 		server->run();
 	}

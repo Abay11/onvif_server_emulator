@@ -10,12 +10,11 @@ class ILogger;
 
 namespace osrv
 {
-	struct ServerConfigs;
+struct ServerConfigs;
 
-	class ImagingService : public IOnvifService
-	{
-	public:
-		ImagingService(const std::string& service_uri,
-			const std::string& service_name, std::shared_ptr<IOnvifServer> srv);
-	};
-}
+class ImagingService : public IOnvifService
+{
+public:
+	ImagingService(const std::string& service_uri, const std::string& service_name, std::shared_ptr<IOnvifServer> srv);
+};
+} // namespace osrv

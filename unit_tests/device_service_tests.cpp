@@ -21,5 +21,5 @@ BOOST_AUTO_TEST_CASE(device_service_configs_test)
 	auto getservices_configs = configs.find("GetServices");
 	BOOST_CHECK_MESSAGE(getservices_configs != configs.not_found(), "Not found GetService configs");
 
-	//BOOST_TEST();
+	// BOOST_TEST();
 }

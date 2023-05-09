@@ -2,7 +2,6 @@
 
 #include "../utility/DateTime.hpp"
 
-
 BOOST_AUTO_TEST_CASE(system_utc_datetime_func)
 {
 	using namespace utility::datetime;

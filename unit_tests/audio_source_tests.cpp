@@ -1,7 +1,7 @@
 #include <boost/test/unit_test.hpp>
 
-#include "../utility/AudioSourceReader.h"
 #include "../include/MediaFormats.h"
+#include "../utility/AudioSourceReader.h"
 
 #include <boost/property_tree/json_parser.hpp>
 
@@ -14,7 +14,6 @@ BOOST_AUTO_TEST_CASE(ASConfigPathTest)
 	std::ifstream ifile(config_file);
 	BOOST_ASSERT(true == ifile.is_open());
 }
-
 
 BOOST_AUTO_TEST_CASE(AudioEncoderReaderByTokenTest)
 {

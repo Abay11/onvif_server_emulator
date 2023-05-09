@@ -10,10 +10,9 @@ class ILogger;
 
 namespace osrv
 {
-	class PTZService : public IOnvifService
-	{
-	public:
-		PTZService(const std::string& service_uri,
-			const std::string& service_name, std::shared_ptr<IOnvifServer> srv);
-	};
-}
+class PTZService : public IOnvifService
+{
+public:
+	PTZService(const std::string& service_uri, const std::string& service_name, std::shared_ptr<IOnvifServer> srv);
+};
+} // namespace osrv

@@ -20,7 +20,7 @@ BOOST_AUTO_TEST_CASE(get_usertype_by_username_func)
 	using namespace osrv::auth;
 	std::vector<osrv::auth::UserAccount> users;
 	const std::string username = "agent007";
-	users.emplace_back(UserAccount{ username, "", USER_TYPE::ADMIN });
+	users.emplace_back(UserAccount{username, "", USER_TYPE::ADMIN});
 	auto res = get_usertype_by_username(username, users);
 	BOOST_TEST(true == (res == USER_TYPE::ADMIN));
 

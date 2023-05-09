@@ -1,8 +1,8 @@
 #include <boost/test/unit_test.hpp>
 
+#include "../onvif_services/pullpoint/pull_point.h"
 #include "../utility/DateTime.hpp"
 #include "../utility/XmlParser.h"
-#include "../onvif_services/pullpoint/pull_point.h"
 
 #include <boost/property_tree/ptree.hpp>
 #include <boost/property_tree/xml_parser.hpp>
@@ -59,21 +59,25 @@ BOOST_AUTO_TEST_CASE(parse_pullmessages_func_1)
 	"<s:Envelope xmlns:s=\"http://www.w3.org/2003/05/soap-envelope\""
 		"xmlns:a=\"http://www.w3.org/2005/08/addressing\">"
 		"<s:Header>"
-        "<a:Action s:mustUnderstand=\"1\">http://www.onvif.org/ver10/events/wsdl/PullPointSubscription/PullMessagesRequest</a:Action>"
-        "<a:MessageID>urn:uuid:30cf5aa8-d867-419f-962b-b789f8d7e37e</a:MessageID>"
-        "<a:ReplyTo>"
-            "<a:Address>http://www.w3.org/2005/08/addressing/anonymous</a:Address>"
-        "</a:ReplyTo>"
+				"<a:Action
+s:mustUnderstand=\"1\">http://www.onvif.org/ver10/events/wsdl/PullPointSubscription/PullMessagesRequest</a:Action>"
+				"<a:MessageID>urn:uuid:30cf5aa8-d867-419f-962b-b789f8d7e37e</a:MessageID>"
+				"<a:ReplyTo>"
+						"<a:Address>http://www.w3.org/2005/08/addressing/anonymous</a:Address>"
+				"</a:ReplyTo>"
 		"<Security s:mustUnderstand=\"1\""
-            "xmlns=\"http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-secext-1.0.xsd\">"
-            "<UsernameToken>"
-                "<Username>admin</Username>"
-                "<Password Type=\"http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-username-token-profile-1.0#PasswordDigest\">24UZInK62uTSnctdnp6ErMpt8LI=</Password>"
-                "<Nonce EncodingType=\"http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-soap-message-security-1.0#Base64Binary\">LYz8rNY2tUyYOTN00Hoo5r0GAAAAAA==</Nonce>"
-                "<Created xmlns=\"http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-utility-1.0.xsd\">2020-10-27T11:10:42.103Z</Created>"
-            "</UsernameToken>"
-        "</Security>"
-        "<a:To s:mustUnderstand=\"1\">http://192.168.43.120:8000/event_service/0</a:To>"
+						"xmlns=\"http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-secext-1.0.xsd\">"
+						"<UsernameToken>"
+								"<Username>admin</Username>"
+								"<Password
+Type=\"http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-username-token-profile-1.0#PasswordDigest\">24UZInK62uTSnctdnp6ErMpt8LI=</Password>"
+								"<Nonce
+EncodingType=\"http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-soap-message-security-1.0#Base64Binary\">LYz8rNY2tUyYOTN00Hoo5r0GAAAAAA==</Nonce>"
+								"<Created
+xmlns=\"http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-utility-1.0.xsd\">2020-10-27T11:10:42.103Z</Created>"
+						"</UsernameToken>"
+				"</Security>"
+				"<a:To s:mustUnderstand=\"1\">http://192.168.43.120:8000/event_service/0</a:To>"
 		"</s:Header>"
 		"<s:Body xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\""
 			"xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\">"
@@ -133,16 +137,17 @@ BOOST_AUTO_TEST_CASE(serialize_notification_messages_func1)
 	std::deque<NotificationMessage> msgs;
 
 	NotificationMessage test_msg;
-	test_msg.source_item_descriptions.push_back({ "ItemName", "ItemValue"});
+	test_msg.source_item_descriptions.push_back({"ItemName", "ItemValue"});
 
 	msgs.push_back(test_msg);
 
 	boost::property_tree::ptree res = serialize_notification_messages(msgs, {});
 
-	auto name = res.get<std::string>("wsnt:NotificationMessage.wsnt:Message.tt:Message.tt:Source.tt:SimpleItem.<xmlattr>.Name");
+	auto name =
+			res.get<std::string>("wsnt:NotificationMessage.wsnt:Message.tt:Message.tt:Source.tt:SimpleItem.<xmlattr>.Name");
 	BOOST_TEST(name == "ItemName");
 
-	auto value = res.get<std::string>("wsnt:NotificationMessage.wsnt:Message.tt:Message.tt:Source.tt:SimpleItem.<xmlattr>.Value");
+	auto value =
+			res.get<std::string>("wsnt:NotificationMessage.wsnt:Message.tt:Message.tt:Source.tt:SimpleItem.<xmlattr>.Value");
 	BOOST_TEST(value == "ItemValue");
 }
-

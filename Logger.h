@@ -2,11 +2,10 @@
 
 #include "./utility/DateTime.hpp"
 
-
 #include <boost/property_tree/ptree.hpp>
 
-#include <mutex>
 #include <iostream>
+#include <mutex>
 #include <string>
 
 class ILogger
@@ -24,9 +23,9 @@ public:
 	virtual void Debug(const std::string& msg) const = 0;
 	virtual void Trace(const std::string& msg) const = 0;
 
-	ILogger(int log_lvl)
-		: m_logging_level_(log_lvl){}
-
+	ILogger(int log_lvl) : m_logging_level_(log_lvl)
+	{
+	}
 
 	void SetLogLevel(int l)
 	{
@@ -37,11 +36,17 @@ public:
 	{
 		switch (m_logging_level_)
 		{
-			case LVL_ERR: return "ERROR";
-			case LVL_WARN: return "WARN";
-			case LVL_INFO: return "INFO";
-			case LVL_TRACE: return "TRACE";
-			default: LVL_DEBUG: return "DEBUG";
+		case LVL_ERR:
+			return "ERROR";
+		case LVL_WARN:
+			return "WARN";
+		case LVL_INFO:
+			return "INFO";
+		case LVL_TRACE:
+			return "TRACE";
+		default:
+		LVL_DEBUG:
+			return "DEBUG";
 		}
 	}
 
@@ -53,7 +58,9 @@ using pt_ptr = std::shared_ptr<boost::property_tree::ptree>;
 class LoggerConfigs
 {
 public:
-	LoggerConfigs(const pt_ptr configs) : configs_(configs) {}
+	LoggerConfigs(const pt_ptr configs) : configs_(configs)
+	{
+	}
 
 	int LogLevel()
 	{
@@ -71,10 +78,10 @@ private:
 	{
 		if (lvl_str == "ERROR")
 			return ILogger::LVL_ERR;
-		
+
 		if (lvl_str == "WARN")
 			return ILogger::LVL_WARN;
-		
+
 		if (lvl_str == "INFO")
 			return ILogger::LVL_INFO;
 
@@ -83,7 +90,7 @@ private:
 
 		if (lvl_str == "TRACE")
 			return ILogger::LVL_TRACE;
-		
+
 		// as default
 		return ILogger::LVL_DEBUG;
 	}

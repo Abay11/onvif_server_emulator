@@ -1,0 +1,9 @@
+BasedOnStyle: Microsoft
+PointerAlignment: Left
+DerivePointerAlignment: false
+UseTab: Always
+TabWidth: 2 
+IndentWidth: 2 
+AccessModifierOffset: -2 
+ColumnLimit: 120 
+Standard: c++20

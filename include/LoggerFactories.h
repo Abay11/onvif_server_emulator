@@ -25,9 +25,9 @@ public:
 class FileLoggerFactory : public ILoggerFactory
 {
 public:
-	FileLoggerFactory(const std::string& fileName)
-		: fileName_(fileName)
-	{}
+	FileLoggerFactory(const std::string& fileName) : fileName_(fileName)
+	{
+	}
 
 	ILogger* GetLogger(int log_level) override
 	{

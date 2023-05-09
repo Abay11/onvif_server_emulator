@@ -7,9 +7,7 @@
 class StreamLogger : public ILogger
 {
 public:
-	StreamLogger(std::ostream& os, int loggingLevel = LVL_INFO)
-		: ILogger(loggingLevel)
-		, os_(os)
+	StreamLogger(std::ostream& os, int loggingLevel = LVL_INFO) : ILogger(loggingLevel), os_(os)
 	{
 	}
 
