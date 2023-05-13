@@ -21,4 +21,19 @@ pt::ptree utility::VideoSourceConfigsReaderByToken::VideoSource()
 
 	throw osrv::invalid_token();
 }
+
+VideoEncoderReaderByToken::VideoEncoderReaderByToken(const std::string& configToken, const pt::ptree& configs)
+		: token_(configToken), cfgs_(configs)
+{
+}
+
+pt::ptree VideoEncoderReaderByToken::VideoEncoder()
+{
+	for (const auto& [key, tree] : cfgs_.get_child(osrv::CONFIGURATION_ENUMERATION[osrv::CONFIGURATION_TYPE::VIDEOENCODER]))
+		if (tree.get<std::string>("token") == token_)
+			return tree;
+
+	throw osrv::invalid_token();
+}
+
 } // namespace utility

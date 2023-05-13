@@ -19,4 +19,17 @@ private:
 	const std::string& token_;
 	const pt::ptree& cfgs_;
 };
+
+class VideoEncoderReaderByToken
+{
+public:
+	VideoEncoderReaderByToken(const std::string& configToken, const pt::ptree& configs);
+
+	pt::ptree VideoEncoder();
+
+private:
+	const std::string& token_;
+	const pt::ptree& cfgs_;
+};
+
 } // namespace utility

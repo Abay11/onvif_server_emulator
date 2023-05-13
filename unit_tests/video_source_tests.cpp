@@ -37,7 +37,36 @@ BOOST_AUTO_TEST_CASE(VideoSourceConfigsReaderByTokenTest_1)
 	{
 		auto cfg = utility::VideoSourceConfigsReaderByToken(token, configTree).VideoSource();
 	}
-	catch(const osrv::invalid_token&)
+	catch (const osrv::invalid_token&)
+	{
+		return;
+	}
+
+	BOOST_TEST_FAIL("osrv::invalid_token was not throwed!");
+}
+
+BOOST_AUTO_TEST_CASE(VideoEncoderReaderByTokenTest_0)
+{
+	pt::ptree configTree;
+	pt::json_parser::read_json(config_file, configTree);
+
+	const auto token = "VideoEncoderToken0";
+	auto cfg = utility::VideoEncoderReaderByToken(token, configTree).VideoEncoder();
+
+	BOOST_TEST(token == cfg.get<std::string>("token"));
+}
+
+BOOST_AUTO_TEST_CASE(VideoEncoderReaderByTokenTest_1)
+{
+	pt::ptree configTree;
+	pt::json_parser::read_json(config_file, configTree);
+
+	const auto token = "invalidToken";
+	try
+	{
+		auto cfg = utility::VideoEncoderReaderByToken(token, configTree).VideoEncoder();
+	}
+	catch (const osrv::invalid_token&)
 	{
 		return;
 	}
