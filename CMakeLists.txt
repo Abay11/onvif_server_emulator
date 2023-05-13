@@ -105,23 +105,25 @@ FILE(GLOB SERVICES_SRC
 )
 
 FILE (GLOB UTILITY_SRC
-	"utility/AudioSourceReader.h"
 	"utility/AudioSourceReader.cpp"
-	"utility/XmlParser.h"
-	"utility/XmlParser.cpp"
-	"utility/HttpHelper.h"
-	"utility/HttpHelper.cpp"
-	"utility/SoapHelper.h"
-	"utility/SoapHelper.cpp"
-	"utility/AuthHelper.h"
+	"utility/AudioSourceReader.h"
 	"utility/AuthHelper.cpp"
-	"utility/HttpDigestHelper.h"
-	"utility/HttpDigestHelper.cpp"
+	"utility/AuthHelper.h"
 	"utility/DateTime.hpp"
-	"utility/EventService.h"
 	"utility/EventService.cpp"
-	"utility/MediaProfilesManager.h"
+	"utility/EventService.h"
+	"utility/HttpDigestHelper.cpp"
+	"utility/HttpDigestHelper.h"
+	"utility/HttpHelper.cpp"
+	"utility/HttpHelper.h"
 	"utility/MediaProfilesManager.cpp"
+	"utility/MediaProfilesManager.h"
+	"utility/SoapHelper.cpp"
+	"utility/SoapHelper.h"
+	"utility/VideoSourceReader.cpp"
+	"utility/VideoSourceReader.h"
+	"utility/XmlParser.cpp"
+	"utility/XmlParser.h"
 )
 
 source_group("OnvifServices" FILES ${SERVICES_SRC})
