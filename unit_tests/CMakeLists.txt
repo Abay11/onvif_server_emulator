@@ -20,10 +20,11 @@ add_executable(test_executable
 	media2_tests.cpp
 	mediaprofiles_manager_tests.cpp
 	pull_point_tests.cpp
+	recording_tests.cpp
 	server_tests.cpp	
 	service_configs_tests.cpp
-	recording_tests.cpp
 	tests_main.cpp
+	video_source_tests.cpp
 	xmlparser_tests.cpp
 	xmlparser_tests.cpp
 )
