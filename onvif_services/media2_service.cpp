@@ -520,16 +520,37 @@ public:
 
 	void operator()(std::shared_ptr<HttpServer::Response> response, std::shared_ptr<HttpServer::Request> request) override
 	{
-		const auto ve_config_list =
-				profiles_configs_->get_child(CONFIGURATION_ENUMERATION[CONFIGURATION_TYPE::VIDEOENCODER]);
-		pt::ptree ve_configs_node;
-		for (const auto& ve_config : ve_config_list)
+		std::string configuration_token;
+		std::string profile_token; // todo: use it
 		{
-			pt::ptree videoencoder_configuration;
-			osrv::media2::util::fill_video_encoder(ve_config.second, videoencoder_configuration);
-			ve_configs_node.add_child("tr2:Configurations", videoencoder_configuration);
+			auto request_str = request->content.string();
+			std::istringstream is(request_str);
+			pt::ptree xml_tree;
+			pt::xml_parser::read_xml(is, xml_tree);
+			configuration_token =
+					exns::find_hierarchy("Envelope.Body.GetVideoEncoderConfigurations.ConfigurationToken", xml_tree);
+			profile_token = exns::find_hierarchy("Envelope.Body.GetVideoEncoderConfigurations.ProfileToken", xml_tree);
 		}
 
+		pt::ptree ve_configs_node;
+		if (!configuration_token.empty())
+		{
+			auto config = utility::VideoEncoderReaderByToken(configuration_token, *profiles_configs_).VideoEncoder();
+			pt::ptree videoencoder_configuration;
+			osrv::media2::util::fill_video_encoder(config, videoencoder_configuration);
+			ve_configs_node.add_child("tr2:Configurations", videoencoder_configuration);
+		}
+		else
+		{
+			const auto ve_config_list =
+					profiles_configs_->get_child(CONFIGURATION_ENUMERATION[CONFIGURATION_TYPE::VIDEOENCODER]);
+			for (const auto& [key, config] : ve_config_list)
+			{
+				pt::ptree videoencoder_configuration;
+				osrv::media2::util::fill_video_encoder(config, videoencoder_configuration);
+				ve_configs_node.add_child("tr2:Configurations", videoencoder_configuration);
+			}
+		}
 		auto env_tree = utility::soap::getEnvelopeTree(ns_);
 		env_tree.put_child("s:Body.tr2:GetVideoEncoderConfigurationsResponse", ve_configs_node);
 		pt::ptree root_tree;
