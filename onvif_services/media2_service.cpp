@@ -9,6 +9,7 @@
 #include "../utility/HttpHelper.h"
 #include "../utility/MediaProfilesManager.h"
 #include "../utility/SoapHelper.h"
+#include "../utility/VideoSourceReader.h"
 #include "../utility/XmlParser.h"
 
 #include "../Simple-Web-Server/server_http.hpp"
@@ -670,23 +671,41 @@ public:
 
 	void operator()(std::shared_ptr<HttpServer::Response> response, std::shared_ptr<HttpServer::Request> request) override
 	{
-		auto vs_config_list = profiles_configs_->get_child(CONFIGURATION_ENUMERATION[CONFIGURATION_TYPE::VIDEOSOURCE]);
-		pt::ptree vs_configs_node;
-		for (const auto& vs_config : vs_config_list)
+		std::string configuration_token;
+		std::string profile_token; // todo: use it
 		{
-			pt::ptree videosource_configuration;
-			osrv::media::util::fill_soap_videosource_configuration(vs_config.second, videosource_configuration);
-			vs_configs_node.put_child("tr2:Configurations", videosource_configuration);
+			auto request_str = request->content.string();
+			std::istringstream is(request_str);
+			pt::ptree xml_tree;
+			pt::xml_parser::read_xml(is, xml_tree);
+			configuration_token =
+					exns::find_hierarchy("Envelope.Body.GetVideoSourceConfigurations.ConfigurationToken", xml_tree);
+			profile_token = exns::find_hierarchy("Envelope.Body.GetVideoSourceConfigurations.ProfileToken", xml_tree);
+		}
 
-			// multichannel simulaiton with the first channel configs
-			if (server_cfg_.multichannel_enabled_)
+		pt::ptree vs_configs_node;
+		if (!configuration_token.empty())
+		{
+			auto vs_config = utility::VideoSourceConfigsReaderByToken(configuration_token, *profiles_configs_).VideoSource();
+
+			pt::ptree videosource_configuration;
+			osrv::media::util::fill_soap_videosource_configuration(vs_config, videosource_configuration);
+			vs_configs_node.put_child("tr2:Configurations", videosource_configuration);
+		}
+		else
+		{
+			auto vs_config_list = profiles_configs_->get_child(CONFIGURATION_ENUMERATION[CONFIGURATION_TYPE::VIDEOSOURCE]);
+			for (const auto& [key, vs_config] : vs_config_list)
 			{
-				for (size_t i = 0; i < server_cfg_.channels_count_ - 1; ++i)
+				pt::ptree videosource_configuration;
+				osrv::media::util::fill_soap_videosource_configuration(vs_config, videosource_configuration);
+				vs_configs_node.put_child("tr2:Configurations", videosource_configuration);
+
+				// multichannel simulaiton with the first channel configs
+				for (size_t i = 0; server_cfg_.multichannel_enabled_ && i < server_cfg_.channels_count_ - 1; ++i)
 				{
 					vs_configs_node.put_child("tr2:Configurations", videosource_configuration);
 				}
-
-				break;
 			}
 		}
 
