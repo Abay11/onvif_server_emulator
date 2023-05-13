@@ -788,20 +788,20 @@ public:
 			option.add("tt:BoundsRange.tt:HeightRange.tt:Max",
 								 vs_config.second.get<int>("Options.BoundsRange.HeightRange.Max"));
 
-			pt::ptree rotate;
-			rotate.add("tt:Mode", "OFF");
-			rotate.add("tt:Mode", "ON");
-			rotate.add("tt:Mode", "AUTO");
-			rotate.add("tt:DegreeList.tt:Items", 0);
+			option.add("tt:VideoSourceTokensAvailable", vs_config.second.get<std::string>("SourceToken"));
 
-			pt::ptree extentions_node;
-			extentions_node.add_child("tt:Rotate", rotate);
+			pt::ptree extensions_node;
+			extensions_node.put("tt:Rotate.<xmlattr>.tt:Reboot", false);
+
+			extensions_node.add("tt:Rotate.tt:Mode", "OFF");
+			extensions_node.add("tt:Rotate.tt:Mode", "ON");
+			extensions_node.add("tt:Rotate.tt:Mode", "AUTO");
+			extensions_node.add("tt:Rotate.tt:DegreeList.tt:Items", 0);
 
 			// one more inner extention for SceneOrientationMode
-			extentions_node.add("tt:Extention.tt:SceneOrientationMode", "AUTO");
+			extensions_node.add("tt:Extension.tt:SceneOrientationMode", "AUTO");
 
-			option.add_child("tt:Extention", extentions_node);
-
+			option.add_child("tt:Extension", extensions_node);
 			options_node.put_child("tr2:Options", option);
 		}
 
