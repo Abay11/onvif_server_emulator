@@ -644,8 +644,6 @@ public:
 				option_node.add("<xmlattr>.ProfilesSupported", media2::util::to_value_list(profiles));
 			}
 
-			option_node.add("<xmlattr>.ConstantBitRateSupported", ec.second.get<bool>("ConstantBitRateSupported"));
-
 			option_node.add("<xmlattr>.GuaranteedFrameRateSupported", ec.second.get<bool>("GuaranteedFrameRateSupported"));
 
 			option_node.add("tt:Encoding ", ec.second.get<std::string>("Encoding"));
@@ -1170,7 +1168,6 @@ void fill_video_encoder(const pt::ptree& config_node, pt::ptree& videoencoder_no
 	videoencoder_node.add("tt:Resolution.tt:Width", config_node.get<int>("Resolution.Width"));
 	videoencoder_node.add("tt:Resolution.tt:Height", config_node.get<int>("Resolution.Height"));
 	videoencoder_node.add("tt:Quality", config_node.get<float>("Quality"));
-	videoencoder_node.add("tt:RateControl.tt:ConstantBitRate", config_node.get<bool>("RateControl.ConstantBitRate"));
 	videoencoder_node.add("tt:RateControl.tt:FrameRateLimit", config_node.get<float>("RateControl.FrameRateLimit"));
 	videoencoder_node.add("tt:RateControl.tt:BitrateLimit", config_node.get<int>("RateControl.BitrateLimit"));
 }
