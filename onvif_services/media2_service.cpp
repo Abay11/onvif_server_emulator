@@ -1,5 +1,5 @@
-#include "media2_service.h"
 #include "media_service.h" // to use some util functions
+#include "media2_service.h"
 
 #include "../onvif/OnvifRequest.h"
 
@@ -1088,13 +1088,6 @@ std::string generate_rtsp_url(const ServerConfigs& server_configs, const std::st
 					 << "/" << profile_stream_url;
 
 	return rtsp_url.str();
-}
-
-std::string generate_snapshot_url(const ServerConfigs& server_configs)
-{
-	auto port = server_configs.enabled_rtsp_port_forwarding ? std::to_string(server_configs.forwarded_http_port)
-																													: server_configs.http_port_;
-	return std::format("http://{}:{}/snapshot.jpeg", server_configs.ipv4_address_, port);
 }
 
 using ptree = boost::property_tree::ptree;
