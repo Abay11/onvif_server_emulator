@@ -64,6 +64,17 @@ public:
 		return "A fixed Profile cannot be deleted";
 	}
 };
+
+class incomplete_configuration : public std::exception
+{
+public:
+	const char* what() const override
+	{
+		return "The specified media profile does contain either unused sources or encoder configurations without a corresponding source.";
+	}
+};
+
+
 } // namespace osrv
 
 namespace utility::media

@@ -26,6 +26,7 @@ namespace util
 {
 // TODO: The same function is used in media. Replace it with one
 std::string generate_rtsp_url(const ServerConfigs& server_configs, const std::string& profile_stream_url);
+std::string generate_snapshot_url(const ServerConfigs& server_configs);
 
 using ptree = boost::property_tree::ptree;
 // functions throw an exception if error occured
