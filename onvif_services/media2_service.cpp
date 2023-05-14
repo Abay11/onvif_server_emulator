@@ -19,6 +19,8 @@
 #include <boost/property_tree/ptree.hpp>
 #include <boost/property_tree/xml_parser.hpp>
 
+#include <filesystem>
+
 namespace pt = boost::property_tree;
 
 // the list of implemented methods
@@ -32,6 +34,7 @@ static const std::string GetAudioEncoderConfigurations = "GetAudioEncoderConfigu
 static const std::string GetAudioSourceConfigurations = "GetAudioSourceConfigurations";
 static const std::string GetProfiles = "GetProfiles";
 static const std::string GetServiceCapabilities = "GetServiceCapabilities";
+static const std::string GetSnapshotUri = "GetSnapshotUri";
 static const std::string GetStreamUri = "GetStreamUri";
 static const std::string GetVideoEncoderConfigurationOptions = "GetVideoEncoderConfigurationOptions";
 static const std::string GetVideoEncoderConfigurations = "GetVideoEncoderConfigurations";
@@ -904,6 +907,48 @@ public:
 	}
 };
 
+struct GetSnapshotUriHandler : public OnvifRequestBase
+{
+private:
+	const utility::media::MediaProfilesManager& profiles_mgr_;
+	const osrv::ServerConfigs& server_cfg_;
+
+public:
+	GetSnapshotUriHandler(const std::map<std::string, std::string>& xs, const std::shared_ptr<pt::ptree>& configs,
+												const utility::media::MediaProfilesManager& profiles_mgr, const osrv::ServerConfigs& server_cfg)
+			: OnvifRequestBase(GetSnapshotUri, auth::SECURITY_LEVELS::READ_MEDIA, xs, configs), profiles_mgr_(profiles_mgr),
+				server_cfg_(server_cfg)
+	{
+	}
+
+	void operator()(std::shared_ptr<HttpServer::Response> response, std::shared_ptr<HttpServer::Request> request) override
+	{
+		pt::ptree request_xml;
+		std::istringstream is(request->content.string());
+		pt::xml_parser::read_xml(is, request_xml);
+
+		std::string profileToken = exns::find_hierarchy("Envelope.Body.GetSnapshotUri.ProfileToken", request_xml);
+
+		const auto& profile_config = profiles_mgr_.GetProfileByToken(profileToken);
+		const auto& srcCfg = profile_config.get<std::string>(CONFIGURATION_ENUMERATION[CONFIGURATION_TYPE::VIDEOSOURCE], "");
+		const auto& encCfg = profile_config.get<std::string>(CONFIGURATION_ENUMERATION[CONFIGURATION_TYPE::VIDEOENCODER], "");
+
+		if (srcCfg.empty() || encCfg.empty())
+			throw incomplete_configuration();
+
+		auto envelope_tree = utility::soap::getEnvelopeTree(ns_);
+		envelope_tree.put("s:Body.tr2:GetSnapshotUriResponse.tr2:Uri", util::generate_snapshot_url(server_cfg_));
+
+		pt::ptree root_tree;
+		root_tree.put_child("s:Envelope", envelope_tree);
+
+		std::ostringstream os;
+		pt::write_xml(os, root_tree);
+
+		utility::http::fillResponseWithHeaders(*response, os.str());
+	}
+};
+
 struct GetStreamUriHandler : public OnvifRequestBase
 {
 private:
@@ -930,8 +975,6 @@ public:
 		{
 			requested_token = media::util::MultichannelProfilesNamesConverter(requested_token).CleanedName();
 		}
-
-		// logger_->Debug("Requested token to get URI=" + requested_token);
 
 		auto profiles_config_list = profiles_configs_->get_child("MediaProfiles");
 
@@ -1045,6 +1088,13 @@ std::string generate_rtsp_url(const ServerConfigs& server_configs, const std::st
 					 << "/" << profile_stream_url;
 
 	return rtsp_url.str();
+}
+
+std::string generate_snapshot_url(const ServerConfigs& server_configs)
+{
+	auto port = server_configs.enabled_rtsp_port_forwarding ? std::to_string(server_configs.forwarded_http_port)
+																													: server_configs.http_port_;
+	return std::format("http://{}:{}/snapshot.jpeg", server_configs.ipv4_address_, port);
 }
 
 using ptree = boost::property_tree::ptree;
@@ -1178,6 +1228,62 @@ Media2Service::Media2Service(const std::string& service_uri, const std::string& 
 														 std::shared_ptr<IOnvifServer> srv)
 		: IOnvifService(service_uri, service_name, srv)
 {
+	srv->HttpServer()->resource["^/snapshot.jpeg$"]["GET"] =
+			[configsPath = srv->ConfigsPath()](std::shared_ptr<HttpServer::Response> response,
+																				 std::shared_ptr<HttpServer::Request> request) {
+				try
+				{
+					SimpleWeb::CaseInsensitiveMultimap header;
+					auto path = std::filesystem::path(configsPath + "/rs/snapshot.jpeg");
+					auto ifs = std::make_shared<std::ifstream>();
+					ifs->open(path.string(), std::ifstream::in | std::ios::binary | std::ios::ate);
+
+					if (*ifs)
+					{
+						auto length = ifs->tellg();
+						ifs->seekg(0, std::ios::beg);
+
+						header.emplace("Content-Type", "image/jpeg");
+						header.emplace("Content-Length", std::to_string(length));
+						response->write(header);
+
+						// Trick to define a recursive function within this scope (for example purposes)
+						class FileServer
+						{
+						public:
+							static void read_and_send(const std::shared_ptr<HttpServer::Response>& response,
+																				const std::shared_ptr<std::ifstream>& ifs)
+							{
+								// Read and send 128 KB at a time
+								static std::vector<char> buffer(131072); // Safe when server is running on one thread
+								std::streamsize read_length;
+								if ((read_length = ifs->read(&buffer[0], static_cast<std::streamsize>(buffer.size())).gcount()) > 0)
+								{
+									response->write(&buffer[0], read_length);
+									if (read_length == static_cast<std::streamsize>(buffer.size()))
+									{
+										response->send([response, ifs](const SimpleWeb::error_code& ec) {
+											if (!ec)
+												read_and_send(response, ifs);
+											// else
+											// cerr << "Connection interrupted" << endl;
+										});
+									}
+								}
+							}
+						};
+						FileServer::read_and_send(response, ifs);
+					}
+					else
+						throw std::runtime_error("could not read file");
+				}
+				catch (const std::exception& e)
+				{
+					response->write(SimpleWeb::StatusCode::client_error_bad_request,
+													"Could not open path " + request->path + ": " + e.what());
+				}
+			};
+
 	requestHandlers_.push_back(
 			std::make_shared<media2::AddConfigurationHandler>(xml_namespaces_, configs_ptree_, srv->MediaProfilesManager()));
 	requestHandlers_.push_back(
@@ -1197,6 +1303,8 @@ Media2Service::Media2Service(const std::string& service_uri, const std::string& 
 	requestHandlers_.push_back(std::make_shared<media2::GetServiceCapabilitiesHandler>(xml_namespaces_, configs_ptree_));
 	requestHandlers_.push_back(std::make_shared<media2::GetStreamUriHandler>(
 			xml_namespaces_, configs_ptree_, srv->ProfilesConfig(), *srv->ServerConfigs()));
+	requestHandlers_.push_back(std::make_shared<media2::GetSnapshotUriHandler>(
+			xml_namespaces_, configs_ptree_, *srv->MediaProfilesManager(), *srv->ServerConfigs()));
 	requestHandlers_.push_back(std::make_shared<media2::GetVideoEncoderConfigurationOptionsHandler>(
 			xml_namespaces_, configs_ptree_, srv->ProfilesConfig()));
 	requestHandlers_.push_back(std::make_shared<media2::GetVideoEncoderConfigurationsHandler>(
