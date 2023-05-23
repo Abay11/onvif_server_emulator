@@ -12,9 +12,8 @@ Onvif Server Emulator is an emulator of an IP device (camera, NVR) compatible wi
 
 # ▶ Server execution
 
-A configuration's directory may be passed as command line argument.
-As default configurations' directory used "./server_configs".
-NOTE: it's expected that the last slash '/' is not added to the passed value.
+A configuration directory may be passed as command line argument.
+As a default configuration directory is used "./server_configs".
 Example: "main.exe ./configs".
 
 
