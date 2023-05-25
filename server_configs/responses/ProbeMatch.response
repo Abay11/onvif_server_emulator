@@ -22,7 +22,7 @@
                 </wsa:EndpointReference>
                 <d:Types>dn:NetworkVideoTransmitter tds:Device</d:Types>
                 <d:Scopes>onvif://www.onvif.org/location/country/russia onvif://www.onvif.org/location/city/nalchik onvif://www.onvif.org/type/network_video_transmitter onvif://www.onvif.org/name/IP-Camera-Emulator onvif://www.onvif.org/hardware/Emulator onvif://www.onvif.org/Profile/Streaming</d:Scopes>
-                <d:XAddrs>http://192.168.43.120:8080/onvif/device_service</d:XAddrs>
+                <d:XAddrs>http://127.0.0.1:8080/onvif/device_service</d:XAddrs>
                 <d:MetadataVersion>1</d:MetadataVersion>
             </d:ProbeMatch>
         </d:ProbeMatches>

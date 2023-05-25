@@ -4,6 +4,8 @@
 
 #include "../HttpServerFwd.h"
 
+#include "../Server.h"
+
 #include <boost/property_tree/ptree_fwd.hpp>
 
 #include <string>
@@ -26,7 +28,12 @@ namespace util
 {
 // TODO: The same function is used in media. Replace it with one
 std::string generate_rtsp_url(const ServerConfigs& server_configs, const std::string& profile_stream_url);
-std::string generate_snapshot_url(const ServerConfigs& server_configs);
+inline std::string generate_snapshot_url(const ServerConfigs& server_configs)
+{
+	auto port = server_configs.enabled_rtsp_port_forwarding ? std::to_string(server_configs.forwarded_http_port)
+																													: server_configs.http_port_;
+	return std::format("http://{}:{}/snapshot.jpeg", server_configs.ipv4_address_, port);
+}
 
 using ptree = boost::property_tree::ptree;
 // functions throw an exception if error occured

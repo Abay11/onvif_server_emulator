@@ -54,8 +54,8 @@ public:
 		}
 
 		auto handlers = service_->Handlers();
-		auto handler_it = std::find_if(handlers.begin(), handlers.end(),
-																	 [method](const HandlerSP handler) { return handler->name() == method; });
+		auto handler_it =
+				std::ranges::find_if(handlers, [&method](const HandlerSP handler) { return handler->name() == method; });
 
 		std::shared_ptr<ServerConfigs> srv_cfg = service_->OnvifServer()->ServerConfigs();
 		if (handler_it != handlers.end())
@@ -156,7 +156,9 @@ public:
 				code_node.add("s:Subcode.s:Value", "ter:Action");
 				code_node.add("s:Subcode.s:Subcode.s:Value", "ter:IncompleteConfiguration");
 				envelope_tree.add_child("s:Body.s:Fault.s:Code", code_node);
-				envelope_tree.put("s:Body.s:Fault.s:Reason.s:Text", "The specified media profile does contain either unused sources or encoder configurations without a corresponding source.");
+				envelope_tree.put("s:Body.s:Fault.s:Reason.s:Text",
+													"The specified media profile does contain either unused sources or encoder configurations "
+													"without a corresponding source.");
 				envelope_tree.put("s:Body.s:Fault.s:Reason.s:Text.<xmlattr>.xml:lang", "en");
 
 				pt::ptree root_tree;
@@ -207,16 +209,14 @@ void osrv::IOnvifService::Run()
 		return;
 
 	const auto dvc_srv_cfg = onvif_server_->DeviceService()->configs_ptree_;
-
-	auto namespaces_tree = configs_ptree_->get_child("Namespaces");
-	for (const auto& n : namespaces_tree)
-		xml_namespaces_.insert({n.first, n.second.get_value<std::string>()});
+	for (auto namespaces_tree = configs_ptree_->get_child("Namespaces"); const auto& [key, tree] : namespaces_tree)
+		xml_namespaces_.try_emplace(key, tree.get_value<std::string>());
 
 	const auto service_config = dvc_srv_cfg->find("GetServices");
-	auto search_configs = std::find_if(service_config->second.begin(), service_config->second.end(),
-																		 [uri = service_uri_](const pt::ptree::iterator::value_type tree) {
-																			 return tree.second.get<std::string>("namespace") == uri;
-																		 });
+	auto search_configs =
+			std::ranges::find_if(service_config->second, [uri = service_uri_](const pt::ptree::iterator::value_type& tree) {
+				return tree.second.get<std::string>("namespace") == uri;
+			});
 
 	std::string search_xaddr = "/" + search_configs->second.get<std::string>("XAddr");
 
