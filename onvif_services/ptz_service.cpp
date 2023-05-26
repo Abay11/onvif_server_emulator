@@ -223,12 +223,16 @@ struct GetNodesHandler : public OnvifRequestBase
 			for (const auto& space_node : node.second.get_child("SupportedPTZSpaces"))
 			{
 				const auto& space_name = space_node.second.get<std::string>("space");
-				const auto item_path = "tt:SupportedPTZSpaces." + space_name;
-				node_tree.add(item_path + "URI", space_node.second.get<std::string>("URI"));
-				node_tree.add(item_path + "XRange.Min", space_node.second.get<std::string>("XRange.Min"));
-				node_tree.add(item_path + "XRange.Max", space_node.second.get<std::string>("XRange.Max"));
-				node_tree.add(item_path + "YRange.Min", space_node.second.get<std::string>("YRange.Min"));
-				node_tree.add(item_path + "YRange.Max", space_node.second.get<std::string>("YRange.Max"));
+				const auto item_path = "tt:SupportedPTZSpaces.tt:" + space_name;
+				node_tree.add(item_path + ".tt:URI", space_node.second.get<std::string>("URI"));
+				node_tree.add(item_path + ".tt:XRange.tt:Min", space_node.second.get<std::string>("XRange.Min"));
+				node_tree.add(item_path + ".tt:XRange.tt:Max", space_node.second.get<std::string>("XRange.Max"));
+
+				if (auto yrange = space_node.second.get_child("YRange", {}); !yrange.empty())
+				{
+					node_tree.add(item_path + ".tt:YRange.tt:Min", yrange.get<std::string>("Min"));
+					node_tree.add(item_path + ".tt:YRange.tt:Max", yrange.get<std::string>("Max"));
+				}
 			}
 
 			node_tree.add("tt:MaximumNumberOfPresets", node.second.get<int>("MaximumNumberOfPresets"));
