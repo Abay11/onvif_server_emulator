@@ -4,6 +4,7 @@
 #include "../Server.h"
 
 #include "../onvif/OnvifRequest.h"
+#include "../utility/MediaProfilesManager.h"
 
 #include "../utility/HttpHelper.h"
 #include "../utility/SoapHelper.h"
@@ -30,6 +31,36 @@ namespace osrv
 {
 namespace ptz
 {
+
+pt::ptree fillNode(const pt::ptree& nodeConfigJson)
+{
+	pt::ptree node_tree;
+	node_tree.add("<xmlattr>.token", nodeConfigJson.get<std::string>("token"));
+	node_tree.add("<xmlattr>.FixedHomePosition", nodeConfigJson.get<bool>("FixedHomePosition"));
+	node_tree.add("<xmlattr>.GeoMove", nodeConfigJson.get<bool>("GeoMove"));
+	node_tree.add("tt:Name", nodeConfigJson.get<std::string>("Name"));
+
+	for (const auto& [key, spaceNode] : nodeConfigJson.get_child("SupportedPTZSpaces"))
+	{
+		const auto& space_name = spaceNode.get<std::string>("space");
+		const auto item_path = "tt:SupportedPTZSpaces.tt:" + space_name;
+		node_tree.add(item_path + ".tt:URI", spaceNode.get<std::string>("URI"));
+		node_tree.add(item_path + ".tt:XRange.tt:Min", spaceNode.get<std::string>("XRange.Min"));
+		node_tree.add(item_path + ".tt:XRange.tt:Max", spaceNode.get<std::string>("XRange.Max"));
+
+		if (auto yrange = spaceNode.get_child("YRange", {}); !yrange.empty())
+		{
+			node_tree.add(item_path + ".tt:YRange.tt:Min", yrange.get<std::string>("Min"));
+			node_tree.add(item_path + ".tt:YRange.tt:Max", yrange.get<std::string>("Max"));
+		}
+	}
+
+	node_tree.add("tt:MaximumNumberOfPresets", nodeConfigJson.get<int>("MaximumNumberOfPresets"));
+	node_tree.add("tt:HomeSupported", nodeConfigJson.get<bool>("HomeSupported"));
+
+	return node_tree;
+};
+
 struct ContinuousMoveHandler : public OnvifRequestBase
 {
 	ContinuousMoveHandler(const std::map<std::string, std::string>& xs, const std::shared_ptr<pt::ptree>& configs)
@@ -212,33 +243,9 @@ struct GetNodesHandler : public OnvifRequestBase
 
 		auto nodes_config = service_configs_->get_child("Nodes");
 
-		for (const auto& node : nodes_config)
+		for (const auto& [key, node] : nodes_config)
 		{
-			pt::ptree node_tree;
-			node_tree.add("<xmlattr>.token", node.second.get<std::string>("token"));
-			node_tree.add("<xmlattr>.FixedHomePosition", node.second.get<bool>("FixedHomePosition"));
-			node_tree.add("<xmlattr>.GeoMove", node.second.get<bool>("GeoMove"));
-			node_tree.add("tt:Name", node.second.get<std::string>("Name"));
-
-			for (const auto& space_node : node.second.get_child("SupportedPTZSpaces"))
-			{
-				const auto& space_name = space_node.second.get<std::string>("space");
-				const auto item_path = "tt:SupportedPTZSpaces.tt:" + space_name;
-				node_tree.add(item_path + ".tt:URI", space_node.second.get<std::string>("URI"));
-				node_tree.add(item_path + ".tt:XRange.tt:Min", space_node.second.get<std::string>("XRange.Min"));
-				node_tree.add(item_path + ".tt:XRange.tt:Max", space_node.second.get<std::string>("XRange.Max"));
-
-				if (auto yrange = space_node.second.get_child("YRange", {}); !yrange.empty())
-				{
-					node_tree.add(item_path + ".tt:YRange.tt:Min", yrange.get<std::string>("Min"));
-					node_tree.add(item_path + ".tt:YRange.tt:Max", yrange.get<std::string>("Max"));
-				}
-			}
-
-			node_tree.add("tt:MaximumNumberOfPresets", node.second.get<int>("MaximumNumberOfPresets"));
-			node_tree.add("tt:HomeSupported", node.second.get<bool>("HomeSupported"));
-
-			nodes_tree.add_child("tptz:PTZNode", node_tree);
+			nodes_tree.add_child("tptz:PTZNode", fillNode(node));
 		}
 
 		envelope_tree.add_child("s:Body.tptz:GetNodesResponse", nodes_tree);
@@ -268,33 +275,25 @@ struct GetNodeHandler : public OnvifRequestBase
 
 		auto nodes_config = service_configs_->get_child("Nodes");
 
-		// TODO: read only configs for required token
-		for (const auto& node : nodes_config)
+		std::string requestedToken;
 		{
-			pt::ptree node_tree;
-			node_tree.add("<xmlattr>.token", node.second.get<std::string>("token"));
-			node_tree.add("<xmlattr>.FixedHomePosition", node.second.get<bool>("FixedHomePosition"));
-			node_tree.add("<xmlattr>.GeoMove", node.second.get<bool>("GeoMove"));
-			node_tree.add("tt:Name", node.second.get<std::string>("Name"));
-
-			for (const auto& space_node : node.second.get_child("SupportedPTZSpaces"))
-			{
-				const auto& space_name = space_node.second.get<std::string>("space");
-				const auto item_path = "tt:SupportedPTZSpaces." + space_name;
-				node_tree.add(item_path + "URI", space_node.second.get<std::string>("URI"));
-				node_tree.add(item_path + "XRange.Min", space_node.second.get<std::string>("XRange.Min"));
-				node_tree.add(item_path + "XRange.Max", space_node.second.get<std::string>("XRange.Max"));
-				node_tree.add(item_path + "YRange.Min", space_node.second.get<std::string>("YRange.Min"));
-				node_tree.add(item_path + "YRange.Max", space_node.second.get<std::string>("YRange.Max"));
-			}
-
-			node_tree.add("tt:MaximumNumberOfPresets", node.second.get<int>("MaximumNumberOfPresets"));
-			node_tree.add("tt:HomeSupported", node.second.get<bool>("HomeSupported"));
-
-			nodes_tree.add_child("tptz:PTZNode", node_tree);
+			auto request_str = request->content.string();
+			std::istringstream is(request_str);
+			pt::ptree xml_tree;
+			pt::xml_parser::read_xml(is, xml_tree);
+			requestedToken = exns::find_hierarchy("Envelope.Body.GetNode.NodeToken", xml_tree);
 		}
 
-		envelope_tree.add_child("s:Body.tptz:GetNodesResponse", nodes_tree);
+		auto nodeConfigIt = std::ranges::find_if(nodes_config, [&requestedToken](const auto nodesIt) {
+			return nodesIt.second.get<std::string>("token") == requestedToken;
+		});
+
+		if (nodeConfigIt == nodes_config.end())
+			throw osrv::no_entity();
+
+		nodes_tree.add_child("tptz:PTZNode", fillNode(nodeConfigIt->second));
+
+		envelope_tree.add_child("s:Body.tptz:GetNodeResponse", nodes_tree);
 
 		pt::ptree root_tree;
 		root_tree.put_child("s:Envelope", envelope_tree);
