@@ -65,6 +65,15 @@ public:
 	}
 };
 
+class no_entity : public std::exception
+{
+public:
+	const char* what() const override
+	{
+		return "No such PTZ node on the device";
+	}
+};
+
 class incomplete_configuration : public std::exception
 {
 public:
