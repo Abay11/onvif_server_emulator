@@ -118,6 +118,8 @@ FILE (GLOB UTILITY_SRC
 	"utility/HttpHelper.h"
 	"utility/MediaProfilesManager.cpp"
 	"utility/MediaProfilesManager.h"
+	"utility/PtzConfigurationReader.cpp"
+	"utility/PtzConfigurationReader.h"
 	"utility/SoapHelper.cpp"
 	"utility/SoapHelper.h"
 	"utility/VideoSourceReader.cpp"

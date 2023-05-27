@@ -83,6 +83,15 @@ public:
 	}
 };
 
+class no_config : public std::exception
+{
+public:
+	const char* what() const override
+	{
+		return "The requested configuration does not exist.";
+	}
+};
+
 
 } // namespace osrv
 
