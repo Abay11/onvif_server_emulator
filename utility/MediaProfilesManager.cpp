@@ -270,6 +270,18 @@ const boost::property_tree::ptree& MediaProfilesManager::Back() const
 	return readerWriter_->ConfigsTree().get_child("MediaProfiles").back().second;
 }
 
+size_t MediaProfilesManager::GetUseCount(std::string_view token, std::string_view configType) const
+{
+	size_t res = 0;
+	for (const auto& profilesConfigs = readerWriter_->ConfigsTree().get_child("MediaProfiles", {});
+			 const auto& [key, node] : profilesConfigs)
+	{
+		res += (int)(node.get<std::string>(configType.data(), "") == token);
+	}
+
+	return res;
+}
+
 ProfileConfigsHelper::ProfileConfigsHelper(const pt::ptree& profileTree) : profileTree_(profileTree)
 {
 }
@@ -278,4 +290,5 @@ std::string ProfileConfigsHelper::ProfileToken() const
 {
 	return profileTree_.get<std::string>("token");
 }
+
 } // namespace utility::media

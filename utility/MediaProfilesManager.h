@@ -118,6 +118,8 @@ private:
 	std::unique_ptr<boost::property_tree::ptree> configsTreeBackup_; // used for reset operation
 };
 
+
+// NOTE: This implementation is not thread-safe. For now it is ok, because the application is single-thread.
 class MediaProfilesManager
 {
 public:
@@ -137,10 +139,12 @@ public:
 																								const std::vector<std::string>& configs) const;
 
 	boost::property_tree::ptree& GetProfileByName(const std::string& name);
+
 	const boost::property_tree::ptree& GetProfileByName(const std::string& name) const
 	{
 		return GetProfileByName(name);
 	};
+
 	// do not call Back on empty profiles list
 	const boost::property_tree::ptree& Back() const;
 
@@ -148,6 +152,8 @@ public:
 	{
 		return readerWriter_.get();
 	}
+
+	size_t GetUseCount(std::string_view /*token*/, std::string_view /*configType*/) const;
 
 private:
 	std::string newProfileToken(size_t n) const;
