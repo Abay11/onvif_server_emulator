@@ -167,34 +167,73 @@ struct GetConfigurationHandler : public OnvifRequestBase
 
 struct GetConfigurationsHandler : public OnvifRequestBase
 {
-	GetConfigurationsHandler(const std::map<std::string, std::string>& xs, const std::shared_ptr<pt::ptree>& configs)
-			: OnvifRequestBase(GetConfigurations, auth::SECURITY_LEVELS::READ_MEDIA, xs, configs)
+private:
+	utility::media::MediaProfilesManager& m_profilesMgr;
+
+public:
+	GetConfigurationsHandler(const std::map<std::string, std::string>& xs, const std::shared_ptr<pt::ptree>& configs,
+													 utility::media::MediaProfilesManager& profilesMgr)
+			: OnvifRequestBase(GetConfigurations, auth::SECURITY_LEVELS::READ_MEDIA, xs, configs), m_profilesMgr(profilesMgr)
 	{
 	}
 
 	void operator()(std::shared_ptr<HttpServer::Response> response, std::shared_ptr<HttpServer::Request> request) override
 	{
-		auto envelope_tree = utility::soap::getEnvelopeTree(ns_);
+		const auto& ptzConfigsList =
+				m_profilesMgr.ReaderWriter()->ConfigsTree().get_child(CONFIGURATION_ENUMERATION[CONFIGURATION_TYPE::PTZ]);
 
-		// TODO: impl. reading configs from a file
+		auto fillPtzConfig = [this](const pt::ptree& jsonConfigNode, pt::ptree& xmlConfigOut) {
+			auto cfgToken = jsonConfigNode.get<std::string>("token");
+			xmlConfigOut.add("<xmlattr>.token", cfgToken);
+			xmlConfigOut.add("tt:Name", jsonConfigNode.get<std::string>("Name"));
+			xmlConfigOut.add("tt:UseCount", m_profilesMgr.GetUseCount(
+																					cfgToken, osrv::CONFIGURATION_ENUMERATION[osrv::CONFIGURATION_TYPE::PTZ]));
+			xmlConfigOut.add("tt:NodeToken", jsonConfigNode.get<std::string>("NodeToken"));
+
+			xmlConfigOut.add("tt:DefaultContinuousPanTiltVelocitySpace",
+											 jsonConfigNode.get<std::string>("DefaultContinuousPanTiltVelocitySpace"));
+			xmlConfigOut.add("tt:DefaultContinuousZoomVelocitySpace",
+											 jsonConfigNode.get<std::string>("DefaultContinuousZoomVelocitySpace"));
+
+			xmlConfigOut.add("tt:DefaultPTZSpeed.tt:PanTilt.<xmlattr>.x",
+											 jsonConfigNode.get<float>("DefaultPTZSpeed.PanTilt.x"));
+			xmlConfigOut.add("tt:DefaultPTZSpeed.tt:PanTilt.<xmlattr>.y",
+											 jsonConfigNode.get<float>("DefaultPTZSpeed.PanTilt.y"));
+			xmlConfigOut.add("tt:DefaultPTZSpeed.tt:PanTilt.<xmlattr>.space",
+											 jsonConfigNode.get<std::string>("DefaultPTZSpeed.PanTilt.space"));
+			xmlConfigOut.add("tt:DefaultPTZSpeed.tt:Zoom.<xmlattr>.x", jsonConfigNode.get<float>("DefaultPTZSpeed.Zoom.x"));
+			xmlConfigOut.add("tt:DefaultPTZSpeed.tt:Zoom.<xmlattr>.space",
+											 jsonConfigNode.get<std::string>("DefaultPTZSpeed.Zoom.space"));
+
+			xmlConfigOut.add("tt:DefaultPTZTimeout", jsonConfigNode.get<std::string>("DefaultPTZTimeout"));
+
+			xmlConfigOut.add("tt:PanTiltLimits.tt:Range.tt:URI", jsonConfigNode.get<std::string>("PanTiltLimits.Range.URI"));
+			xmlConfigOut.add("tt:PanTiltLimits.tt:Range.tt:XRange.tt:Min",
+											 jsonConfigNode.get<float>("PanTiltLimits.Range.XRange.Min"));
+			xmlConfigOut.add("tt:PanTiltLimits.tt:Range.tt:XRange.tt:Max",
+											 jsonConfigNode.get<float>("PanTiltLimits.Range.XRange.Max"));
+			xmlConfigOut.add("tt:PanTiltLimits.tt:Range.tt:YRange.tt:Min",
+											 jsonConfigNode.get<float>("PanTiltLimits.Range.YRange.Min"));
+			xmlConfigOut.add("tt:PanTiltLimits.tt:Range.tt:YRange.tt:Max",
+											 jsonConfigNode.get<float>("PanTiltLimits.Range.YRange.Max"));
+
+			xmlConfigOut.add("tt:ZoomLimits.tt:Range.tt:URI", jsonConfigNode.get<std::string>("ZoomLimits.Range.URI"));
+			xmlConfigOut.add("tt:ZoomLimits.tt:Range.tt:XRange.tt:Min",
+											 jsonConfigNode.get<float>("ZoomLimits.Range.XRange.Min"));
+			xmlConfigOut.add("tt:ZoomLimits.tt:Range.tt:XRange.tt:Max",
+											 jsonConfigNode.get<float>("ZoomLimits.Range.XRange.Max"));
+		};
+
 		pt::ptree response_node;
-
+		for (const auto& [key, configNode] : ptzConfigsList)
 		{
-			pt::ptree ptz_node;
-			ptz_node.add("<xmlattr>.token", "PtzConfigToken0");
-			ptz_node.add("tt:Name", "PtzConfig0");
-			ptz_node.add("tt:UseCount", 3);
-			ptz_node.add("tt:NodeToken", "PTZNODE_1");
-			ptz_node.add("tt:DefaultContinuousPanTiltVelocitySpace",
-									 "http://www.onvif.org/ver10/tptz/PanTiltSpaces/VelocityGenericSpace");
-			ptz_node.add("tt:DefaultContinuousZoomVelocitySpace",
-									 "http://www.onvif.org/ver10/tptz/ZoomSpaces/VelocityGenericSpace");
-
-			response_node.add_child("PTZConfiguration", ptz_node);
+			pt::ptree ptzConfigResponseNode;
+			fillPtzConfig(configNode, ptzConfigResponseNode);
+			response_node.add_child("tptz:PTZConfiguration", ptzConfigResponseNode);
 		}
 
+		auto envelope_tree = utility::soap::getEnvelopeTree(ns_);
 		envelope_tree.add_child("s:Body.tptz:GetConfigurationsResponse", response_node);
-
 		pt::ptree root_tree;
 		root_tree.put_child("s:Envelope", envelope_tree);
 
@@ -361,7 +400,8 @@ PTZService::PTZService(const std::string& service_uri, const std::string& servic
 	requestHandlers_.push_back(
 			std::make_shared<ptz::GetCompatibleConfigurationsHandler>(xml_namespaces_, configs_ptree_));
 	requestHandlers_.push_back(std::make_shared<ptz::GetConfigurationHandler>(xml_namespaces_, configs_ptree_));
-	requestHandlers_.push_back(std::make_shared<ptz::GetConfigurationsHandler>(xml_namespaces_, configs_ptree_));
+	requestHandlers_.push_back(
+			std::make_shared<ptz::GetConfigurationsHandler>(xml_namespaces_, configs_ptree_, *srv->MediaProfilesManager()));
 	requestHandlers_.push_back(std::make_shared<ptz::GetNodeHandler>(xml_namespaces_, configs_ptree_));
 	requestHandlers_.push_back(std::make_shared<ptz::GetNodesHandler>(xml_namespaces_, configs_ptree_));
 	requestHandlers_.push_back(std::make_shared<ptz::RelativeMoveHandler>(xml_namespaces_, configs_ptree_));

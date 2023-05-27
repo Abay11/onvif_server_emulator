@@ -570,3 +570,23 @@ BOOST_AUTO_TEST_CASE(MediaProfilesManager_RemoveConfiguration_test3)
 
 	readerWriter.Reset();
 }
+
+BOOST_AUTO_TEST_CASE(MediaProfilesManager_GetUseCount_test0)
+{
+	using namespace utility::media;
+
+	const std::string path{"../../server_configs/media_profiles.config"};
+
+	MediaProfilesManager manager(path);
+	BOOST_CHECK_EQUAL(size_t{1}, manager.GetUseCount("VideoEncoderToken0", osrv::CONFIGURATION_ENUMERATION[osrv::CONFIGURATION_TYPE::VIDEOENCODER]));
+}
+
+BOOST_AUTO_TEST_CASE(MediaProfilesManager_GetUseCount_test1)
+{
+	using namespace utility::media;
+
+	const std::string path{"../../server_configs/media_profiles.config"};
+
+	MediaProfilesManager manager(path);
+	BOOST_CHECK_EQUAL(size_t{2}, manager.GetUseCount("PtzConfig_0", osrv::CONFIGURATION_ENUMERATION[osrv::CONFIGURATION_TYPE::PTZ]));
+}
