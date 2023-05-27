@@ -14,7 +14,7 @@ PtzConfigsReaderByToken::PtzConfigsReaderByToken(const std::string& configToken,
 
 pt::ptree PtzConfigsReaderByToken::Ptz() const
 {
-	for (const auto& [key, node] : m_cfgs.get_child(osrv::CONFIGURATION_ENUMERATION[osrv::CONFIGURATION_TYPE::PTZ]))
+	for (const auto& [key, node] : m_cfgs.get_child(osrv::CONFIGURATION_ENUMERATION[osrv::CONFIGURATION_TYPE::PTZ], {}))
 		if (node.get<std::string>("token") == m_token)
 			return node;
 
