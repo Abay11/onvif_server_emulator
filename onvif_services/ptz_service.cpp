@@ -22,8 +22,9 @@ const std::string ContinuousMove = "ContinuousMove";
 const std::string GetCompatibleConfigurations = "GetCompatibleConfigurations";
 const std::string GetConfiguration = "GetConfiguration";
 const std::string GetConfigurations = "GetConfigurations";
-const std::string GetNodes = "GetNodes";
+const std::string GetConfigurationOptions = "GetConfigurationOptions";
 const std::string GetNode = "GetNode";
+const std::string GetNodes = "GetNodes";
 const std::string RelativeMove = "RelativeMove";
 const std::string SetConfiguration = "SetConfiguration";
 const std::string Stop = "Stop";
@@ -238,6 +239,93 @@ public:
 	}
 };
 
+struct GetConfigurationOptionsHandler : public OnvifRequestBase
+{
+private:
+	const utility::media::MediaProfilesManager& m_profilesMgr;
+
+public:
+	GetConfigurationOptionsHandler(const std::map<std::string, std::string>& xs,
+																 const std::shared_ptr<pt::ptree>& configs,
+																 const utility::media::MediaProfilesManager& profilesMgr)
+			: OnvifRequestBase(GetConfigurationOptions, auth::SECURITY_LEVELS::READ_MEDIA, xs, configs),
+				m_profilesMgr(profilesMgr)
+	{
+	}
+
+	void operator()(std::shared_ptr<HttpServer::Response> response, std::shared_ptr<HttpServer::Request> request) override
+	{
+		pt::ptree request_xml_tree;
+		pt::xml_parser::read_xml(request->content, request_xml_tree);
+		auto requestedToken =
+				exns::find_hierarchy("Envelope.Body.GetConfigurationOptions.ConfigurationToken", request_xml_tree);
+
+		auto ptzConfig =
+				utility::PtzConfigsReaderByToken(requestedToken, m_profilesMgr.ReaderWriter()->ConfigsTree()).Ptz();
+
+		auto usedNodeTokenInPtzConfig = ptzConfig.get<std::string>("NodeToken", {});
+
+		auto ptzNodesConfigJson = service_configs_->get_child("Nodes", {});
+		const auto ptzNodeConfigJsonIt =
+				std::ranges::find_if(ptzNodesConfigJson, [&usedNodeTokenInPtzConfig](const auto& it) {
+					return it.second.get<std::string>("token") == usedNodeTokenInPtzConfig;
+				});
+
+		if (ptzNodeConfigJsonIt == ptzNodesConfigJson.end())
+		{
+			// this normally should not happen!! it means your configuraitons files invalid!!
+			throw std::runtime_error("Failed to find related PTZ Node to PTZ configuration! Node token: " +
+															 usedNodeTokenInPtzConfig);
+		}
+
+		auto ptzConfigOptions = m_profilesMgr.ReaderWriter()->ConfigsTree().get_child("PTZConfigurationOptions");
+		auto currentPtzConfigOptionsIt = std::ranges::find_if(ptzConfigOptions, [&requestedToken](const auto& p) {
+			return p.second.get<std::string>("token") == requestedToken;
+		});
+		if (currentPtzConfigOptionsIt == ptzConfigOptions.end())
+		{
+			// this normally should not happen!! it means your configuraitons files invalid!!
+			throw std::runtime_error("Failed to find related PTZ configuration options! PTZ token: " + requestedToken);
+		}
+
+		pt::ptree PTZConfigurationOptionsNode;
+
+		for (const auto& [key, node] : ptzNodeConfigJsonIt->second.get_child("SupportedPTZSpaces", {}))
+		{
+			pt::ptree spaceConfig;
+
+			spaceConfig.add("tt:URI", node.get<std::string>("URI"));
+
+			spaceConfig.add("tt:XRange.tt:Min", node.get<std::string>("XRange.Min"));
+			spaceConfig.add("tt:XRange.tt:Max", node.get<std::string>("XRange.Max"));
+
+			if (auto YRangeNodeJson = node.get_child("YRange", {}); !YRangeNodeJson.empty())
+			{
+				spaceConfig.add("tt:YRange.tt:Min", YRangeNodeJson.get<std::string>("Min"));
+				spaceConfig.add("tt:YRange.tt:Max", YRangeNodeJson.get<std::string>("Max"));
+			}
+			
+			PTZConfigurationOptionsNode.add_child("tt:Spaces.tt:" + node.get<std::string>("space"), spaceConfig);
+		}
+
+		PTZConfigurationOptionsNode.add("tt:PTZTimeout.tt:Min",
+																		currentPtzConfigOptionsIt->second.get<std::string>("PTZTimeout.Min"));
+		PTZConfigurationOptionsNode.add("tt:PTZTimeout.tt:Max",
+																		currentPtzConfigOptionsIt->second.get<std::string>("PTZTimeout.Max"));
+
+		auto envelope_tree = utility::soap::getEnvelopeTree(ns_);
+		envelope_tree.add_child("s:Body.tptz:GetConfigurationOptionsResponse.tptz:PTZConfigurationOptions",
+														PTZConfigurationOptionsNode);
+		pt::ptree root_tree;
+		root_tree.put_child("s:Envelope", envelope_tree);
+
+		std::ostringstream os;
+		pt::write_xml(os, root_tree);
+
+		utility::http::fillResponseWithHeaders(*response, os.str());
+	}
+};
+
 struct RelativeMoveHandler : public OnvifRequestBase
 {
 	RelativeMoveHandler(const std::map<std::string, std::string>& xs, const std::shared_ptr<pt::ptree>& configs)
@@ -397,6 +485,8 @@ PTZService::PTZService(const std::string& service_uri, const std::string& servic
 			std::make_shared<ptz::GetConfigurationHandler>(xml_namespaces_, configs_ptree_, *srv->MediaProfilesManager()));
 	requestHandlers_.push_back(
 			std::make_shared<ptz::GetConfigurationsHandler>(xml_namespaces_, configs_ptree_, *srv->MediaProfilesManager()));
+	requestHandlers_.push_back(std::make_shared<ptz::GetConfigurationOptionsHandler>(xml_namespaces_, configs_ptree_,
+																																									 *srv->MediaProfilesManager()));
 	requestHandlers_.push_back(std::make_shared<ptz::GetNodeHandler>(xml_namespaces_, configs_ptree_));
 	requestHandlers_.push_back(std::make_shared<ptz::GetNodesHandler>(xml_namespaces_, configs_ptree_));
 	requestHandlers_.push_back(std::make_shared<ptz::RelativeMoveHandler>(xml_namespaces_, configs_ptree_));
