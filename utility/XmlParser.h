@@ -110,6 +110,7 @@ pt::ptree::const_assoc_iterator find(const pt::ptree::key_type& /*key*/, const p
 
 // Do the same as exns::find(), but return a value as a string and accept a whole hierarchy for searching,
 // Expected format is same as the way in Boost::Property_tree - childs is dot separated:  ex: "el1.el2.el3"
+// TODO: fix searching also attribute elements
 std::string find_hierarchy(const std::string& /*path*/, const pt::ptree& /*node*/);
 
 // same as \find_hierarchy, but this version could be used to get multiple childrens with the same name.

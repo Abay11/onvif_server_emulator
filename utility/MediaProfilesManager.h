@@ -29,6 +29,15 @@ enum CONFIGURATION_TYPE : int
 	RECEIVER
 };
 
+class well_formed : public std::exception
+{
+public:
+	const char* what() const override
+	{
+		return "XML Well-formed violation occurred.";
+	}
+};
+	
 class no_such_profile : public std::exception
 {
 public:
@@ -158,6 +167,12 @@ public:
 	const boost::property_tree::ptree& Back() const;
 
 	const ConfigsReaderWriter* ReaderWriter() const
+	{
+		return readerWriter_.get();
+
+	}
+
+	ConfigsReaderWriter* ReaderWriter()
 	{
 		return readerWriter_.get();
 	}
