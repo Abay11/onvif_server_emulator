@@ -48,7 +48,8 @@ void fillPtzConfig(const pt::ptree& jsonConfigNode, pt::ptree& xmlConfigOut,
 	xmlConfigOut.add("tt:DefaultContinuousZoomVelocitySpace",
 									 jsonConfigNode.get<std::string>("DefaultContinuousZoomVelocitySpace"));
 
-	/* If the PTZ Node supports absolute or relative PTZ movements, it shall specify corresponding default Pan/Tilt and Zoom speeds
+	/* If the PTZ Node supports absolute or relative PTZ movements, it shall specify corresponding default Pan/Tilt and
+	Zoom speeds
 	* So uncomment if absolute or relative PTZ movements will be implemented
 	xmlConfigOut.add("tt:DefaultPTZSpeed.tt:PanTilt.<xmlattr>.x", jsonConfigNode.get<float>("DefaultPTZSpeed.PanTilt.x"));
 	xmlConfigOut.add("tt:DefaultPTZSpeed.tt:PanTilt.<xmlattr>.y", jsonConfigNode.get<float>("DefaultPTZSpeed.PanTilt.y"));
@@ -310,7 +311,7 @@ public:
 				spaceConfig.add("tt:YRange.tt:Min", YRangeNodeJson.get<std::string>("Min"));
 				spaceConfig.add("tt:YRange.tt:Max", YRangeNodeJson.get<std::string>("Max"));
 			}
-			
+
 			PTZConfigurationOptionsNode.add_child("tt:Spaces.tt:" + node.get<std::string>("space"), spaceConfig);
 		}
 
@@ -434,14 +435,52 @@ struct GetNodeHandler : public OnvifRequestBase
 
 struct SetConfigurationHandler : public OnvifRequestBase
 {
-	SetConfigurationHandler(const std::map<std::string, std::string>& xs, const std::shared_ptr<pt::ptree>& configs)
-			: OnvifRequestBase(SetConfiguration, auth::SECURITY_LEVELS::ACTUATE, xs, configs)
+private:
+	utility::media::MediaProfilesManager& m_profilesMgr;
+
+public:
+	SetConfigurationHandler(const std::map<std::string, std::string>& xs, const std::shared_ptr<pt::ptree>& configs,
+													utility::media::MediaProfilesManager& mgr)
+			: OnvifRequestBase(SetConfiguration, auth::SECURITY_LEVELS::ACTUATE, xs, configs), m_profilesMgr(mgr)
 	{
 	}
 
 	void operator()(std::shared_ptr<HttpServer::Response> response, std::shared_ptr<HttpServer::Request> request) override
 	{
 		auto envelope_tree = utility::soap::getEnvelopeTree(ns_);
+
+		pt::ptree requestXmlTree;
+		pt::xml_parser::read_xml(request->content, requestXmlTree);
+		auto ptzConfigRequestTree = exns::find_hierarchy_elements("Envelope.Body.SetConfiguration.PTZConfiguration", requestXmlTree);
+		if (ptzConfigRequestTree.size() != size_t{1})
+		{
+			throw osrv::well_formed{};
+		}
+
+		auto requestedToken = ptzConfigRequestTree.front()->second.get<std::string>("<xmlattr>.token", {});
+
+		auto& ptzConfigsJson =
+				m_profilesMgr.ReaderWriter()->ConfigsTree().get_child(CONFIGURATION_ENUMERATION[CONFIGURATION_TYPE::PTZ]);
+
+		auto configIt = std::ranges::find_if(ptzConfigsJson, [&requestedToken](auto& p) {
+			return p.second.get<std::string>("token") == requestedToken;
+		});
+
+		if (configIt == ptzConfigsJson.end())
+		{
+			throw osrv::no_config{};
+		}
+
+		auto& ptzNodeJson = configIt->second;
+
+		if (auto newDefaultPtzTimeout =
+						exns::find_hierarchy("Envelope.Body.SetConfiguration.PTZConfiguration.DefaultPTZTimeout", requestXmlTree);
+				!newDefaultPtzTimeout.empty())
+		{
+			ptzNodeJson.put("DefaultPTZTimeout", newDefaultPtzTimeout);
+		}
+
+		m_profilesMgr.ReaderWriter()->Save();
 
 		envelope_tree.add("s:Body.tptz:SetConfigurationResponse", "");
 
@@ -496,7 +535,8 @@ PTZService::PTZService(const std::string& service_uri, const std::string& servic
 	requestHandlers_.push_back(std::make_shared<ptz::GetNodeHandler>(xml_namespaces_, configs_ptree_));
 	requestHandlers_.push_back(std::make_shared<ptz::GetNodesHandler>(xml_namespaces_, configs_ptree_));
 	requestHandlers_.push_back(std::make_shared<ptz::RelativeMoveHandler>(xml_namespaces_, configs_ptree_));
-	requestHandlers_.push_back(std::make_shared<ptz::SetConfigurationHandler>(xml_namespaces_, configs_ptree_));
+	requestHandlers_.push_back(
+			std::make_shared<ptz::SetConfigurationHandler>(xml_namespaces_, configs_ptree_, *srv->MediaProfilesManager()));
 	requestHandlers_.push_back(std::make_shared<ptz::StopHandler>(xml_namespaces_, configs_ptree_));
 }
 

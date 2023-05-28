@@ -67,6 +67,7 @@ std::string find_hierarchy(const std::string& path, const pt::ptree& node)
 				// <value>some</value>
 				// <value2>some2</value>
 				// </root>
+				// upd: use for that case @find_hierarchy_elements
 
 				if (++assoc_it == node.end()) // Could not find match element on the same level - return not found
 				{
