@@ -48,16 +48,21 @@ void fillPtzConfig(const pt::ptree& jsonConfigNode, pt::ptree& xmlConfigOut,
 	xmlConfigOut.add("tt:DefaultContinuousZoomVelocitySpace",
 									 jsonConfigNode.get<std::string>("DefaultContinuousZoomVelocitySpace"));
 
+	/* If the PTZ Node supports absolute or relative PTZ movements, it shall specify corresponding default Pan/Tilt and Zoom speeds
+	* So uncomment if absolute or relative PTZ movements will be implemented
 	xmlConfigOut.add("tt:DefaultPTZSpeed.tt:PanTilt.<xmlattr>.x", jsonConfigNode.get<float>("DefaultPTZSpeed.PanTilt.x"));
 	xmlConfigOut.add("tt:DefaultPTZSpeed.tt:PanTilt.<xmlattr>.y", jsonConfigNode.get<float>("DefaultPTZSpeed.PanTilt.y"));
 	xmlConfigOut.add("tt:DefaultPTZSpeed.tt:PanTilt.<xmlattr>.space",
 									 jsonConfigNode.get<std::string>("DefaultPTZSpeed.PanTilt.space"));
 	xmlConfigOut.add("tt:DefaultPTZSpeed.tt:Zoom.<xmlattr>.x", jsonConfigNode.get<float>("DefaultPTZSpeed.Zoom.x"));
 	xmlConfigOut.add("tt:DefaultPTZSpeed.tt:Zoom.<xmlattr>.space",
-									 jsonConfigNode.get<std::string>("DefaultPTZSpeed.Zoom.space"));
+									 jsonConfigNode.get<std::string>("DefaultPTZSpeed.Zoom.space"));*/
 
 	xmlConfigOut.add("tt:DefaultPTZTimeout", jsonConfigNode.get<std::string>("DefaultPTZTimeout"));
 
+	/*	The Pan/Tilt limits element should be present for a PTZ Node that supports an absolute Pan/Tilt.
+	*	If the element is present it signals the support for configurable Pan/Tilt limits.
+	*	So uncomment if absolute Pan/Tilt will be supported
 	xmlConfigOut.add("tt:PanTiltLimits.tt:Range.tt:URI", jsonConfigNode.get<std::string>("PanTiltLimits.Range.URI"));
 	xmlConfigOut.add("tt:PanTiltLimits.tt:Range.tt:XRange.tt:Min",
 									 jsonConfigNode.get<float>("PanTiltLimits.Range.XRange.Min"));
@@ -67,6 +72,7 @@ void fillPtzConfig(const pt::ptree& jsonConfigNode, pt::ptree& xmlConfigOut,
 									 jsonConfigNode.get<float>("PanTiltLimits.Range.YRange.Min"));
 	xmlConfigOut.add("tt:PanTiltLimits.tt:Range.tt:YRange.tt:Max",
 									 jsonConfigNode.get<float>("PanTiltLimits.Range.YRange.Max"));
+									 */
 
 	xmlConfigOut.add("tt:ZoomLimits.tt:Range.tt:URI", jsonConfigNode.get<std::string>("ZoomLimits.Range.URI"));
 	xmlConfigOut.add("tt:ZoomLimits.tt:Range.tt:XRange.tt:Min", jsonConfigNode.get<float>("ZoomLimits.Range.XRange.Min"));
