@@ -159,7 +159,7 @@ struct GetCompatibleConfigurationsHandler : public OnvifRequestBase
 			ptz_node.add("tt:DefaultContinuousZoomVelocitySpace",
 									 "http://www.onvif.org/ver10/tptz/ZoomSpaces/VelocityGenericSpace");
 
-			response_node.add_child("PTZConfiguration", ptz_node);
+			response_node.add_child("tptz:PTZConfiguration", ptz_node);
 		}
 
 		envelope_tree.add_child("s:Body.tptz:GetCompatibleConfigurationsResponse", response_node);
