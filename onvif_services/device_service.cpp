@@ -202,6 +202,10 @@ struct GetServicesHandler : public OnvifRequestBase
 			pt::ptree xml_service_node;
 			xml_service_node.put("tds:Namespace", elements.second.get<std::string>("namespace"));
 			xml_service_node.put("tds:XAddr", ipv4_address_ + elements.second.get<std::string>("XAddr"));
+			if (elements.second.get<std::string>("namespace") == "http://www.onvif.org/ver20/ptz/wsdl")
+			{
+				xml_service_node.put("tds:Capabilities.tptz:Capabilities", "");
+			}
 			xml_service_node.put("tds:Version.tt:Major", elements.second.get<std::string>("Version.Major"));
 			xml_service_node.put("tds:Version.tt:Minor", elements.second.get<std::string>("Version.Minor"));
 
