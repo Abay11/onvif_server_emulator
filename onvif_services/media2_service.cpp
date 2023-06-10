@@ -1,5 +1,5 @@
-#include "media_service.h" // to use some util functions
 #include "media2_service.h"
+#include "media_service.h" // to use some util functions
 
 #include "../onvif/OnvifRequest.h"
 
@@ -434,10 +434,10 @@ public:
 		std::string profile_token;
 		profile_token = exns::find_hierarchy("Envelope.Body.GetProfiles.Token", xml_tree);
 
-		// TODO: move this into separate helper function
-		std::vector<std::string> configsType;
-		boost::algorithm::split(configsType, exns::find_hierarchy("Envelope.Body.GetProfiles.Type", xml_tree),
-														boost::is_any_of(",\s,\t"));
+		auto configsTypes = exns::find_hierarchy_elements("Envelope.Body.GetProfiles.Type", xml_tree);
+		std::vector<std::string> configTypesStr;
+		std::ranges::transform(configsTypes, std::back_inserter(configTypesStr),
+													 [](const pt::ptree::const_iterator t) { return t->second.get_value<std::string>(); });
 
 		pt::ptree response_node;
 		if (profile_token.empty())
@@ -472,8 +472,9 @@ public:
 				for (const auto& [name, tree] : profiles_configs_list)
 				{
 					pt::ptree profile_node;
-					media2::util::profile_to_soap(profiles_mgr_->GetProfileByToken(tree.get<std::string>("token"), configsType),
-																				profiles_mgr_->ReaderWriter()->ConfigsTree(), profile_node);
+					media2::util::profile_to_soap(
+							profiles_mgr_->GetProfileByToken(tree.get<std::string>("token"), configTypesStr),
+							profiles_mgr_->ReaderWriter()->ConfigsTree(), profile_node);
 					response_node.add_child("tr2:Profiles", profile_node);
 				}
 			}
@@ -930,8 +931,10 @@ public:
 		std::string profileToken = exns::find_hierarchy("Envelope.Body.GetSnapshotUri.ProfileToken", request_xml);
 
 		const auto& profile_config = profiles_mgr_.GetProfileByToken(profileToken);
-		const auto& srcCfg = profile_config.get<std::string>(CONFIGURATION_ENUMERATION[CONFIGURATION_TYPE::VIDEOSOURCE], "");
-		const auto& encCfg = profile_config.get<std::string>(CONFIGURATION_ENUMERATION[CONFIGURATION_TYPE::VIDEOENCODER], "");
+		const auto& srcCfg =
+				profile_config.get<std::string>(CONFIGURATION_ENUMERATION[CONFIGURATION_TYPE::VIDEOSOURCE], "");
+		const auto& encCfg =
+				profile_config.get<std::string>(CONFIGURATION_ENUMERATION[CONFIGURATION_TYPE::VIDEOENCODER], "");
 
 		if (srcCfg.empty() || encCfg.empty())
 			throw incomplete_configuration();
