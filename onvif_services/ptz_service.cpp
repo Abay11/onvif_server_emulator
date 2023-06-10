@@ -25,6 +25,7 @@ const std::string GetConfigurations = "GetConfigurations";
 const std::string GetConfigurationOptions = "GetConfigurationOptions";
 const std::string GetNode = "GetNode";
 const std::string GetNodes = "GetNodes";
+const std::string GetServiceCapabilities = "GetServiceCapabilities";
 const std::string RelativeMove = "RelativeMove";
 const std::string SetConfiguration = "SetConfiguration";
 const std::string Stop = "Stop";
@@ -388,6 +389,29 @@ struct GetNodesHandler : public OnvifRequestBase
 	}
 };
 
+struct GetServiceCapabilitiesHandler : public OnvifRequestBase
+{
+	GetServiceCapabilitiesHandler(const std::map<std::string, std::string>& xs, const std::shared_ptr<pt::ptree>& configs)
+			: OnvifRequestBase(GetServiceCapabilities, auth::SECURITY_LEVELS::PRE_AUTH, xs, configs)
+	{
+	}
+
+	void operator()(std::shared_ptr<HttpServer::Response> response, std::shared_ptr<HttpServer::Request> request) override
+	{
+		auto envelope_tree = utility::soap::getEnvelopeTree(ns_);
+
+		envelope_tree.add("s:Body.tptz:GetServiceCapabilitiesResponse.tptz:Capabilities", "");
+
+		pt::ptree root_tree;
+		root_tree.put_child("s:Envelope", envelope_tree);
+
+		std::ostringstream os;
+		pt::write_xml(os, root_tree);
+
+		utility::http::fillResponseWithHeaders(*response, os.str());
+	}
+};
+
 struct GetNodeHandler : public OnvifRequestBase
 {
 	GetNodeHandler(const std::map<std::string, std::string>& xs, const std::shared_ptr<pt::ptree>& configs)
@@ -534,6 +558,7 @@ PTZService::PTZService(const std::string& service_uri, const std::string& servic
 																																									 *srv->MediaProfilesManager()));
 	requestHandlers_.push_back(std::make_shared<ptz::GetNodeHandler>(xml_namespaces_, configs_ptree_));
 	requestHandlers_.push_back(std::make_shared<ptz::GetNodesHandler>(xml_namespaces_, configs_ptree_));
+	requestHandlers_.push_back(std::make_shared<ptz::GetServiceCapabilitiesHandler>(xml_namespaces_, configs_ptree_));
 	requestHandlers_.push_back(std::make_shared<ptz::RelativeMoveHandler>(xml_namespaces_, configs_ptree_));
 	requestHandlers_.push_back(
 			std::make_shared<ptz::SetConfigurationHandler>(xml_namespaces_, configs_ptree_, *srv->MediaProfilesManager()));
