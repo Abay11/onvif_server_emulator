@@ -250,6 +250,19 @@ boost::property_tree::ptree MediaProfilesManager::GetProfileByToken(const std::s
 	return profileWithFilteredConfigs;
 }
 
+const boost::property_tree::ptree& MediaProfilesManager::GetConfigByToken(std::string_view token,
+																																					std::string_view configType) const
+{
+	auto& configsTree = readerWriter_->ConfigsTree().get_child(configType.data());
+	const auto res_it = std::ranges::find_if(
+			configsTree, [&token](const auto& p) { return token == p.second.get<std::string>("token"); });
+
+	if (res_it == configsTree.end())
+		throw osrv::no_config{};
+
+	return res_it->second;
+}
+
 boost::property_tree::ptree& MediaProfilesManager::GetProfileByName(const std::string& name)
 {
 	auto& profilesTree = readerWriter_->ConfigsTree().get_child("MediaProfiles");

@@ -578,7 +578,9 @@ BOOST_AUTO_TEST_CASE(MediaProfilesManager_GetUseCount_test0)
 	const std::string path{"../../server_configs/media_profiles.config"};
 
 	MediaProfilesManager manager(path);
-	BOOST_CHECK_EQUAL(size_t{1}, manager.GetUseCount("VideoEncoderToken0", osrv::CONFIGURATION_ENUMERATION[osrv::CONFIGURATION_TYPE::VIDEOENCODER]));
+	BOOST_CHECK_EQUAL(size_t{1},
+										manager.GetUseCount("VideoEncoderToken0",
+																				osrv::CONFIGURATION_ENUMERATION[osrv::CONFIGURATION_TYPE::VIDEOENCODER]));
 }
 
 BOOST_AUTO_TEST_CASE(MediaProfilesManager_GetUseCount_test1)
@@ -588,5 +590,19 @@ BOOST_AUTO_TEST_CASE(MediaProfilesManager_GetUseCount_test1)
 	const std::string path{"../../server_configs/media_profiles.config"};
 
 	MediaProfilesManager manager(path);
-	BOOST_CHECK_EQUAL(size_t{2}, manager.GetUseCount("PtzConfig_0", osrv::CONFIGURATION_ENUMERATION[osrv::CONFIGURATION_TYPE::PTZ]));
+	BOOST_CHECK_EQUAL(size_t{2},
+										manager.GetUseCount("PtzConfig_0", osrv::CONFIGURATION_ENUMERATION[osrv::CONFIGURATION_TYPE::PTZ]));
+}
+
+BOOST_AUTO_TEST_CASE(MediaProfilesManager_GetConfigByToken_test0)
+{
+	using namespace utility::media;
+
+	const std::string path{"../../server_configs/media_profiles.config"};
+
+	MediaProfilesManager manager(path);
+	auto config = manager.GetConfigByToken("VideoEncoderToken1",
+																				 osrv::CONFIGURATION_ENUMERATION[osrv::CONFIGURATION_TYPE::VIDEOENCODER]);
+	BOOST_CHECK_EQUAL(std::string{"VideoEncoderToken1"}, config.get<std::string>("token"));
+	BOOST_CHECK_EQUAL(std::string{"VideoEncConfig1"}, config.get<std::string>("Name"));
 }
