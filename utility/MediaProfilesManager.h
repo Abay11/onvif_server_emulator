@@ -37,7 +37,7 @@ public:
 		return "XML Well-formed violation occurred.";
 	}
 };
-	
+
 class no_such_profile : public std::exception
 {
 public:
@@ -88,7 +88,8 @@ class incomplete_configuration : public std::exception
 public:
 	const char* what() const override
 	{
-		return "The specified media profile does contain either unused sources or encoder configurations without a corresponding source.";
+		return "The specified media profile does contain either unused sources or encoder configurations without a "
+					 "corresponding source.";
 	}
 };
 
@@ -100,7 +101,6 @@ public:
 		return "The requested configuration does not exist.";
 	}
 };
-
 
 } // namespace osrv
 
@@ -136,7 +136,6 @@ private:
 	std::unique_ptr<boost::property_tree::ptree> configsTreeBackup_; // used for reset operation
 };
 
-
 // NOTE: This implementation is not thread-safe. For now it is ok, because the application is single-thread.
 class MediaProfilesManager
 {
@@ -163,13 +162,14 @@ public:
 		return GetProfileByName(name);
 	};
 
+	const boost::property_tree::ptree& GetConfigByToken(std::string_view token, std::string_view configType);
+
 	// do not call Back on empty profiles list
 	const boost::property_tree::ptree& Back() const;
 
 	const ConfigsReaderWriter* ReaderWriter() const
 	{
 		return readerWriter_.get();
-
 	}
 
 	ConfigsReaderWriter* ReaderWriter()
