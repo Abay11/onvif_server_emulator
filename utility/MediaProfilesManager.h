@@ -38,6 +38,7 @@ public:
 	}
 };
 
+
 class no_such_profile : public std::exception
 {
 public:
