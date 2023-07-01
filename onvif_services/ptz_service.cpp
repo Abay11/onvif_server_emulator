@@ -135,34 +135,56 @@ struct ContinuousMoveHandler : public OnvifRequestBase
 
 struct GetCompatibleConfigurationsHandler : public OnvifRequestBase
 {
+private:
+	const utility::media::MediaProfilesManager& m_profilesMgr;
+
+public:
 	GetCompatibleConfigurationsHandler(const std::map<std::string, std::string>& xs,
-																		 const std::shared_ptr<pt::ptree>& configs)
-			: OnvifRequestBase(GetCompatibleConfigurations, auth::SECURITY_LEVELS::READ_MEDIA, xs, configs)
+																		 const std::shared_ptr<pt::ptree>& configs,
+																		 const utility::media::MediaProfilesManager& profilesMgr)
+			: OnvifRequestBase(GetCompatibleConfigurations, auth::SECURITY_LEVELS::READ_MEDIA, xs, configs),
+				m_profilesMgr(profilesMgr)
 	{
 	}
 
 	void operator()(std::shared_ptr<HttpServer::Response> response, std::shared_ptr<HttpServer::Request> request) override
 	{
+		pt::ptree xml_tree;
+		auto request_str = request->content.string();
+		std::istringstream is(request_str);
+		pt::xml_parser::read_xml(is, xml_tree);
+
+		std::string profileToken;
+		profileToken = exns::find_hierarchy("Envelope.Body.GetCompatibleConfigurations.ProfileToken", xml_tree);
+
+		const auto& profileConfig = m_profilesMgr.GetProfileByToken(profileToken);
+		auto vsToken = profileConfig.get<std::string>("VideoSource");
+		const auto& configs = m_profilesMgr.ReaderWriter()->ConfigsTree();
+
+		const auto& vsConfigJson =
+				m_profilesMgr.GetConfigByToken(vsToken, osrv::CONFIGURATION_ENUMERATION[osrv::VIDEOSOURCE]);
+
+		const auto& compatibleNodes = vsConfigJson.get_child("CompatiblePtzNodes");
+		std::vector<std::string> compatibleNodeTokens;
+		std::ranges::transform(compatibleNodes, std::back_inserter(compatibleNodeTokens),
+													 [](auto t) { return t.second.get_value<std::string>(); });
+
+		const auto& allPtzConfigs =
+				m_profilesMgr.ReaderWriter()->ConfigsTree().get_child(osrv::CONFIGURATION_ENUMERATION[osrv::PTZ]);
+
 		auto envelope_tree = utility::soap::getEnvelopeTree(ns_);
-
-		// TODO: impl. reading configs from a file
-		pt::ptree response_node;
-
+		for (const auto& [key, node] : allPtzConfigs)
 		{
-			pt::ptree ptz_node;
-			ptz_node.add("<xmlattr>.token", "PtzConfigToken0");
-			ptz_node.add("tt:Name", "PtzConfig0");
-			ptz_node.add("tt:UseCount", 3);
-			ptz_node.add("tt:NodeToken", "PTZNODE_1");
-			ptz_node.add("tt:DefaultContinuousPanTiltVelocitySpace",
-									 "http://www.onvif.org/ver10/tptz/PanTiltSpaces/VelocityGenericSpace");
-			ptz_node.add("tt:DefaultContinuousZoomVelocitySpace",
-									 "http://www.onvif.org/ver10/tptz/ZoomSpaces/VelocityGenericSpace");
+			if (std::ranges::find_if(compatibleNodeTokens, [&node](const auto& nodeToken) {
+						return node.get<std::string>("NodeToken") == nodeToken;
+					}) == compatibleNodeTokens.end())
+				continue; // current ptz configuration is not compatible with the requested media profile
 
-			response_node.add_child("tptz:PTZConfiguration", ptz_node);
+			pt::ptree xmlPtzConfig;
+			fillPtzConfig(node, xmlPtzConfig, m_profilesMgr);
+
+			envelope_tree.add_child("s:Body.tptz:GetCompatibleConfigurationsResponse.tptz:PTZConfiguration", xmlPtzConfig);
 		}
-
-		envelope_tree.add_child("s:Body.tptz:GetCompatibleConfigurationsResponse", response_node);
 
 		pt::ptree root_tree;
 		root_tree.put_child("s:Envelope", envelope_tree);
@@ -475,7 +497,8 @@ public:
 
 		pt::ptree requestXmlTree;
 		pt::xml_parser::read_xml(request->content, requestXmlTree);
-		auto ptzConfigRequestTree = exns::find_hierarchy_elements("Envelope.Body.SetConfiguration.PTZConfiguration", requestXmlTree);
+		auto ptzConfigRequestTree =
+				exns::find_hierarchy_elements("Envelope.Body.SetConfiguration.PTZConfiguration", requestXmlTree);
 		if (ptzConfigRequestTree.size() != size_t{1})
 		{
 			throw osrv::well_formed{};
@@ -486,9 +509,8 @@ public:
 		auto& ptzConfigsJson =
 				m_profilesMgr.ReaderWriter()->ConfigsTree().get_child(CONFIGURATION_ENUMERATION[CONFIGURATION_TYPE::PTZ]);
 
-		auto configIt = std::ranges::find_if(ptzConfigsJson, [&requestedToken](auto& p) {
-			return p.second.get<std::string>("token") == requestedToken;
-		});
+		auto configIt = std::ranges::find_if(
+				ptzConfigsJson, [&requestedToken](auto& p) { return p.second.get<std::string>("token") == requestedToken; });
 
 		if (configIt == ptzConfigsJson.end())
 		{
@@ -548,8 +570,8 @@ PTZService::PTZService(const std::string& service_uri, const std::string& servic
 		: IOnvifService(service_uri, service_name, srv)
 {
 	requestHandlers_.push_back(std::make_shared<ptz::ContinuousMoveHandler>(xml_namespaces_, configs_ptree_));
-	requestHandlers_.push_back(
-			std::make_shared<ptz::GetCompatibleConfigurationsHandler>(xml_namespaces_, configs_ptree_));
+	requestHandlers_.push_back(std::make_shared<ptz::GetCompatibleConfigurationsHandler>(xml_namespaces_, configs_ptree_,
+																																											 *srv->MediaProfilesManager()));
 	requestHandlers_.push_back(
 			std::make_shared<ptz::GetConfigurationHandler>(xml_namespaces_, configs_ptree_, *srv->MediaProfilesManager()));
 	requestHandlers_.push_back(
