@@ -11,6 +11,7 @@
 
 #include "onvif_services/service_configs.h"
 
+#include "../onvif_services/analytics_service.h"
 #include "../onvif_services/device_service.h"
 #include "../onvif_services/deviceio_service.h"
 #include "../onvif_services/imaging_service.h"
@@ -27,6 +28,11 @@ namespace osrv
 std::shared_ptr<IOnvifService> OnvifServiceFactory::Create(const std::string& service_uri,
 																													 std::shared_ptr<IOnvifServer> srv)
 {
+	if (SERVICE_URI::ANALYTICS == service_uri)
+	{
+		return std::make_shared<AnalyticsService>(service_uri, "Analytics", srv);
+	}
+
 	if (SERVICE_URI::DEVICE == service_uri)
 	{
 		return std::make_shared<DeviceService>(service_uri, "Device", srv);
@@ -80,6 +86,16 @@ IOnvifServer::IOnvifServer(const std::string& configs_path, std::shared_ptr<ILog
 const std::string& IOnvifServer::ConfigsPath() const
 {
 	return configs_path_;
+}
+
+std::shared_ptr<IOnvifService> IOnvifServer::AnalyticsService()
+{
+	if (!analytics_service_)
+	{
+		analytics_service_ = OnvifServiceFactory().Create(SERVICE_URI::ANALYTICS, shared_from_this());
+	}
+
+	return analytics_service_;
 }
 
 std::shared_ptr<IOnvifService> IOnvifServer::DeviceService()

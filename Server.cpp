@@ -93,6 +93,7 @@ void Server::init()
 
 	profiles_config_ = osrv::ServiceConfigs("media_profiles", configs_dir);
 
+	AnalyticsService()->Run();
 	DeviceService()->Run();
 	DeviceIOService()->Run();
 	ImagingService()->Run();
