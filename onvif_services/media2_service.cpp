@@ -1165,15 +1165,14 @@ void profile_to_soap(const ptree& profile_config, const ptree& configs_file, ptr
 	static const std::string DEFAULT_EMPTY_STRING;
 
 	// Videosource
-	const std::string vs_token =
-			profile_config.get<std::string>(CONFIGURATION_ENUMERATION[CONFIGURATION_TYPE::VIDEOSOURCE], DEFAULT_EMPTY_STRING);
-	if (!vs_token.empty())
+	if (const std::string vs_token = profile_config.get<std::string>(
+					CONFIGURATION_ENUMERATION[CONFIGURATION_TYPE::VIDEOSOURCE], DEFAULT_EMPTY_STRING);
+			!vs_token.empty())
 	{
 		auto vs_configs_list = configs_file.get_child(CONFIGURATION_ENUMERATION[CONFIGURATION_TYPE::VIDEOSOURCE]);
-		auto vs_config =
-				std::find_if(vs_configs_list.begin(), vs_configs_list.end(), [vs_token](pt::ptree::value_type vs_obj) {
-					return vs_obj.second.get<std::string>(CONFIG_PROP_TOKEN) == vs_token;
-				});
+		auto vs_config = std::ranges::find_if(vs_configs_list, [&vs_token](const pt::ptree::value_type& vs_obj) {
+			return vs_obj.second.get<std::string>(CONFIG_PROP_TOKEN) == vs_token;
+		});
 
 		if (vs_config == vs_configs_list.end())
 			throw std::runtime_error("Can't find VideoSourceConfiguration with token '" + vs_token + "'");
@@ -1184,16 +1183,15 @@ void profile_to_soap(const ptree& profile_config, const ptree& configs_file, ptr
 	}
 
 	// videoencoder
-	const std::string ve_token = profile_config.get<std::string>(
-			CONFIGURATION_ENUMERATION[CONFIGURATION_TYPE::VIDEOENCODER], DEFAULT_EMPTY_STRING);
-	if (!ve_token.empty())
+	if (const std::string ve_token = profile_config.get<std::string>(
+					CONFIGURATION_ENUMERATION[CONFIGURATION_TYPE::VIDEOENCODER], DEFAULT_EMPTY_STRING);
+			!ve_token.empty())
 	{
 		// TODO: use the same configuartion structure with Media1  --->get_child("VideoEncoderConfigurations2")
 		auto vs_configs_list = configs_file.get_child(CONFIGURATION_ENUMERATION[CONFIGURATION_TYPE::VIDEOENCODER]);
-		auto vs_config =
-				std::find_if(vs_configs_list.begin(), vs_configs_list.end(), [&ve_token](const pt::ptree::value_type& vs_obj) {
-					return vs_obj.second.get<std::string>(CONFIG_PROP_TOKEN) == ve_token;
-				});
+		auto vs_config = std::ranges::find_if(vs_configs_list, [&ve_token](const pt::ptree::value_type& vs_obj) {
+			return vs_obj.second.get<std::string>(CONFIG_PROP_TOKEN) == ve_token;
+		});
 
 		if (vs_config == vs_configs_list.end())
 			throw std::runtime_error("Can't find VideoEncoderConfiguration with token '" + ve_token + "'");
@@ -1203,7 +1201,6 @@ void profile_to_soap(const ptree& profile_config, const ptree& configs_file, ptr
 	}
 
 	// Videoanalytics
-
 	if (const std::string va_token = profile_config.get<std::string>(
 					CONFIGURATION_ENUMERATION[CONFIGURATION_TYPE::ANALYTICS], DEFAULT_EMPTY_STRING);
 			!va_token.empty())
@@ -1215,9 +1212,9 @@ void profile_to_soap(const ptree& profile_config, const ptree& configs_file, ptr
 	}
 
 	// PTZ
-	const std::string ptz_token =
-			profile_config.get<std::string>(CONFIGURATION_ENUMERATION[CONFIGURATION_TYPE::PTZ], DEFAULT_EMPTY_STRING);
-	if (!ptz_token.empty())
+	if (const std::string ptz_token =
+					profile_config.get<std::string>(CONFIGURATION_ENUMERATION[CONFIGURATION_TYPE::PTZ], DEFAULT_EMPTY_STRING);
+			!ptz_token.empty())
 	{
 		// TODO: make reading from a profile
 		pt::ptree ptz_node;
@@ -1233,9 +1230,9 @@ void profile_to_soap(const ptree& profile_config, const ptree& configs_file, ptr
 	}
 
 	// Audio source
-	auto as_token =
-			profile_config.get<std::string>(CONFIGURATION_ENUMERATION[CONFIGURATION_TYPE::AUDIOSOURCE], DEFAULT_EMPTY_STRING);
-	if (!as_token.empty())
+	if (auto as_token = profile_config.get<std::string>(CONFIGURATION_ENUMERATION[CONFIGURATION_TYPE::AUDIOSOURCE],
+																											DEFAULT_EMPTY_STRING);
+			!as_token.empty())
 	{
 		pt::ptree as_node;
 		auto as_config = utility::AudioSourceConfigsReaderByToken(as_token, configs_file).AudioSource();
@@ -1248,9 +1245,9 @@ void profile_to_soap(const ptree& profile_config, const ptree& configs_file, ptr
 	}
 
 	// Audio encoder
-	auto ae_token = profile_config.get<std::string>(CONFIGURATION_ENUMERATION[CONFIGURATION_TYPE::AUDIOENCODER],
-																									DEFAULT_EMPTY_STRING);
-	if (!ae_token.empty())
+	if (auto ae_token = profile_config.get<std::string>(CONFIGURATION_ENUMERATION[CONFIGURATION_TYPE::AUDIOENCODER],
+																											DEFAULT_EMPTY_STRING);
+			!ae_token.empty())
 	{
 		pt::ptree ae_node;
 		auto ae_config = utility::AudioEncoderReaderByToken(ae_token, configs_file).AudioEncoder();
