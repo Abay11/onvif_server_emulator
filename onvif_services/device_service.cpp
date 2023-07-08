@@ -203,10 +203,6 @@ struct GetServicesHandler : public OnvifRequestBase
 			const auto& ns = node.get<std::string>("namespace");
 			xml_service_node.put("tds:Namespace", ns);
 			xml_service_node.put("tds:XAddr", ipv4_address_ + node.get<std::string>("XAddr"));
-			if (node.get<std::string>("namespace") == "http://www.onvif.org/ver20/ptz/wsdl") // TODO: get rid of it
-			{
-				xml_service_node.put("tds:Capabilities.tptz:Capabilities", "");
-			}
 
 			static const std::unordered_map<std::string, std::string> maps = {
 					{"http://www.onvif.org/ver20/analytics/wsdl", "tan"},
