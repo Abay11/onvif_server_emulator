@@ -159,7 +159,6 @@ public:
 
 		const auto& profileConfig = m_profilesMgr.GetProfileByToken(profileToken);
 		auto vsToken = profileConfig.get<std::string>("VideoSource");
-		const auto& configs = m_profilesMgr.ReaderWriter()->ConfigsTree();
 
 		const auto& vsConfigJson =
 				m_profilesMgr.GetConfigByToken(vsToken, osrv::CONFIGURATION_ENUMERATION[osrv::VIDEOSOURCE]);

@@ -37,7 +37,8 @@ inline std::string generate_snapshot_url(const ServerConfigs& server_configs)
 
 using ptree = boost::property_tree::ptree;
 // functions throw an exception if error occured
-void profile_to_soap(const ptree& profile_config, const ptree& configs_file, ptree& result);
+void profile_to_soap(const ptree& profile_config, const ptree& configs_file, ptree& result,
+										 const utility::media::MediaProfilesManager& profilesMgr);
 void fill_video_encoder(const ptree& config_node, ptree& videoencoder_node);
 
 template <typename T> std::string to_value_list(const std::vector<T>& list)
