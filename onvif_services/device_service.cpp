@@ -189,6 +189,13 @@ struct GetServicesHandler : public OnvifRequestBase
 
 	void operator()(std::shared_ptr<HttpServer::Response> response, std::shared_ptr<HttpServer::Request> request) override
 	{
+		pt::ptree xml_tree;
+		auto request_str = request->content.string();
+		std::istringstream is(request_str);
+		pt::xml_parser::read_xml(is, xml_tree);
+
+		auto isNeedIncludeCaps = exns::find_hierarchy("Envelope.Body.GetServices.IncludeCapability", xml_tree) == "true";
+
 		auto envelope_tree = utility::soap::getEnvelopeTree(ns_);
 
 		auto ipv4_bind = ipv4_address_;
@@ -213,7 +220,7 @@ struct GetServicesHandler : public OnvifRequestBase
 			};
 
 			pt::ptree def;
-			if (const auto& caps = node.get_child("Capabilities", def); !caps.empty())
+			if (const auto& caps = node.get_child("Capabilities", def); isNeedIncludeCaps && !caps.empty())
 			{
 				const auto& ns_tag = maps.at(ns);
 				for (const auto& [caps_key, caps_value] : caps)
