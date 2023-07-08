@@ -100,6 +100,7 @@ void Server::init()
 	discovery::init_service(configs_dir, *logger_, *server_configs_);
 	discovery::start();
 
+	AnalyticsService()->Run();
 	DeviceService()->Run();
 	DeviceIOService()->Run();
 	ImagingService()->Run();
