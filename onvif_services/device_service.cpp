@@ -194,20 +194,36 @@ struct GetServicesHandler : public OnvifRequestBase
 		pt::ptree services_node;
 
 		// here's Services are enumerates as array, so handle them manualy
-		for (auto elements : services_config)
+		for (const auto& [key, node] : services_config)
 		{
-			if (!elements.second.get<bool>("Enabled", true))
+			if (!node.get<bool>("Enabled", true))
 				continue;
 
 			pt::ptree xml_service_node;
-			xml_service_node.put("tds:Namespace", elements.second.get<std::string>("namespace"));
-			xml_service_node.put("tds:XAddr", ipv4_address_ + elements.second.get<std::string>("XAddr"));
-			if (elements.second.get<std::string>("namespace") == "http://www.onvif.org/ver20/ptz/wsdl")
+			const auto& ns = node.get<std::string>("namespace");
+			xml_service_node.put("tds:Namespace", ns);
+			xml_service_node.put("tds:XAddr", ipv4_address_ + node.get<std::string>("XAddr"));
+			if (node.get<std::string>("namespace") == "http://www.onvif.org/ver20/ptz/wsdl") // TODO: get rid of it
 			{
 				xml_service_node.put("tds:Capabilities.tptz:Capabilities", "");
 			}
-			xml_service_node.put("tds:Version.tt:Major", elements.second.get<std::string>("Version.Major"));
-			xml_service_node.put("tds:Version.tt:Minor", elements.second.get<std::string>("Version.Minor"));
+
+			static const std::unordered_map<std::string, std::string> maps = {
+					{"http://www.onvif.org/ver20/analytics/wsdl", "tan"},
+					{"http://www.onvif.org/ver20/ptz/wsdl", "tptz"}
+			};
+
+			pt::ptree def;
+			if (const auto& caps = node.get_child("Capabilities", def); !caps.empty())
+			{
+				const auto& ns_tag = maps.at(ns);
+				for (const auto& [caps_key, caps_value] : caps)
+					xml_service_node.add(std::format("tds:Capabilities.{}:Capabilities.<xmlattr>.{}", ns_tag, caps_key),
+															 caps_value.get_value<std::string>());
+			}
+
+			xml_service_node.put("tds:Version.tt:Major", node.get<std::string>("Version.Major"));
+			xml_service_node.put("tds:Version.tt:Minor", node.get<std::string>("Version.Minor"));
 
 			services_node.add_child("tds:Service", xml_service_node);
 		}
