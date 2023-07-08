@@ -10,13 +10,23 @@ def browse_file():
 	global userServerConfigsDir
 	userServerConfigsDir = dirname
 
+def connect_server():
+	print('connecting')
+
+def disconnect_server():
+	print('disconnect')
+
 root = tk.Tk()
+root.minsize(400, 300)
 
-pathLabel = tk.Label(root)
-pathLabel.pack()
+browseServerConfigsFrame = tk.Frame(root)
+browseServerConfigsFrame.pack()
 
-browseButton = tk.Button(root, text="Browse", command=browse_file)
-browseButton.pack()
+browseButton = tk.Button(browseServerConfigsFrame, text="Select configs dir", command=browse_file)
+browseButton.pack(side=tk.LEFT)
+
+pathLabel = tk.Label(browseServerConfigsFrame)
+pathLabel.pack(side=tk.LEFT)
 
 # restore user configuration
 appConfig = configparser.ConfigParser()
@@ -29,6 +39,27 @@ if len(configFilesList) != 0:
 	pathLabel.config(text=userServerConfigsDir)
 else:
 	appConfig.add_section('OnvifServerEmulator')
+
+# create a menu bar
+menu_bar = tk.Menu(root)
+root.config(menu=menu_bar)
+
+# create a settings menu
+settings_menu = tk.Menu(menu_bar, tearoff=False)
+menu_bar.add_cascade(label="Server", menu=settings_menu)
+
+# add items to the settings menu
+settings_menu.add_command(label="Connect")
+settings_menu.add_command(label="Disconnect")
+settings_menu.add_separator()
+settings_menu.add_command(label="Exit", command=root.quit)
+
+status_bar = tk.Label(root, text="Status: not connected", bd=1, relief=tk.SUNKEN, anchor=tk.W)
+status_bar.pack(side=tk.BOTTOM, fill=tk.X)
+
+
+buildTreeButton = tk.Button(root, text='Build tree')
+buildTreeButton.pack()
 
 root.mainloop()
 
