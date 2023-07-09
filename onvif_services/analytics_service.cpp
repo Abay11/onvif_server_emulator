@@ -18,6 +18,7 @@
 namespace pt = boost::property_tree;
 
 // a list of implemented methods
+const std::string GetAnalyticsModuleOptions = "GetAnalyticsModuleOptions";
 const std::string GetServiceCapabilities = "GetServiceCapabilities";
 const std::string GetSupportedAnalyticsModules = "GetSupportedAnalyticsModules";
 
@@ -26,6 +27,68 @@ namespace osrv
 
 namespace analytics
 {
+
+struct GetAnalyticsModuleOptionsHandler : public OnvifRequestBase
+{
+private:
+public:
+	GetAnalyticsModuleOptionsHandler(const std::map<std::string, std::string>& xs,
+																	 const std::shared_ptr<pt::ptree>& configs, const pt::ptree& device_service_configs)
+			: OnvifRequestBase(GetAnalyticsModuleOptions, auth::SECURITY_LEVELS::READ_MEDIA, xs, configs)
+	{
+	}
+
+	void operator()(std::shared_ptr<HttpServer::Response> response, std::shared_ptr<HttpServer::Request> request) override
+	{
+		//TODO: type and name from the request is ignored for now
+
+
+		auto fillOptions = [](const pt::ptree& modules, pt::ptree& optionsResponse){
+			for (const auto& [moduleKey, moduleNode] : modules)
+				for (const auto& [key, node] : moduleNode.get_child("Options"))
+				{
+					pt::ptree option;
+
+					if (const auto& ruleType = node.get<std::string>("RuleType"); !ruleType.empty())
+					{
+						option.add("<xmlattr>.RuleType", ruleType);
+					}
+					option.add("<xmlattr>.Name", node.get<std::string>("Name"));
+					const auto& type = node.get<std::string>("Type");
+					option.add("<xmlattr>.Type", type);
+					if (const auto& analyticsModule = node.get<std::string>("AnalyticsModule"); !analyticsModule.empty())
+					{
+						option.add("<xmlattr>.AnalyticsModule", analyticsModule);
+					}
+					option.add("<xmlattr>.minOccurs", node.get<int>("minOccurs"));
+					option.add("<xmlattr>.maxOccurs", node.get<int>("maxOccurs"));
+
+					if (type == "tt:IntRange") // TODO: need to support other types too
+					{
+						option.add("tt:IntRange.tt:Min", node.get<int>("Min"));
+						option.add("tt:IntRange.tt:Max", node.get<int>("Max"));
+					}
+
+					optionsResponse.add_child("tan:Options", option);
+				}
+		};
+
+		const auto& modules = service_configs_->get_child("SupportedAnalyticsModules.modules");
+		pt::ptree options;
+		fillOptions(modules, options);
+
+		auto envelope_tree = utility::soap::getEnvelopeTree(ns_);
+		envelope_tree.add_child("s:Body.tan:GetAnalyticsModuleOptionsResponse", options);
+
+		pt::ptree root_tree;
+		root_tree.put_child("s:Envelope", envelope_tree);
+
+		std::ostringstream os;
+		pt::write_xml(os, root_tree);
+
+		utility::http::fillResponseWithHeaders(*response, os.str());
+	}
+};
 
 struct GetServiceCapabilitiesHandler : public OnvifRequestBase
 {
@@ -120,7 +183,6 @@ public:
 						const auto& itemType = dataNode.get<std::string>("DescriptionType");
 
 						message.add_child("tt:Data.tt:" + itemType, data);
-					
 					}
 
 					message.add("tt:ParentTopic", messNode.get<std::string>("ParentTopic"));
@@ -137,7 +199,8 @@ public:
 		fillAnalyticsModulesResponse(modules, supportedAnalyticsModules);
 
 		auto envelope_tree = utility::soap::getEnvelopeTree(ns_);
-		envelope_tree.add_child("s:Body.tan:GetSupportedAnalyticsModulesResponse.tan:SupportedAnalyticsModules", supportedAnalyticsModules);
+		envelope_tree.add_child("s:Body.tan:GetSupportedAnalyticsModulesResponse.tan:SupportedAnalyticsModules",
+														supportedAnalyticsModules);
 
 		pt::ptree root_tree;
 		root_tree.put_child("s:Envelope", envelope_tree);
@@ -155,6 +218,8 @@ AnalyticsService::AnalyticsService(const std::string& service_uri, const std::st
 																	 std::shared_ptr<IOnvifServer> srv)
 		: IOnvifService(service_uri, service_name, srv)
 {
+	requestHandlers_.push_back(std::make_shared<analytics::GetAnalyticsModuleOptionsHandler>(
+			xml_namespaces_, configs_ptree_, *srv->DeviceService()->Configs()));
 	requestHandlers_.push_back(std::make_shared<analytics::GetServiceCapabilitiesHandler>(
 			xml_namespaces_, configs_ptree_, *srv->DeviceService()->Configs()));
 	requestHandlers_.push_back(
