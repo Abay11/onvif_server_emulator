@@ -40,7 +40,8 @@ After vcpkg installation, install other dependencies. In this example we will us
 **Step 1.** Install `GStreamer` libs and plugins:
 
 ```
-vcpkg install --triplet x64-windows gstreamer gstreamer[plugins-base] gstreamer[plugins-good] gstreamer[plugins-ugly] [plugins-bad] gstreamer[pango] gstreamer[x264] gst-rtsp-server
+vcpkg install --triplet x64-windows gstreamer gstreamer[plugins-base] gstreamer[plugins-good] \
+	gstreamer[plugins-ugly] [plugins-bad] gstreamer[pango] gstreamer[x264] gst-rtsp-server
 ```
 
 Make sure the installation was completed successfully with command: 
@@ -66,7 +67,7 @@ C:\your_vcpkg_dir\installed\x64-windows\bin
 **Step 3.** Install Boost libs.
 
 ```
-vcpkg install boost-system boost-date-time boost-regex --triplet x64-window`
+vcpkg install boost-system boost-date-time boost-regex boost-thread --triplet x64-window`
 ```
 
 Optional:
@@ -79,7 +80,8 @@ vcpkg install boost-test --triplet x64-window
 cd <path_to_repository_clone>
 mkdir x64_build
 cd x64_build
-cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_TOOLCHAIN_FILE=C:/your_vcpkg_dir/scripts/buildsystems/vcpkg.cmake -DVCPKG_TARGET_TRIPLET=x64-windows -G "Visual Studio 17 2022" -A "x64" ..
+cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_TOOLCHAIN_FILE=C:/your_vcpkg_dir/scripts/buildsystems/vcpkg.cmake \
+	-DVCPKG_TARGET_TRIPLET=x64-windows -G "Visual Studio 17 2022" -A "x64" ..
 cmake --build .
 ```
 It also possible to use `cmake-gui` and configure all there.
