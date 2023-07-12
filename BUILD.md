@@ -41,7 +41,7 @@ After vcpkg installation, install other dependencies. In this example we will us
 
 ```
 vcpkg install --triplet x64-windows gstreamer gstreamer[plugins-base] gstreamer[plugins-good] \
-	gstreamer[plugins-ugly] [plugins-bad] gstreamer[pango] gstreamer[x264] gst-rtsp-server
+	gstreamer[plugins-ugly] gstreamer[plugins-bad] gstreamer[pango] gstreamer[x264] gstreamer[x265] gst-rtsp-server
 ```
 
 Make sure the installation was completed successfully with command: 
