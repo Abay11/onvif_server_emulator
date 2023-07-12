@@ -17,6 +17,9 @@ To build OnvifServerEmulator:
 - system
 - date_time
 - regex
+- asio
+- property-tree
+- thread
 - test (optional, for unit-test purposes)
 * GStreamer libraries and plugins 1.16 or later:
 	- core
@@ -67,7 +70,7 @@ C:\your_vcpkg_dir\installed\x64-windows\bin
 **Step 3.** Install Boost libs.
 
 ```
-vcpkg install boost-system boost-date-time boost-regex boost-thread --triplet x64-window`
+vcpkg install boost-system boost-date-time boost-regex boost-thread boost-asio boost-property-tree --triplet x64-window`
 ```
 
 Optional:
