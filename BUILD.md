@@ -59,9 +59,13 @@ All required GStreamer dependencies should be listed.
 **Step 2.** For proper work GStreamer applications require to point binaries and plugin directories.
 
 Add the `GST_PLUGIN_PATH` variable system environment. Usually install it here:
-```
-C:\your_vcpkg_dir\packages\gstreamer_x64-windows\bin
-```
+
+`C:\your_vcpkg_dir\packages\gstreamer_x64-windows\bin`
+
+or
+
+`C:\your_vcpkg_dir\packages\gstreamer_x64-windows\plugins\gstreamer`
+
 Add GStreamer binaries to PATH. Usually it installed here:
 ```
 C:\your_vcpkg_dir\installed\x64-windows\bin
