@@ -1,6 +1,7 @@
 #include <boost/test/unit_test.hpp>
 
 #include "../onvif_services/media2_service.h"
+#include "../utility/MediaProfilesManager.h"
 
 #include <boost/property_tree/json_parser.hpp>
 #include <boost/property_tree/ptree.hpp>
@@ -12,13 +13,17 @@ BOOST_AUTO_TEST_CASE(profiles_to_soap_func)
 	namespace pt = boost::property_tree;
 	using ptree = boost::property_tree::ptree;
 
+	const auto configPath = "../../unit_tests/test_data/media2_service_test.config";
+
 	ptree configs_file;
-	pt::json_parser::read_json("../../unit_tests/test_data/media2_service_test.config", configs_file);
+	pt::json_parser::read_json(configPath, configs_file);
+
+	utility::media::MediaProfilesManager profilesManager(configPath);
 
 	// GENERAL FIELDS OF MEDIA PROFILE 1
 	ptree profile_configs = configs_file.get_child("MediaProfiles").front().second;
 	ptree result_profile_tree;
-	profile_to_soap(profile_configs, configs_file, result_profile_tree);
+	profile_to_soap(profile_configs, configs_file, result_profile_tree, profilesManager);
 
 	auto token = result_profile_tree.get<std::string>("<xmlattr>.token");
 	BOOST_TEST(token == "ProfileToken0");
@@ -42,7 +47,7 @@ BOOST_AUTO_TEST_CASE(profiles_to_soap_func)
 	// Just make sure that the profile node also is in the result tree
 	ptree profile2_configs = configs_file.get_child("MediaProfiles").back().second;
 	ptree result_profile_tree2;
-	profile_to_soap(profile2_configs, configs_file, result_profile_tree2);
+	profile_to_soap(profile2_configs, configs_file, result_profile_tree2, profilesManager);
 	BOOST_TEST(result_profile_tree2.get<std::string>("<xmlattr>.token") == "ProfileToken1");
 
 	// TESTS FOR ROOT TREE
