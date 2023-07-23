@@ -107,6 +107,8 @@ FILE(GLOB SERVICES_SRC
 )
 
 FILE (GLOB UTILITY_SRC
+	"utility/AnalyticsReader.cpp"
+	"utility/AnalyticsReader.h"
 	"utility/AudioSourceReader.cpp"
 	"utility/AudioSourceReader.h"
 	"utility/AuthHelper.cpp"
