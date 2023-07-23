@@ -5,6 +5,7 @@
 
 #include "../onvif/OnvifRequest.h"
 #include "../onvif_services/device_service.h"
+#include "../utility/AnalyticsReader.h"
 #include "../utility/MediaProfilesManager.h"
 
 #include "../utility/HttpHelper.h"
@@ -19,6 +20,7 @@ namespace pt = boost::property_tree;
 
 // a list of implemented methods
 const std::string GetAnalyticsModuleOptions = "GetAnalyticsModuleOptions";
+const std::string GetAnalyticsModules = "GetAnalyticsModules";
 const std::string GetServiceCapabilities = "GetServiceCapabilities";
 const std::string GetSupportedAnalyticsModules = "GetSupportedAnalyticsModules";
 
@@ -40,10 +42,9 @@ public:
 
 	void operator()(std::shared_ptr<HttpServer::Response> response, std::shared_ptr<HttpServer::Request> request) override
 	{
-		//TODO: type and name from the request is ignored for now
+		// TODO: type and name from the request is ignored for now
 
-
-		auto fillOptions = [](const pt::ptree& modules, pt::ptree& optionsResponse){
+		auto fillOptions = [](const pt::ptree& modules, pt::ptree& optionsResponse) {
 			for (const auto& [moduleKey, moduleNode] : modules)
 				for (const auto& [key, node] : moduleNode.get_child("Options"))
 				{
@@ -79,6 +80,71 @@ public:
 
 		auto envelope_tree = utility::soap::getEnvelopeTree(ns_);
 		envelope_tree.add_child("s:Body.tan:GetAnalyticsModuleOptionsResponse", options);
+
+		pt::ptree root_tree;
+		root_tree.put_child("s:Envelope", envelope_tree);
+
+		std::ostringstream os;
+		pt::write_xml(os, root_tree);
+
+		utility::http::fillResponseWithHeaders(*response, os.str());
+	}
+};
+
+struct GetAnalyticsModulesHandler : public OnvifRequestBase
+{
+private:
+	const utility::media::MediaProfilesManager& m_profilesMgr;
+
+public:
+	GetAnalyticsModulesHandler(const std::map<std::string, std::string>& xs, const std::shared_ptr<pt::ptree>& configs,
+														 const utility::media::MediaProfilesManager& mgr)
+			: OnvifRequestBase(GetAnalyticsModules, auth::SECURITY_LEVELS::READ_MEDIA, xs, configs), m_profilesMgr(mgr)
+	{
+	}
+
+	void operator()(std::shared_ptr<HttpServer::Response> response, std::shared_ptr<HttpServer::Request> request) override
+	{
+		auto fillModules = [](const pt::ptree& modules, pt::ptree& out) {
+			for (const auto& [key, node] : modules)
+			{
+				pt::ptree moduleNode;
+				moduleNode.add("<xmlattr>.Name", node.get<std::string>("Name"));
+				moduleNode.add("<xmlattr>.Type", node.get<std::string>("Type"));
+
+				for (const auto& [paramKey, paramsNode] : node.get_child("Parameters"))
+				{
+					for (const auto& [itemName, itemValue] : paramsNode)
+					{
+						// TODO: read depending on value type
+						pt::ptree itemNode;
+						itemNode.add("<xmlattr>.Name", itemName);
+						itemNode.add("<xmlattr>.Value", itemValue.get_value<int>());
+						moduleNode.add_child("tt:Parameters.tt:SimpleItem", itemNode);
+					}
+				}
+
+				out.add_child("tan:AnalyticsModule", moduleNode);
+			}
+		};
+
+		std::string analytConfigsToken;
+		{
+			auto request_str = request->content.string();
+			std::istringstream is(request_str);
+			pt::ptree xml_tree;
+			pt::xml_parser::read_xml(is, xml_tree);
+			analytConfigsToken = exns::find_hierarchy("Envelope.Body.GetAnalyticsModules.ConfigurationToken", xml_tree);
+		}
+
+		utility::AnalyticsModulesReaderByConfigToken reader{analytConfigsToken,
+																												m_profilesMgr.ReaderWriter()->ConfigsTree()};
+
+		pt::ptree modules;
+		fillModules(reader.Modules(), modules);
+
+		auto envelope_tree = utility::soap::getEnvelopeTree(ns_);
+		envelope_tree.add_child("s:Body.tan:GetAnalyticsModulesResponse", modules);
 
 		pt::ptree root_tree;
 		root_tree.put_child("s:Envelope", envelope_tree);
@@ -220,6 +286,8 @@ AnalyticsService::AnalyticsService(const std::string& service_uri, const std::st
 {
 	requestHandlers_.push_back(std::make_shared<analytics::GetAnalyticsModuleOptionsHandler>(
 			xml_namespaces_, configs_ptree_, *srv->DeviceService()->Configs()));
+	requestHandlers_.push_back(std::make_shared<analytics::GetAnalyticsModulesHandler>(xml_namespaces_, configs_ptree_,
+																																										 *srv->MediaProfilesManager()));
 	requestHandlers_.push_back(std::make_shared<analytics::GetServiceCapabilitiesHandler>(
 			xml_namespaces_, configs_ptree_, *srv->DeviceService()->Configs()));
 	requestHandlers_.push_back(
