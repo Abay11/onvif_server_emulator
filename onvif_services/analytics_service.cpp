@@ -19,6 +19,7 @@
 namespace pt = boost::property_tree;
 
 // a list of implemented methods
+const std::string CreateAnalyticsModules = "CreateAnalyticsModules";
 const std::string GetAnalyticsModuleOptions = "GetAnalyticsModuleOptions";
 const std::string GetAnalyticsModules = "GetAnalyticsModules";
 const std::string GetServiceCapabilities = "GetServiceCapabilities";
@@ -29,6 +30,47 @@ namespace osrv
 
 namespace analytics
 {
+
+struct CreateAnalyticsModulesHandler : public OnvifRequestBase
+{
+private:
+	const utility::media::MediaProfilesManager& m_profilesMgr;
+
+public:
+	CreateAnalyticsModulesHandler(const std::map<std::string, std::string>& xs, const std::shared_ptr<pt::ptree>& configs,
+																const utility::media::MediaProfilesManager& mgr)
+			: OnvifRequestBase(CreateAnalyticsModules, auth::SECURITY_LEVELS::ACTUATE, xs, configs), m_profilesMgr(mgr)
+	{
+	}
+
+	void operator()(std::shared_ptr<HttpServer::Response> response, std::shared_ptr<HttpServer::Request> request) override
+	{
+		auto request_str = request->content.string();
+		std::istringstream is(request_str);
+		pt::ptree xml_tree;
+		pt::xml_parser::read_xml(is, xml_tree);
+		const auto& configToken = exns::find_hierarchy("Envelope.Body.CreateAnalyticsModules.ConfigurationToken", xml_tree);
+		const auto& analyticsModule =
+				exns::find_hierarchy_elements("Envelope.Body.CreateAnalyticsModules.AnalyticsModule", xml_tree);
+
+		// utility::AnalyticsModulesReaderByConfigToken reader{analytConfigsToken,
+		//																										m_profilesMgr.ReaderWriter()->ConfigsTree()};
+
+		// pt::ptree modules;
+		// fillModules(reader.Modules(), modules);
+
+		auto envelope_tree = utility::soap::getEnvelopeTree(ns_);
+		envelope_tree.add("s:Body.tan:CreateAnalyticsModulesResponse", "");
+
+		pt::ptree root_tree;
+		root_tree.put_child("s:Envelope", envelope_tree);
+
+		std::ostringstream os;
+		pt::write_xml(os, root_tree);
+
+		utility::http::fillResponseWithHeaders(*response, os.str());
+	}
+};
 
 struct GetAnalyticsModuleOptionsHandler : public OnvifRequestBase
 {
@@ -284,6 +326,8 @@ AnalyticsService::AnalyticsService(const std::string& service_uri, const std::st
 																	 std::shared_ptr<IOnvifServer> srv)
 		: IOnvifService(service_uri, service_name, srv)
 {
+	requestHandlers_.push_back(std::make_shared<analytics::CreateAnalyticsModulesHandler>(xml_namespaces_, configs_ptree_,
+																																												*srv->MediaProfilesManager()));
 	requestHandlers_.push_back(std::make_shared<analytics::GetAnalyticsModuleOptionsHandler>(
 			xml_namespaces_, configs_ptree_, *srv->DeviceService()->Configs()));
 	requestHandlers_.push_back(std::make_shared<analytics::GetAnalyticsModulesHandler>(xml_namespaces_, configs_ptree_,
