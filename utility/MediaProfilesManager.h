@@ -112,6 +112,33 @@ public:
 	}
 };
 
+class name_already_existent : public std::exception
+{
+public:
+	const char* what() const override
+	{
+		return "The same analytics module name exists already in the configuration.";
+	}
+};
+
+class too_many_modules : public std::exception
+{
+public:
+	const char* what() const override
+	{
+		return "There are not enough resources in the device to add the analytics modules to the configuration.";
+	}
+};
+
+class configuration_conflict : public std::exception
+{
+public:
+	const char* what() const override
+	{
+		return "The device cannot create the analytics modules without creating a conflicting configuration.";
+	}
+};
+
 } // namespace osrv
 
 namespace utility::media
