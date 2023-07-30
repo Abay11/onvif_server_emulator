@@ -20,4 +20,15 @@ private:
 	std::string_view m_configToken;
 	const pt::ptree& m_cfgs;
 };
+
+class AnalyticsModulesReaderByName
+{
+public:
+	AnalyticsModulesReaderByName(std::string_view name, const pt::ptree& configs);
+	const pt::ptree& Module() const;
+
+private:
+	std::string_view m_name;
+	const pt::ptree& m_cfgs;
+};
 } // namespace utility

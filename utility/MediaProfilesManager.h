@@ -103,6 +103,15 @@ public:
 	}
 };
 
+class invalid_module : public std::exception
+{
+public:
+	const char* what() const override
+	{
+		return "The suggested module configuration is not valid on the device.";
+	}
+};
+
 } // namespace osrv
 
 namespace utility::media
