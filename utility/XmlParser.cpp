@@ -6,20 +6,20 @@
 #include <boost/algorithm/string.hpp>
 #include <boost/property_tree/xml_parser.hpp>
 
+namespace exns
+{
 // return XML Element without NS
 // Example: if passed value equal "ns:element", returned value is "element"
 // Example: if passed value equal "element", returned value also is "element"
-std::string get_element_without_ns(const std::string& el)
+std::string get_element_without_ns(std::string_view el)
 {
 	size_t start_pos = el.find(':');
 	if (start_pos != std::string::npos)
-		return el.substr(start_pos + 1);
+		return std::string(el.substr(start_pos + 1));
 
-	return el;
+	return std::string(el);
 }
 
-namespace exns
-{
 pt::ptree::const_assoc_iterator find(const pt::ptree::key_type& key, const pt::ptree& node)
 {
 	for (auto assoc_it = node.begin(); assoc_it != node.end(); ++assoc_it)
