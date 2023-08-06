@@ -45,7 +45,8 @@ BOOST_AUTO_TEST_CASE(AnalyticsModuleInstanceCountTest0)
 	ConfigsReaderWriter readerWriter{"../../server_configs/media_profiles.config"};
 	readerWriter.Read();
 
-	BOOST_CHECK_EQUAL(utility::AnalyticsModuleInstanceCount(readerWriter.ConfigsTree(), "tt:MotionRegionDetector").count(), 1);
+	BOOST_CHECK_EQUAL(
+			utility::AnalyticsModuleInstanceCount(readerWriter.ConfigsTree(), "tt:MotionRegionDetector").count(), 1);
 }
 
 BOOST_AUTO_TEST_CASE(AnalyticsModuleInstanceCountTest1)
@@ -54,7 +55,8 @@ BOOST_AUTO_TEST_CASE(AnalyticsModuleInstanceCountTest1)
 	ConfigsReaderWriter readerWriter{"../../server_configs/media_profiles.config"};
 	readerWriter.Read();
 
-	BOOST_CHECK_EQUAL(utility::AnalyticsModuleInstanceCount(readerWriter.ConfigsTree(), "InvalidDetectorType").count(), 0);
+	BOOST_CHECK_EQUAL(utility::AnalyticsModuleInstanceCount(readerWriter.ConfigsTree(), "InvalidDetectorType").count(),
+										0);
 }
 
 BOOST_AUTO_TEST_CASE(CreateAnalyticsModuleTest0)
@@ -69,7 +71,7 @@ BOOST_AUTO_TEST_CASE(CreateAnalyticsModuleTest0)
 	try
 	{
 		BOOST_CHECK_THROW(utility::AnalyticsModuleCreator("InvalidAnalyticsConfigToken", readerWriter.ConfigsTree(),
-																										 analyticsConfigsReader.ConfigsTree())
+																											analyticsConfigsReader.ConfigsTree())
 													.create("", "", {}),
 											osrv::no_config);
 	}
@@ -96,7 +98,7 @@ BOOST_AUTO_TEST_CASE(CreateAnalyticsModuleTest1)
 	try
 	{
 		BOOST_CHECK_THROW(utility::AnalyticsModuleCreator("AnalyticsConfig_0", readerWriter.ConfigsTree(),
-																										 analyticsConfigsReader.ConfigsTree())
+																											analyticsConfigsReader.ConfigsTree())
 													.create("MyModuleName", "tt:NotExistingDetectorType", {}),
 											osrv::invalid_module);
 	}
@@ -109,4 +111,34 @@ BOOST_AUTO_TEST_CASE(CreateAnalyticsModuleTest1)
 
 	readerWriter.Reset();
 	analyticsConfigsReader.Reset();
+}
+
+BOOST_AUTO_TEST_CASE(CreateAnalyticsModuleTest2)
+{
+	using namespace utility::media;
+	ConfigsReaderWriter profilesReaderWriter{"../../server_configs/media_profiles.config"};
+	profilesReaderWriter.Read();
+
+	ConfigsReaderWriter analyticsConfigsReader{"../../server_configs/analytics.config"};
+	analyticsConfigsReader.Read();
+
+	const auto* analytConfig = "AnalyticsConfig_0";
+	const auto* moduleName = "CreateAnalyticsModuleTest2_moduleName";
+	const auto* moduleType = "tt:MotionRegionDetector";
+
+	const auto& analyticsConfig =
+			utility::AnalyticsConfigurationReaderByToken(analytConfig, profilesReaderWriter.ConfigsTree()).Config();
+	const auto& analyticsModules = analyticsConfig.get_child("analyticsModules");
+	const auto sizeBefore = analyticsModules.size();
+
+	utility::AnalyticsModuleCreator(analytConfig, profilesReaderWriter.ConfigsTree(),
+																	analyticsConfigsReader.ConfigsTree())
+			.create(moduleName, moduleType, {});
+	const auto& res =
+			utility::AnalyticsModuleRelatedAnalytConfig(analytConfig, moduleName, profilesReaderWriter.ConfigsTree())
+					.Module();
+
+	BOOST_CHECK_EQUAL(analyticsModules.size(), sizeBefore + 1);
+	BOOST_CHECK_EQUAL(res.get<std::string>("Name"), moduleName);
+	BOOST_CHECK_EQUAL(res.get<std::string>("Type"), moduleType);
 }
