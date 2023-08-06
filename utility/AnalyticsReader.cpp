@@ -11,20 +11,25 @@ namespace utility
 {
 
 AnalyticsConfigurationReaderByToken::AnalyticsConfigurationReaderByToken(std::string_view configToken,
-																																				 const pt::ptree& profilesConfigs)
+																																				 pt::ptree& profilesConfigs)
 		: m_configToken(configToken), m_profilesCfgs(profilesConfigs)
 {
 }
 
-const pt::ptree& AnalyticsConfigurationReaderByToken::Config() const
+pt::ptree& AnalyticsConfigurationReaderByToken::Config()
 {
-	const auto& analyticsNode = m_profilesCfgs.get_child("Analytics");
+	auto& analyticsNode = m_profilesCfgs.get_child("Analytics");
 	auto it = std::ranges::find_if(
 			analyticsNode, [this](const auto& pt) { return pt.second.get<std::string>("token") == m_configToken; });
 	if (it == analyticsNode.end())
 		throw osrv::no_config{};
 
 	return it->second;
+}
+
+const pt::ptree& AnalyticsConfigurationReaderByToken::Config() const
+{
+	return Config();
 }
 
 AnalyticsModulesReaderByConfigToken::AnalyticsModulesReaderByConfigToken(std::string_view configToken,
@@ -92,21 +97,15 @@ AnalyticsModuleCreator::AnalyticsModuleCreator(std::string_view configToken, pt:
 {
 }
 
-void AnalyticsModuleCreator::create(std::string_view name, std::string_view moduleType,
-																		std::vector<std::pair<std::string_view, int>>)
+void AnalyticsModuleCreator::create(std::string_view moduleName, std::string_view moduleType,
+																		std::vector<std::pair<std::string_view, int>> /*TODO: use this params*/)
 {
-	const auto& analytics = m_profileCfgs.get_child("Analytics");
-	const auto cfgIt = std::ranges::find_if(
-			analytics, [token = m_configToken](const auto& tree) { return tree.second.get<std::string>("token") == token; });
-
-	if (cfgIt == analytics.end())
-		throw osrv::no_config{};
-
+	auto& analyticsConfigNode = utility::AnalyticsConfigurationReaderByToken(m_configToken, m_profileCfgs).Config();
 	const auto& analyticsModuleIt = utility::AnalyticsModulesReaderByName(moduleType, m_analyticsCfgs).Module();
 
 	try
 	{
-		utility::AnalyticsModulesReaderByName(name, m_analyticsCfgs).Module();
+		utility::AnalyticsModulesReaderByName(moduleName, m_analyticsCfgs).Module();
 		// with line above we check that there is no module with same name yet
 		// and if an exception was not thrown we need ot throw an error
 		throw osrv::name_already_existent{};
@@ -121,7 +120,6 @@ void AnalyticsModuleCreator::create(std::string_view name, std::string_view modu
 		throw osrv::too_many_modules{};
 	}
 
-	const auto& analyticsConfigNode = utility::AnalyticsConfigurationReaderByToken(m_configToken, m_profileCfgs).Config();
 	if (!std::ranges::any_of(analyticsConfigNode.get_child("compatibleModuleAnalytics"),
 													 [mt = exns::get_element_without_ns(moduleType)](const auto& t) {
 														 return exns::get_element_without_ns(t.second.get_value<std::string>()) == mt;
@@ -129,8 +127,32 @@ void AnalyticsModuleCreator::create(std::string_view name, std::string_view modu
 	{
 		throw osrv::configuration_conflict{};
 	}
-	//  m_profileCfgs.
-	//  if ()
+
+	pt::ptree newModule;
+	newModule.add("Name", moduleName);
+	newModule.add("Type", moduleType);
+
+	auto& analytics = analyticsConfigNode.get_child("analyticsModules");
+	analytics.push_back(std::make_pair(std::string{}, newModule));
+}
+
+AnalyticsModuleRelatedAnalytConfig::AnalyticsModuleRelatedAnalytConfig(std::string_view analytConfig,
+																																			 std::string_view moduleName, pt::ptree& configs)
+		: m_configToken(analytConfig), m_name(moduleName), m_cfgs(configs)
+{
+}
+
+const pt::ptree& AnalyticsModuleRelatedAnalytConfig::Module() const
+{
+	const auto& analytConfig = AnalyticsConfigurationReaderByToken(m_configToken, m_cfgs).Config();
+	const auto& modules = analytConfig.get_child("analyticsModules");
+
+	const auto it =
+			std::ranges::find_if(modules, [this](const auto& pt) { return pt.second.get<std::string>("Name") == m_name; });
+	if (it == modules.end())
+		throw osrv::invalid_module{};
+
+	return it->second;
 }
 
 } // namespace utility

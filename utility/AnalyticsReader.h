@@ -13,17 +13,18 @@ namespace utility
 class AnalyticsConfigurationReaderByToken
 {
 	std::string_view m_configToken;
-	const pt::ptree& m_profilesCfgs;
+	pt::ptree& m_profilesCfgs;
 
 public:
-	AnalyticsConfigurationReaderByToken(std::string_view configToken, const pt::ptree& profilesConfigs);
+	AnalyticsConfigurationReaderByToken(std::string_view configToken, pt::ptree& profilesConfigs);
+	pt::ptree& Config();
 	const pt::ptree& Config() const;
 };
 
 class AnalyticsModulesReaderByConfigToken
 {
 public:
-	AnalyticsModulesReaderByConfigToken(std::string_view configToken, const pt::ptree& configs);
+	AnalyticsModulesReaderByConfigToken(std::string_view configToken, const pt::ptree& profilesConfigs);
 	const pt::ptree& Modules() const;
 
 private:
@@ -40,6 +41,17 @@ public:
 private:
 	std::string_view m_name;
 	const pt::ptree& m_cfgs;
+};
+
+class AnalyticsModuleRelatedAnalytConfig
+{
+	std::string_view m_configToken;
+	std::string_view m_name;
+	pt::ptree& m_cfgs;
+
+public:
+	AnalyticsModuleRelatedAnalytConfig(std::string_view analytConfig, std::string_view moduleName, pt::ptree& configs);
+	const pt::ptree& Module() const;
 };
 
 class AnalyticsModuleInstanceCount
