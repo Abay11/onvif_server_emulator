@@ -56,11 +56,11 @@ void fillModules(const boost::property_tree::ptree& modules, boost::property_tre
 struct CreateAnalyticsModulesHandler : public OnvifRequestBase
 {
 private:
-	const utility::media::MediaProfilesManager& m_profilesMgr;
+	utility::media::MediaProfilesManager& m_profilesMgr;
 
 public:
 	CreateAnalyticsModulesHandler(const std::map<std::string, std::string>& xs, const std::shared_ptr<pt::ptree>& configs,
-																const utility::media::MediaProfilesManager& mgr)
+																utility::media::MediaProfilesManager& mgr)
 			: OnvifRequestBase(CreateAnalyticsModules, auth::SECURITY_LEVELS::ACTUATE, xs, configs), m_profilesMgr(mgr)
 	{
 	}
@@ -75,11 +75,16 @@ public:
 		const auto& analyticsModule =
 				exns::find_hierarchy_elements("Envelope.Body.CreateAnalyticsModules.AnalyticsModule", xml_tree);
 
-		// utility::AnalyticsModulesReaderByConfigToken reader{analytConfigsToken,
-		//																										m_profilesMgr.ReaderWriter()->ConfigsTree()};
+		utility::AnalyticsModuleCreator moduleCreator{configToken, m_profilesMgr.ReaderWriter()->ConfigsTree(),
+																									*service_configs_};
+		for (const auto& moduleNode : analyticsModule)
+		{
+			const auto& name = moduleNode->second.get<std::string>("<xmlattr>.Name");
+			const auto& type = moduleNode->second.get<std::string>("<xmlattr>.Type");
+			moduleCreator.create(name, type, {});
+		}
 
-		// pt::ptree modules;
-		// fillModules(reader.Modules(), modules);
+		m_profilesMgr.ReaderWriter()->Save();
 
 		auto envelope_tree = utility::soap::getEnvelopeTree(ns_);
 		envelope_tree.add("s:Body.tan:CreateAnalyticsModulesResponse", "");
