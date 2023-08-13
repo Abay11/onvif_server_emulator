@@ -76,6 +76,15 @@ public:
 							const std::vector<std::pair<std::string_view, int>>& params); // TODO: allow to pass diff param types
 };
 
+class AnalyticsModuleDeleter
+{
+	pt::ptree& m_profileCfgs;
+
+public:
+	AnalyticsModuleDeleter(pt::ptree& profileConfigs);
+	void doDelete(std::string_view configToken, std::string_view moduleName);
+};
+
 class AnalyticsModuleSettingsApplier
 {
 	pt::ptree& m_moduleToApply;

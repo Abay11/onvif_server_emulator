@@ -128,7 +128,7 @@ void AnalyticsModuleCreator::create(std::string_view moduleName, std::string_vie
 		throw osrv::configuration_conflict{};
 	}
 
-	const auto& moduleConfig =  utility::AnalyticsModulesReaderByName(moduleType, m_analyticsCfgs).Module();
+	const auto& moduleConfig = utility::AnalyticsModulesReaderByName(moduleType, m_analyticsCfgs).Module();
 
 	pt::ptree newModule;
 	newModule.add("Name", moduleName);
@@ -142,6 +142,23 @@ void AnalyticsModuleCreator::create(std::string_view moduleName, std::string_vie
 
 	auto& analytics = analyticsConfigNode.get_child("analyticsModules");
 	analytics.push_back(std::make_pair(std::string{}, newModule));
+}
+
+AnalyticsModuleDeleter::AnalyticsModuleDeleter(pt::ptree& profileConfigs) : m_profileCfgs(profileConfigs)
+{
+}
+
+void AnalyticsModuleDeleter::doDelete(std::string_view configToken, std::string_view moduleName)
+{
+	auto& analytConfig = utility::AnalyticsConfigurationReaderByToken(configToken, m_profileCfgs).Config();
+	auto& modules = analytConfig.get_child("analyticsModules");
+	auto it = std::ranges::find_if(
+			modules, [&moduleName](const auto& pt) { return pt.second.get<std::string>("Name") == moduleName; });
+
+	if (it == modules.end())
+		throw osrv::invalid_module{};
+
+	modules.erase(it);
 }
 
 AnalyticsModuleRelatedAnalytConfig::AnalyticsModuleRelatedAnalytConfig(std::string_view analytConfig,
