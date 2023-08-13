@@ -1,5 +1,6 @@
 #include "media2_service.h"
 #include "media_service.h" // to use some util functions
+#include "analytics_service.h" // to use some util functions
 
 #include "../onvif/OnvifRequest.h"
 
@@ -11,6 +12,7 @@
 #include "../utility/SoapHelper.h"
 #include "../utility/VideoSourceReader.h"
 #include "../utility/XmlParser.h"
+#include "../utility/AnalyticsReader.h"
 
 #include "../Simple-Web-Server/server_http.hpp"
 
@@ -57,7 +59,12 @@ auto fillAnalyticsConfiguration = [](const pt::ptree& jsonConfigNode, pt::ptree&
 	xmlConfigOut.add("tt:Name", jsonConfigNode.get<std::string>("Name"));
 	xmlConfigOut.add("tt:UseCount", profilesMgr.GetUseCount(
 																			cfgToken, osrv::CONFIGURATION_ENUMERATION[osrv::CONFIGURATION_TYPE::ANALYTICS]));
-	xmlConfigOut.add("tt:AnalyticsEngineConfiguration", "");
+
+	utility::AnalyticsModulesReaderByConfigToken reader{cfgToken, profilesMgr.ReaderWriter()->ConfigsTree()};
+	pt::ptree analyticsEngine;
+	analytics::fillModules(reader.Modules(), analyticsEngine, "tt");
+
+	xmlConfigOut.add_child("tt:AnalyticsEngineConfiguration", analyticsEngine);
 	xmlConfigOut.add("tt:RuleEngineConfiguration", "");
 };
 

@@ -20,6 +20,7 @@ namespace pt = boost::property_tree;
 
 // a list of implemented methods
 const std::string CreateAnalyticsModules = "CreateAnalyticsModules";
+const std::string DeleteAnalyticsModules = "DeleteAnalyticsModules";
 const std::string GetAnalyticsModuleOptions = "GetAnalyticsModuleOptions";
 const std::string GetAnalyticsModules = "GetAnalyticsModules";
 const std::string GetServiceCapabilities = "GetServiceCapabilities";
@@ -30,6 +31,27 @@ namespace osrv
 
 namespace analytics
 {
+
+void fillModules(const boost::property_tree::ptree& modules, boost::property_tree::ptree& out, std::string_view xns)
+{
+	for (const auto& [key, node] : modules)
+	{
+		pt::ptree moduleNode;
+		moduleNode.add("<xmlattr>.Name", node.get<std::string>("Name"));
+		moduleNode.add("<xmlattr>.Type", node.get<std::string>("Type"));
+
+		for (const auto& [paramKey, paramNode] : node.get_child("Parameters"))
+		{
+			// TODO: read depending on value type
+			pt::ptree itemNode;
+			itemNode.add("<xmlattr>.Name", paramKey);
+			itemNode.add("<xmlattr>.Value", paramNode.get_value<int>());
+			moduleNode.add_child("tt:Parameters.tt:SimpleItem", itemNode);
+		}
+
+		out.add_child(std::string{xns} + ":AnalyticsModule", moduleNode);
+	}
+};
 
 struct CreateAnalyticsModulesHandler : public OnvifRequestBase
 {
@@ -147,29 +169,6 @@ public:
 
 	void operator()(std::shared_ptr<HttpServer::Response> response, std::shared_ptr<HttpServer::Request> request) override
 	{
-		auto fillModules = [](const pt::ptree& modules, pt::ptree& out) {
-			for (const auto& [key, node] : modules)
-			{
-				pt::ptree moduleNode;
-				moduleNode.add("<xmlattr>.Name", node.get<std::string>("Name"));
-				moduleNode.add("<xmlattr>.Type", node.get<std::string>("Type"));
-
-				for (const auto& [paramKey, paramsNode] : node.get_child("Parameters"))
-				{
-					for (const auto& [itemName, itemValue] : paramsNode)
-					{
-						// TODO: read depending on value type
-						pt::ptree itemNode;
-						itemNode.add("<xmlattr>.Name", itemName);
-						itemNode.add("<xmlattr>.Value", itemValue.get_value<int>());
-						moduleNode.add_child("tt:Parameters.tt:SimpleItem", itemNode);
-					}
-				}
-
-				out.add_child("tan:AnalyticsModule", moduleNode);
-			}
-		};
-
 		std::string analytConfigsToken;
 		{
 			auto request_str = request->content.string();
@@ -183,7 +182,7 @@ public:
 																												m_profilesMgr.ReaderWriter()->ConfigsTree()};
 
 		pt::ptree modules;
-		fillModules(reader.Modules(), modules);
+		fillModules(reader.Modules(), modules, "tan");
 
 		auto envelope_tree = utility::soap::getEnvelopeTree(ns_);
 		envelope_tree.add_child("s:Body.tan:GetAnalyticsModulesResponse", modules);
