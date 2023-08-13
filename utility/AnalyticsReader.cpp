@@ -158,6 +158,8 @@ void AnalyticsModuleDeleter::doDelete(std::string_view configToken, std::string_
 	if (it == modules.end())
 		throw osrv::invalid_module{};
 
+	// todo: check if a module is fixed or not
+
 	modules.erase(it);
 }
 

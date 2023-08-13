@@ -99,6 +99,45 @@ public:
 	}
 };
 
+struct DeleteAnalyticsModulesHandler : public OnvifRequestBase
+{
+private:
+	utility::media::MediaProfilesManager& m_profilesMgr;
+
+public:
+	DeleteAnalyticsModulesHandler(const std::map<std::string, std::string>& xs, const std::shared_ptr<pt::ptree>& configs,
+																utility::media::MediaProfilesManager& mgr)
+			: OnvifRequestBase(DeleteAnalyticsModules, auth::SECURITY_LEVELS::ACTUATE, xs, configs), m_profilesMgr(mgr)
+	{
+	}
+
+	void operator()(std::shared_ptr<HttpServer::Response> response, std::shared_ptr<HttpServer::Request> request) override
+	{
+		std::string analytConfig;
+		std::string moduleName;
+		{
+			auto request_str = request->content.string();
+			std::istringstream is(request_str);
+			pt::ptree xml_tree;
+			pt::xml_parser::read_xml(is, xml_tree);
+			analytConfig = exns::find_hierarchy("Envelope.Body.DeleteAnalyticsModules.ConfigurationToken", xml_tree);
+			moduleName = exns::find_hierarchy("Envelope.Body.DeleteAnalyticsModules.AnalyticsModuleName", xml_tree);
+		}
+
+		 utility::AnalyticsModuleDeleter{m_profilesMgr.ReaderWriter()->ConfigsTree()}.doDelete(analytConfig, moduleName);
+
+		 m_profilesMgr.ReaderWriter()->Save();
+
+		 auto envelope_tree = utility::soap::getEnvelopeTree(ns_);
+		 envelope_tree.add("s:Body.tan:DeleteAnalyticsModulesResponse", "");
+		 pt::ptree root_tree;
+		 root_tree.put_child("s:Envelope", envelope_tree);
+		 std::ostringstream os;
+		 pt::write_xml(os, root_tree);
+		 utility::http::fillResponseWithHeaders(*response, os.str());
+	}
+};
+
 struct GetAnalyticsModuleOptionsHandler : public OnvifRequestBase
 {
 private:
@@ -331,6 +370,8 @@ AnalyticsService::AnalyticsService(const std::string& service_uri, const std::st
 		: IOnvifService(service_uri, service_name, srv)
 {
 	requestHandlers_.push_back(std::make_shared<analytics::CreateAnalyticsModulesHandler>(xml_namespaces_, configs_ptree_,
+																																												*srv->MediaProfilesManager()));
+	requestHandlers_.push_back(std::make_shared<analytics::DeleteAnalyticsModulesHandler>(xml_namespaces_, configs_ptree_,
 																																												*srv->MediaProfilesManager()));
 	requestHandlers_.push_back(std::make_shared<analytics::GetAnalyticsModuleOptionsHandler>(
 			xml_namespaces_, configs_ptree_, *srv->DeviceService()->Configs()));
