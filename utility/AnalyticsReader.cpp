@@ -98,7 +98,7 @@ AnalyticsModuleCreator::AnalyticsModuleCreator(std::string_view configToken, pt:
 }
 
 void AnalyticsModuleCreator::create(std::string_view moduleName, std::string_view moduleType,
-																		std::vector<std::pair<std::string_view, int>> /*TODO: use this params*/)
+																		const std::vector<std::pair<std::string_view, int>>& params)
 {
 	auto& analyticsConfigNode = utility::AnalyticsConfigurationReaderByToken(m_configToken, m_profileCfgs).Config();
 	const auto& analyticsModuleIt = utility::AnalyticsModulesReaderByName(moduleType, m_analyticsCfgs).Module();
@@ -128,9 +128,17 @@ void AnalyticsModuleCreator::create(std::string_view moduleName, std::string_vie
 		throw osrv::configuration_conflict{};
 	}
 
+	const auto& moduleConfig =  utility::AnalyticsModulesReaderByName(moduleType, m_analyticsCfgs).Module();
+
 	pt::ptree newModule;
 	newModule.add("Name", moduleName);
-	newModule.add("Type", moduleType);
+	newModule.add("Type", moduleConfig.get<std::string>("Name"));
+
+	utility::AnalyticsModuleSettingsApplier applier{newModule, moduleType, m_analyticsCfgs};
+	for (auto&& [name, value] : params)
+	{
+		applier.Apply(name, value);
+	}
 
 	auto& analytics = analyticsConfigNode.get_child("analyticsModules");
 	analytics.push_back(std::make_pair(std::string{}, newModule));
@@ -153,6 +161,43 @@ const pt::ptree& AnalyticsModuleRelatedAnalytConfig::Module() const
 		throw osrv::invalid_module{};
 
 	return it->second;
+}
+
+AnalyticsModuleSettingsApplier::AnalyticsModuleSettingsApplier(pt::ptree& moduleToApply, std::string_view type,
+																															 const pt::ptree& analytConfigs)
+		: m_moduleToApply(moduleToApply), m_type(type), m_analytConfigs(analytConfigs)
+{
+	InitDefaults();
+}
+
+void AnalyticsModuleSettingsApplier::InitDefaults()
+{
+	const auto& moduleInfo = AnalyticsModulesReaderByName(m_type, m_analytConfigs).Module();
+	const auto& options = moduleInfo.get_child("Options");
+	for (const auto& [_, node] : options)
+	{
+		m_moduleToApply.add("Parameters." + node.get<std::string>("Name"), node.get<std::string>("Default"));
+	}
+}
+
+void AnalyticsModuleSettingsApplier::Apply(std::string_view paramName, int value)
+{
+	auto& params = m_moduleToApply.get_child("Parameters");
+
+	auto it = std::ranges::find_if(params, [&paramName](const auto& t) { return t.first == paramName; });
+	if (it == params.end())
+		throw osrv::configuration_conflict{};
+
+	const auto& moduleInfo = AnalyticsModulesReaderByName(m_type, m_analytConfigs).Module();
+	const auto& options = moduleInfo.get_child("Options");
+
+	const auto optIt = std::ranges::find_if(
+			options, [&paramName](const auto& pt) { return pt.second.get<std::string>("Name") == paramName; });
+
+	if (value < optIt->second.get<int>("Min") || value > optIt->second.get<int>("Max"))
+		throw osrv::configuration_conflict{};
+
+	it->second.put_value(value);
 }
 
 } // namespace utility

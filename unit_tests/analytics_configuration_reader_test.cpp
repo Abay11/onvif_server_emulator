@@ -141,4 +141,58 @@ BOOST_AUTO_TEST_CASE(CreateAnalyticsModuleTest2)
 	BOOST_CHECK_EQUAL(analyticsModules.size(), sizeBefore + 1);
 	BOOST_CHECK_EQUAL(res.get<std::string>("Name"), moduleName);
 	BOOST_CHECK_EQUAL(res.get<std::string>("Type"), moduleType);
+
+	const auto& params = res.get_child("Parameters");
+	BOOST_CHECK_EQUAL(params.size(), 1);
+	BOOST_CHECK_EQUAL(params.get<int>("Sensitivity"), 50);
+}
+
+BOOST_AUTO_TEST_CASE(AnalyticsModuleSettingsApplierTest0)
+{
+	using namespace utility::media;
+
+	ConfigsReaderWriter analyticsConfigsReader{"../../server_configs/analytics.config"};
+	analyticsConfigsReader.Read();
+
+	pt::ptree testModule;
+
+	utility::AnalyticsModuleSettingsApplier sa(testModule, "tt:MotionRegionDetector",
+																						 analyticsConfigsReader.ConfigsTree());
+
+	BOOST_CHECK_EQUAL(testModule.size(), 1);
+	BOOST_CHECK_EQUAL(testModule.get<int>("Parameters.Sensitivity"), 50);
+}
+
+BOOST_AUTO_TEST_CASE(AnalyticsModuleSettingsApplierTest1)
+{
+	using namespace utility::media;
+
+	ConfigsReaderWriter analyticsConfigsReader{"../../server_configs/analytics.config"};
+	analyticsConfigsReader.Read();
+
+	pt::ptree testModule;
+
+	utility::AnalyticsModuleSettingsApplier sa(testModule, "tt:MotionRegionDetector",
+																						 analyticsConfigsReader.ConfigsTree());
+	sa.Apply("Sensitivity", 3);
+
+	BOOST_CHECK_EQUAL(testModule.size(), 1);
+	BOOST_CHECK_EQUAL(testModule.get<int>("Parameters.Sensitivity"), 3);
+}
+
+BOOST_AUTO_TEST_CASE(AnalyticsModuleSettingsApplierTest2)
+{
+	using namespace utility::media;
+
+	ConfigsReaderWriter analyticsConfigsReader{"../../server_configs/analytics.config"};
+	analyticsConfigsReader.Read();
+
+	pt::ptree testModule;
+
+	utility::AnalyticsModuleSettingsApplier sa(testModule, "tt:MotionRegionDetector",
+																						 analyticsConfigsReader.ConfigsTree());
+	BOOST_CHECK_THROW(sa.Apply("Sensitivity", 150), osrv::configuration_conflict);
+
+	const int defaultValue = 50;
+	BOOST_CHECK_EQUAL(testModule.get<int>("Parameters.Sensitivity"), defaultValue);
 }

@@ -72,7 +72,21 @@ class AnalyticsModuleCreator
 
 public:
 	AnalyticsModuleCreator(std::string_view configToken, pt::ptree& configs, const pt::ptree& analytConfigs);
-	void create(std::string_view name, std::string_view type, std::vector<std::pair<std::string_view, int>>);
+	void create(std::string_view name, std::string_view type,
+							const std::vector<std::pair<std::string_view, int>>& params); // TODO: allow to pass diff param types
+};
+
+class AnalyticsModuleSettingsApplier
+{
+	pt::ptree& m_moduleToApply;
+	std::string_view m_type;
+	const pt::ptree& m_analytConfigs;
+
+	void InitDefaults();
+
+public:
+	AnalyticsModuleSettingsApplier(pt::ptree& moduleToApply, std::string_view type, const pt::ptree& analytConfigs);
+	void Apply(std::string_view paramName, int value);
 };
 
 } // namespace utility
