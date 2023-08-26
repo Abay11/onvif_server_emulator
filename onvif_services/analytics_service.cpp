@@ -54,6 +54,50 @@ void fillModules(const boost::property_tree::ptree& modules, boost::property_tre
 	}
 };
 
+
+void fillConfigDescr(const pt::ptree& tree, pt::ptree& moduleDescr) {
+	moduleDescr.add("<xmlattr>.Name", tree.get<std::string>("Name"));
+	moduleDescr.add("<xmlattr>.fixed", tree.get<bool>("fixed"));
+	moduleDescr.add("<xmlattr>.maxInstances", tree.get<std::string>("maxInstances"));
+	for (const auto& [paramsKey, paramsNode] : tree.get_child("Parameters"))
+	{
+		const auto& itemType = paramsNode.get<std::string>("DescriptionType");
+		pt::ptree item;
+		item.add("<xmlattr>.Name", paramsNode.get<std::string>("Name"));
+		item.add("<xmlattr>.Type", paramsNode.get<std::string>("Type"));
+		moduleDescr.add_child("tt:Parameters.tt:" + itemType, item);
+	}
+
+	for (const auto& [messKey, messNode] : tree.get_child("Messages"))
+	{
+		pt::ptree message;
+		message.add("<xmlattr>.IsProperty", messNode.get<bool>("IsProperty"));
+		for (const auto& [sourceKey, sourceNode] : messNode.get_child("Source"))
+		{
+			pt::ptree item;
+			item.add("<xmlattr>.Name", sourceNode.get<std::string>("Name"));
+			item.add("<xmlattr>.Type", sourceNode.get<std::string>("Type"));
+			const auto& itemType = sourceNode.get<std::string>("DescriptionType");
+
+			message.add_child("tt:Source.tt:" + itemType, item);
+		}
+
+		for (const auto& [dataKey, dataNode] : messNode.get_child("Data"))
+		{
+			pt::ptree data;
+			data.add("<xmlattr>.Name", dataNode.get<std::string>("Name"));
+			data.add("<xmlattr>.Type", dataNode.get<std::string>("Type"));
+			const auto& itemType = dataNode.get<std::string>("DescriptionType");
+
+			message.add_child("tt:Data.tt:" + itemType, data);
+		}
+
+		message.add("tt:ParentTopic", messNode.get<std::string>("ParentTopic"));
+
+		moduleDescr.add_child("tt:Messages", message);
+	}
+};
+
 struct CreateAnalyticsModulesHandler : public OnvifRequestBase
 {
 private:
@@ -295,64 +339,24 @@ public:
 	void operator()(std::shared_ptr<HttpServer::Response> response, std::shared_ptr<HttpServer::Request> request) override
 	{
 		// TODO: configuration token in the request is ignored for now
-		auto fillAnalyticsModulesResponse = [](const pt::ptree& configIn, pt::ptree& out) {
-			out.add("tt:AnalyticsModuleContentSchemaLocation",
-							configIn.get<std::string>("AnalyticsModuleContentSchemaLocation"));
-			for (const auto& [key, tree] : configIn.get_child("modules"))
-			{
-				pt::ptree moduleDescr;
-				moduleDescr.add("<xmlattr>.Name", tree.get<std::string>("Name"));
-				moduleDescr.add("<xmlattr>.fixed", tree.get<bool>("fixed"));
-				moduleDescr.add("<xmlattr>.maxInstances", tree.get<std::string>("maxInstances"));
-				for (const auto& [paramsKey, paramsNode] : tree.get_child("Parameters"))
-				{
-					const auto& itemType = paramsNode.get<std::string>("DescriptionType");
-					pt::ptree item;
-					item.add("<xmlattr>.Name", paramsNode.get<std::string>("Name"));
-					item.add("<xmlattr>.Type", paramsNode.get<std::string>("Type"));
-					moduleDescr.add_child("tt:Parameters.tt:" + itemType, item);
-				}
+		const auto& supportedModulesJson = service_configs_->get_child("SupportedAnalyticsModules");
+		pt::ptree getSupportedAnalyticsModulesResponse;
+		for (const auto& [key, schema] : supportedModulesJson.get_child("AnalyticsModuleContentSchemaLocation"))
+		{
+			getSupportedAnalyticsModulesResponse.add("tan:SupportedAnalyticsModules.tt:AnalyticsModuleContentSchemaLocation",
+																						schema.get_value<std::string>());
+		}
 
-				for (const auto& [messKey, messNode] : tree.get_child("Messages"))
-				{
-					pt::ptree message;
-					message.add("<xmlattr>.IsProperty", messNode.get<bool>("IsProperty"));
-					for (const auto& [sourceKey, sourceNode] : messNode.get_child("Source"))
-					{
-						pt::ptree item;
-						item.add("<xmlattr>.Name", sourceNode.get<std::string>("Name"));
-						item.add("<xmlattr>.Type", sourceNode.get<std::string>("Type"));
-						const auto& itemType = sourceNode.get<std::string>("DescriptionType");
-
-						message.add_child("tt:Source.tt:" + itemType, item);
-					}
-
-					for (const auto& [dataKey, dataNode] : messNode.get_child("Data"))
-					{
-						pt::ptree data;
-						data.add("<xmlattr>.Name", dataNode.get<std::string>("Name"));
-						data.add("<xmlattr>.Type", dataNode.get<std::string>("Type"));
-						const auto& itemType = dataNode.get<std::string>("DescriptionType");
-
-						message.add_child("tt:Data.tt:" + itemType, data);
-					}
-
-					message.add("tt:ParentTopic", messNode.get<std::string>("ParentTopic"));
-
-					moduleDescr.add_child("tt:Messages", message);
-				}
-
-				out.add_child("tt:AnalyticsModuleDescription", moduleDescr);
-			}
-		};
-
-		const auto& modules = service_configs_->get_child("SupportedAnalyticsModules");
-		pt::ptree supportedAnalyticsModules;
-		fillAnalyticsModulesResponse(modules, supportedAnalyticsModules);
+		for (const auto& [moduleConfigKey, moduleConfigTree] : supportedModulesJson.get_child("modules"))
+		{
+			pt::ptree moduleDescrOut;
+			fillConfigDescr(moduleConfigTree, moduleDescrOut);
+			getSupportedAnalyticsModulesResponse.add_child("tan:SupportedAnalyticsModules.tt:AnalyticsModuleDescription",
+																										 moduleDescrOut);
+		}
 
 		auto envelope_tree = utility::soap::getEnvelopeTree(ns_);
-		envelope_tree.add_child("s:Body.tan:GetSupportedAnalyticsModulesResponse.tan:SupportedAnalyticsModules",
-														supportedAnalyticsModules);
+		envelope_tree.add_child("s:Body.tan:GetSupportedAnalyticsModulesResponse", getSupportedAnalyticsModulesResponse);
 
 		pt::ptree root_tree;
 		root_tree.put_child("s:Envelope", envelope_tree);
