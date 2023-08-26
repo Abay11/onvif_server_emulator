@@ -25,6 +25,7 @@ const std::string GetAnalyticsModuleOptions = "GetAnalyticsModuleOptions";
 const std::string GetAnalyticsModules = "GetAnalyticsModules";
 const std::string GetServiceCapabilities = "GetServiceCapabilities";
 const std::string GetSupportedAnalyticsModules = "GetSupportedAnalyticsModules";
+const std::string GetSupportedMetadata = "GetSupportedMetadata";
 
 namespace osrv
 {
@@ -124,17 +125,17 @@ public:
 			moduleName = exns::find_hierarchy("Envelope.Body.DeleteAnalyticsModules.AnalyticsModuleName", xml_tree);
 		}
 
-		 utility::AnalyticsModuleDeleter{m_profilesMgr.ReaderWriter()->ConfigsTree()}.doDelete(analytConfig, moduleName);
+		utility::AnalyticsModuleDeleter{m_profilesMgr.ReaderWriter()->ConfigsTree()}.doDelete(analytConfig, moduleName);
 
-		 m_profilesMgr.ReaderWriter()->Save();
+		m_profilesMgr.ReaderWriter()->Save();
 
-		 auto envelope_tree = utility::soap::getEnvelopeTree(ns_);
-		 envelope_tree.add("s:Body.tan:DeleteAnalyticsModulesResponse", "");
-		 pt::ptree root_tree;
-		 root_tree.put_child("s:Envelope", envelope_tree);
-		 std::ostringstream os;
-		 pt::write_xml(os, root_tree);
-		 utility::http::fillResponseWithHeaders(*response, os.str());
+		auto envelope_tree = utility::soap::getEnvelopeTree(ns_);
+		envelope_tree.add("s:Body.tan:DeleteAnalyticsModulesResponse", "");
+		pt::ptree root_tree;
+		root_tree.put_child("s:Envelope", envelope_tree);
+		std::ostringstream os;
+		pt::write_xml(os, root_tree);
+		utility::http::fillResponseWithHeaders(*response, os.str());
 	}
 };
 
@@ -363,6 +364,76 @@ public:
 	}
 };
 
+struct GetSupportedMetadataHandler : public OnvifRequestBase
+{
+public:
+	GetSupportedMetadataHandler(const std::map<std::string, std::string>& xs, const std::shared_ptr<pt::ptree>& configs)
+			: OnvifRequestBase(GetSupportedMetadata, auth::SECURITY_LEVELS::READ_MEDIA, xs, configs)
+	{
+	}
+
+	void operator()(std::shared_ptr<HttpServer::Response> response, std::shared_ptr<HttpServer::Request> request) override
+	{
+		auto request_str = request->content.string();
+		std::istringstream is(request_str);
+		
+		std::string moduleType;
+		{
+			auto request_str = request->content.string();
+			std::istringstream is(request_str);
+			pt::ptree xml_tree;
+			pt::xml_parser::read_xml(is, xml_tree);
+			moduleType = exns::find_hierarchy("Envelope.Body.GetSupportedMetadata.Type", xml_tree);
+		}
+
+		auto motionRegionSample = []()
+		{
+			pt::ptree object;
+			object.add("<xmlattr>.ObjectId", "1");
+			object.add("tt:Appearance.tt:VehicleInfo.tt:Type.<xmlattr>.Likelihood", "0.6");
+			object.add("tt:Appearance.tt:VehicleInfo.tt:Type", "Car");
+			object.add("tt:Appearance.tt:VehicleInfo.tt:Brand.<xmlattr>.Likelihood", "0.5");
+			object.add("tt:Appearance.tt:VehicleInfo.tt:Brand", "Tayota");
+			object.add("tt:Appearance.tt:VehicleInfo.tt:Model.<xmlattr>.Likelihood", "0.2");
+			object.add("tt:Appearance.tt:VehicleInfo.tt:Model", "Camry");
+
+			pt::ptree sampleFrame;
+			sampleFrame.add("<xmlattr>.UtcTime", utility::datetime::system_utc_datetime());
+			sampleFrame.add_child("tt:Object", object);
+
+			pt::ptree analyticsModule;
+			analyticsModule.add("<xmlattr>.Type", "tt:MotionRegionDetector");
+			analyticsModule.add_child("tan:SampleFrame", sampleFrame);
+
+			return analyticsModule;
+		};
+
+		pt::ptree supportedMetadata;
+		if (moduleType.empty())
+		{
+			supportedMetadata.add_child("tan:AnalyticsModule", motionRegionSample());
+		}
+		else
+		{
+			if (exns::get_element_without_ns(moduleType) == "MotionRegionDetector")
+			{
+				supportedMetadata.add_child("tan:AnalyticsModule", motionRegionSample());
+			}
+		}
+
+		auto envelope_tree = utility::soap::getEnvelopeTree(ns_);
+		envelope_tree.add_child("s:Body.tan:GetSupportedMetadataResponse", supportedMetadata);
+
+		pt::ptree root_tree;
+		root_tree.put_child("s:Envelope", envelope_tree);
+
+		std::ostringstream os;
+		pt::write_xml(os, root_tree);
+
+		utility::http::fillResponseWithHeaders(*response, os.str());
+	}
+};
+
 } // namespace analytics
 
 AnalyticsService::AnalyticsService(const std::string& service_uri, const std::string& service_name,
@@ -381,7 +452,7 @@ AnalyticsService::AnalyticsService(const std::string& service_uri, const std::st
 			xml_namespaces_, configs_ptree_, *srv->DeviceService()->Configs()));
 	requestHandlers_.push_back(
 			std::make_shared<analytics::GetSupportedAnalyticsModulesHandler>(xml_namespaces_, configs_ptree_));
-	;
+	requestHandlers_.push_back(std::make_shared<analytics::GetSupportedMetadataHandler>(xml_namespaces_, configs_ptree_));
 }
 
 } // namespace osrv
