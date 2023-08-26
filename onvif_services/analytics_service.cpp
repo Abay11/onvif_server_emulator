@@ -26,6 +26,7 @@ const std::string GetAnalyticsModules = "GetAnalyticsModules";
 const std::string GetServiceCapabilities = "GetServiceCapabilities";
 const std::string GetSupportedAnalyticsModules = "GetSupportedAnalyticsModules";
 const std::string GetSupportedMetadata = "GetSupportedMetadata";
+const std::string GetSupportedRules = "GetSupportedRules";
 
 namespace osrv
 {
@@ -438,6 +439,56 @@ public:
 	}
 };
 
+struct GetSupportedRulesHandler : public OnvifRequestBase
+{
+public:
+	GetSupportedRulesHandler(const std::map<std::string, std::string>& xs, const std::shared_ptr<pt::ptree>& configs)
+			: OnvifRequestBase(GetSupportedRules, auth::SECURITY_LEVELS::READ_MEDIA, xs, configs)
+	{
+	}
+
+	void operator()(std::shared_ptr<HttpServer::Response> response, std::shared_ptr<HttpServer::Request> request) override
+	{
+		auto request_str = request->content.string();
+		std::istringstream is(request_str);
+		
+		std::string analytConfigToken;
+		{
+			auto request_str = request->content.string();
+			std::istringstream is(request_str);
+			pt::ptree xml_tree;
+			pt::xml_parser::read_xml(is, xml_tree);
+			analytConfigToken = exns::find_hierarchy("Envelope.Body.GetSupportedRules.ConfigurationToken", xml_tree);
+		}
+
+		pt::ptree getSupportedRulesResponse;
+		const auto& supportedRulesJson = service_configs_->get_child("SupportedRules");
+
+		for (const auto& [key, schema] : supportedRulesJson.get_child("RuleContentSchemaLocation"))
+		{
+			getSupportedRulesResponse.add("tan:SupportedRules.tt:RuleContentSchemaLocation", schema.get_value<std::string>());
+		}
+		
+		for (const auto& [ruleConfigKey, ruleConfigTree] : supportedRulesJson.get_child("rules"))
+		{
+			pt::ptree ruleDescrOut;
+			fillConfigDescr(ruleConfigTree, ruleDescrOut);
+			getSupportedRulesResponse.add_child("tan:SupportedRules.tt:RuleDescription", ruleDescrOut);
+		}
+
+		auto envelope_tree = utility::soap::getEnvelopeTree(ns_);
+		envelope_tree.add_child("s:Body.tan:GetSupportedRulesResponse", getSupportedRulesResponse);
+
+		pt::ptree root_tree;
+		root_tree.put_child("s:Envelope", envelope_tree);
+
+		std::ostringstream os;
+		pt::write_xml(os, root_tree);
+
+		utility::http::fillResponseWithHeaders(*response, os.str());
+	}
+};
+
 } // namespace analytics
 
 AnalyticsService::AnalyticsService(const std::string& service_uri, const std::string& service_name,
@@ -457,6 +508,7 @@ AnalyticsService::AnalyticsService(const std::string& service_uri, const std::st
 	requestHandlers_.push_back(
 			std::make_shared<analytics::GetSupportedAnalyticsModulesHandler>(xml_namespaces_, configs_ptree_));
 	requestHandlers_.push_back(std::make_shared<analytics::GetSupportedMetadataHandler>(xml_namespaces_, configs_ptree_));
+	requestHandlers_.push_back(std::make_shared<analytics::GetSupportedRulesHandler>(xml_namespaces_, configs_ptree_));
 }
 
 } // namespace osrv
