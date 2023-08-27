@@ -139,6 +139,15 @@ public:
 	}
 };
 
+class rule_not_existent : public std::exception
+{
+public:
+	const char* what() const override
+	{
+		return "The rule option type does not exist.";
+	}
+};
+
 } // namespace osrv
 
 namespace utility::media
