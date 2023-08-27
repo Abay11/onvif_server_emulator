@@ -23,6 +23,7 @@ const std::string CreateAnalyticsModules = "CreateAnalyticsModules";
 const std::string DeleteAnalyticsModules = "DeleteAnalyticsModules";
 const std::string GetAnalyticsModuleOptions = "GetAnalyticsModuleOptions";
 const std::string GetAnalyticsModules = "GetAnalyticsModules";
+const std::string GetRuleOptions = "GetRuleOptions";
 const std::string GetServiceCapabilities = "GetServiceCapabilities";
 const std::string GetSupportedAnalyticsModules = "GetSupportedAnalyticsModules";
 const std::string GetSupportedMetadata = "GetSupportedMetadata";
@@ -55,8 +56,8 @@ void fillModules(const boost::property_tree::ptree& modules, boost::property_tre
 	}
 };
 
-
-void fillConfigDescr(const pt::ptree& tree, pt::ptree& moduleDescr) {
+void fillConfigDescr(const pt::ptree& tree, pt::ptree& moduleDescr)
+{
 	moduleDescr.add("<xmlattr>.Name", tree.get<std::string>("Name"));
 	moduleDescr.add("<xmlattr>.fixed", tree.get<bool>("fixed"));
 	moduleDescr.add("<xmlattr>.maxInstances", tree.get<std::string>("maxInstances"));
@@ -186,7 +187,6 @@ public:
 
 struct GetAnalyticsModuleOptionsHandler : public OnvifRequestBase
 {
-private:
 public:
 	GetAnalyticsModuleOptionsHandler(const std::map<std::string, std::string>& xs,
 																	 const std::shared_ptr<pt::ptree>& configs, const pt::ptree& device_service_configs)
@@ -287,6 +287,80 @@ public:
 	}
 };
 
+struct GetRuleOptionsHandler : public OnvifRequestBase
+{
+public:
+	GetRuleOptionsHandler(const std::map<std::string, std::string>& xs, const std::shared_ptr<pt::ptree>& configs)
+			: OnvifRequestBase(GetRuleOptions, auth::SECURITY_LEVELS::READ_MEDIA, xs, configs)
+	{
+	}
+
+	void operator()(std::shared_ptr<HttpServer::Response> response, std::shared_ptr<HttpServer::Request> request) override
+	{
+		auto fillRegionMotionRuleOptions = [](const pt::ptree& ruleConfigJson, pt::ptree& motionRegRuleOptOut) {
+			const auto& options = ruleConfigJson.get_child("Options").front().second;
+			motionRegRuleOptOut.add("<xmlattr>.Name", "MotionRegion");
+			motionRegRuleOptOut.add("<xmlattr>.Type", "axt:MotionRegionConfigOptions");
+			motionRegRuleOptOut.add("axt:MotionRegionConfigOptions.MaxRegions", options.get<int>("MaxRegions"));
+			motionRegRuleOptOut.add("axt:MotionRegionConfigOptions.DisarmSupport",
+															options.get<bool>("DisarmSupport"));
+			motionRegRuleOptOut.add("axt:MotionRegionConfigOptions.PolygonSupport",
+															options.get<bool>("PolygonSupport"));
+			motionRegRuleOptOut.add("axt:MotionRegionConfigOptions.PolygonLimits.tt:Min",
+															options.get<int>("PolygonLimitsMin"));
+			motionRegRuleOptOut.add("axt:MotionRegionConfigOptions.PolygonLimits.tt:Max",
+															options.get<int>("PolygonLimitsMax"));
+			motionRegRuleOptOut.add("axt:MotionRegionConfigOptions.RuleNotification",
+															options.get<bool>("RuleNotification"));
+			motionRegRuleOptOut.add("axt:MotionRegionConfigOptions.SingleSensitivitySupport",
+															options.get<bool>("SingleSensitivitySupport"));
+			motionRegRuleOptOut.add("axt:MotionRegionConfigOptions.PTZPresetMotionSupport",
+															options.get<bool>("PTZPresetMotionSupport"));
+		};
+
+		std::string ruleType;
+		std::string analytConfigsToken; // TODO: use
+		{
+			auto request_str = request->content.string();
+			std::istringstream is(request_str);
+			pt::ptree xml_tree;
+			pt::xml_parser::read_xml(is, xml_tree);
+			analytConfigsToken = exns::find_hierarchy("Envelope.Body.GetRuleOptions.RuleType", xml_tree);
+			analytConfigsToken = exns::find_hierarchy("Envelope.Body.GetRuleOptions.ConfigurationToken", xml_tree);
+		}
+
+		pt::ptree getRuleOptionsResponse;
+		if (ruleType.empty())
+		{
+			pt::ptree regionMotionRuleOptsOut;
+			fillRegionMotionRuleOptions(utility::RuleReaderByName("MotionRegionDetector", *service_configs_).Rule(),
+																	regionMotionRuleOptsOut);
+			getRuleOptionsResponse.add_child("tan:RuleOptions", regionMotionRuleOptsOut);
+		}
+		else
+		{
+			if (exns::get_element_without_ns(ruleType) == "MotionRegionDetector")
+			{
+				pt::ptree regionMotionRuleOptsOut;
+				fillRegionMotionRuleOptions(utility::RuleReaderByName("MotionRegionDetector", *service_configs_).Rule(),
+																		regionMotionRuleOptsOut);
+				getRuleOptionsResponse.add_child("tan:RuleOptions", regionMotionRuleOptsOut);
+			}
+		}
+
+		auto envelope_tree = utility::soap::getEnvelopeTree(ns_);
+		envelope_tree.add_child("s:Body.tan:GetRuleOptionsResponse", getRuleOptionsResponse);
+
+		pt::ptree root_tree;
+		root_tree.put_child("s:Envelope", envelope_tree);
+
+		std::ostringstream os;
+		pt::write_xml(os, root_tree);
+
+		utility::http::fillResponseWithHeaders(*response, os.str());
+	}
+};
+
 struct GetServiceCapabilitiesHandler : public OnvifRequestBase
 {
 private:
@@ -345,7 +419,7 @@ public:
 		for (const auto& [key, schema] : supportedModulesJson.get_child("AnalyticsModuleContentSchemaLocation"))
 		{
 			getSupportedAnalyticsModulesResponse.add("tan:SupportedAnalyticsModules.tt:AnalyticsModuleContentSchemaLocation",
-																						schema.get_value<std::string>());
+																							 schema.get_value<std::string>());
 		}
 
 		for (const auto& [moduleConfigKey, moduleConfigTree] : supportedModulesJson.get_child("modules"))
@@ -381,7 +455,7 @@ public:
 	{
 		auto request_str = request->content.string();
 		std::istringstream is(request_str);
-		
+
 		std::string moduleType;
 		{
 			auto request_str = request->content.string();
@@ -391,8 +465,7 @@ public:
 			moduleType = exns::find_hierarchy("Envelope.Body.GetSupportedMetadata.Type", xml_tree);
 		}
 
-		auto motionRegionSample = []()
-		{
+		auto motionRegionSample = []() {
 			pt::ptree object;
 			object.add("<xmlattr>.ObjectId", "1");
 			object.add("tt:Appearance.tt:VehicleInfo.tt:Type.<xmlattr>.Likelihood", "0.6");
@@ -451,7 +524,7 @@ public:
 	{
 		auto request_str = request->content.string();
 		std::istringstream is(request_str);
-		
+
 		std::string analytConfigToken;
 		{
 			auto request_str = request->content.string();
@@ -468,7 +541,7 @@ public:
 		{
 			getSupportedRulesResponse.add("tan:SupportedRules.tt:RuleContentSchemaLocation", schema.get_value<std::string>());
 		}
-		
+
 		for (const auto& [ruleConfigKey, ruleConfigTree] : supportedRulesJson.get_child("rules"))
 		{
 			pt::ptree ruleDescrOut;
@@ -503,6 +576,7 @@ AnalyticsService::AnalyticsService(const std::string& service_uri, const std::st
 			xml_namespaces_, configs_ptree_, *srv->DeviceService()->Configs()));
 	requestHandlers_.push_back(std::make_shared<analytics::GetAnalyticsModulesHandler>(xml_namespaces_, configs_ptree_,
 																																										 *srv->MediaProfilesManager()));
+	requestHandlers_.push_back(std::make_shared<analytics::GetRuleOptionsHandler>(xml_namespaces_, configs_ptree_));
 	requestHandlers_.push_back(std::make_shared<analytics::GetServiceCapabilitiesHandler>(
 			xml_namespaces_, configs_ptree_, *srv->DeviceService()->Configs()));
 	requestHandlers_.push_back(
