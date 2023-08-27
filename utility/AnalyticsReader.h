@@ -98,4 +98,14 @@ public:
 	void Apply(std::string_view paramName, int value);
 };
 
+class RuleReaderByName
+{
+public:
+	RuleReaderByName(std::string_view name, const pt::ptree& configs);
+	const pt::ptree& Rule() const;
+
+private:
+	std::string_view m_name;
+	const pt::ptree& m_cfgs;
+};
 } // namespace utility

@@ -219,4 +219,22 @@ void AnalyticsModuleSettingsApplier::Apply(std::string_view paramName, int value
 	it->second.put_value(value);
 }
 
+RuleReaderByName::RuleReaderByName(std::string_view name, const pt::ptree& configs) : m_name(name), m_cfgs(configs)
+{
+}
+
+const pt::ptree& RuleReaderByName::Rule() const
+{
+	const auto& rulesCfg = m_cfgs.get_child("SupportedRules").get_child("rules");
+	auto it = std::ranges::find_if(rulesCfg, [this](const auto& it) {
+		return exns::get_element_without_ns(it.second.get<std::string>("Name")) ==
+					 exns::get_element_without_ns(m_name.data());
+	});
+
+	if (it == rulesCfg.end())
+		throw osrv::rule_not_existent{};
+
+	return it->second;
+}
+
 } // namespace utility
