@@ -44,8 +44,7 @@ After vcpkg installation, install other dependencies. In this example we will us
 **Step 1.** Install `GStreamer` libs and plugins:
 
 ```
-vcpkg install --triplet x64-windows gstreamer gstreamer[plugins-base] gstreamer[plugins-good] \
-	gstreamer[plugins-ugly] gstreamer[plugins-bad] gstreamer[pango] gstreamer[x264] gstreamer[x265] gst-rtsp-server
+vcpkg install --triplet x64-windows gstreamer gstreamer[plugins-base] gstreamer[plugins-good] gstreamer[plugins-ugly] gstreamer[plugins-bad] gstreamer[pango] gstreamer[x264] gstreamer[x265] gst-rtsp-server
 ```
 
 Make sure the installation was completed successfully with command: 
@@ -75,7 +74,7 @@ C:\your_vcpkg_dir\installed\x64-windows\bin
 **Step 3.** Install Boost libs.
 
 ```
-vcpkg install boost-system boost-date-time boost-asio boost-regex boost-thread signals2 --triplet x64-window`
+vcpkg install boost-system boost-date-time boost-asio boost-regex boost-thread boost-signals2 boost-property-tree --triplet x64-windows`
 ```
 
 Optional:
