@@ -32,7 +32,7 @@ enum CONFIGURATION_TYPE : int
 class well_formed : public std::exception
 {
 public:
-	const char* what() const override
+	const char* what() const noexcept override
 	{
 		return "XML Well-formed violation occurred.";
 	}
@@ -42,7 +42,7 @@ public:
 class no_such_profile : public std::exception
 {
 public:
-	const char* what() const override
+	const char* what() const noexcept override
 	{
 		return "No such profile";
 	}
@@ -51,7 +51,7 @@ public:
 class invalid_token : public std::exception
 {
 public:
-	const char* what() const override
+	const char* what() const noexcept override
 	{
 		return "No such configuration token";
 	}
@@ -60,7 +60,7 @@ public:
 class invalid_config_type : public std::exception
 {
 public:
-	const char* what() const override
+	const char* what() const noexcept override
 	{
 		return "No such configuration type";
 	}
@@ -69,7 +69,7 @@ public:
 class deletion_of_fixed_profile : public std::exception
 {
 public:
-	const char* what() const override
+	const char* what() const noexcept override
 	{
 		return "A fixed Profile cannot be deleted";
 	}
@@ -78,7 +78,7 @@ public:
 class no_entity : public std::exception
 {
 public:
-	const char* what() const override
+	const char* what() const noexcept override
 	{
 		return "No such PTZ node on the device";
 	}
@@ -87,7 +87,7 @@ public:
 class incomplete_configuration : public std::exception
 {
 public:
-	const char* what() const override
+	const char* what() const noexcept override
 	{
 		return "The specified media profile does contain either unused sources or encoder configurations without a "
 					 "corresponding source.";
@@ -97,7 +97,7 @@ public:
 class no_config : public std::exception
 {
 public:
-	const char* what() const override
+	const char* what() const noexcept override
 	{
 		return "The requested configuration does not exist.";
 	}

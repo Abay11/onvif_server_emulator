@@ -3,7 +3,7 @@
 #include <fstream>
 #include <vector>
 
-#include <boost\property_tree\json_parser.hpp>
+#include <boost/property_tree/json_parser.hpp>
 
 const std::string osrv::auth::UserAccount::LOGIN = "login";
 const std::string osrv::auth::UserAccount::PASS = "password";

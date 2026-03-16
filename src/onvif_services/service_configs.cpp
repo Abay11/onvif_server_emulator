@@ -1,4 +1,4 @@
-#include "..\..\include\onvif_services\service_configs.h"
+#include "../../include/onvif_services/service_configs.h"
 
 #include <boost/property_tree/ptree.hpp>
 #include <boost/property_tree/json_parser.hpp>

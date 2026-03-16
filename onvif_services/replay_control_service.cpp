@@ -54,6 +54,6 @@ ReplayControlService::ReplayControlService(const std::string& service_uri, const
 		: IOnvifService(service_uri, service_name, srv)
 
 {
-	requestHandlers_.push_back(std::make_shared<GetReplayHandler>(xml_namespaces_, srv->ServerConfigs(), configs_ptree_));
+	requestHandlers_.push_back(std::make_shared<GetReplayHandler>(xml_namespaces_, srv->GetServerConfigs(), configs_ptree_));
 }
 } // namespace osrv

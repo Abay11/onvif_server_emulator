@@ -166,8 +166,9 @@ public:
 
 		const auto& compatibleNodes = vsConfigJson.get_child("CompatiblePtzNodes");
 		std::vector<std::string> compatibleNodeTokens;
-		std::ranges::transform(compatibleNodes, std::back_inserter(compatibleNodeTokens),
-													 [](auto t) { return t.second.get_value<std::string>(); });
+		std::transform(compatibleNodes.begin(), compatibleNodes.end(),
+			std::back_inserter(compatibleNodeTokens),
+			[](auto t) { return t.second.template get_value<std::string>(); });
 
 		const auto& allPtzConfigs =
 				m_profilesMgr.ReaderWriter()->ConfigsTree().get_child(osrv::CONFIGURATION_ENUMERATION[osrv::PTZ]);
@@ -297,8 +298,8 @@ public:
 
 		auto ptzNodesConfigJson = service_configs_->get_child("Nodes", {});
 		const auto ptzNodeConfigJsonIt =
-				std::ranges::find_if(ptzNodesConfigJson, [&usedNodeTokenInPtzConfig](const auto& it) {
-					return it.second.get<std::string>("token") == usedNodeTokenInPtzConfig;
+				std::find_if(ptzNodesConfigJson.begin(), ptzNodesConfigJson.end(), [&usedNodeTokenInPtzConfig](const auto& it) {
+					return it.second.template get<std::string>("token") == usedNodeTokenInPtzConfig;
 				});
 
 		if (ptzNodeConfigJsonIt == ptzNodesConfigJson.end())
@@ -309,8 +310,8 @@ public:
 		}
 
 		auto ptzConfigOptions = m_profilesMgr.ReaderWriter()->ConfigsTree().get_child("PTZConfigurationOptions");
-		auto currentPtzConfigOptionsIt = std::ranges::find_if(ptzConfigOptions, [&requestedToken](const auto& p) {
-			return p.second.get<std::string>("token") == requestedToken;
+		auto currentPtzConfigOptionsIt = std::find_if(ptzConfigOptions.begin(), ptzConfigOptions.end(), [&requestedToken](const auto& p) {
+			return p.second.template get<std::string>("token") == requestedToken;
 		});
 		if (currentPtzConfigOptionsIt == ptzConfigOptions.end())
 		{
@@ -324,18 +325,18 @@ public:
 		{
 			pt::ptree spaceConfig;
 
-			spaceConfig.add("tt:URI", node.get<std::string>("URI"));
+			spaceConfig.add("tt:URI", node.template get<std::string>("URI"));
 
-			spaceConfig.add("tt:XRange.tt:Min", node.get<std::string>("XRange.Min"));
-			spaceConfig.add("tt:XRange.tt:Max", node.get<std::string>("XRange.Max"));
+			spaceConfig.add("tt:XRange.tt:Min", node.template get<std::string>("XRange.Min"));
+			spaceConfig.add("tt:XRange.tt:Max", node.template get<std::string>("XRange.Max"));
 
 			if (auto YRangeNodeJson = node.get_child("YRange", {}); !YRangeNodeJson.empty())
 			{
-				spaceConfig.add("tt:YRange.tt:Min", YRangeNodeJson.get<std::string>("Min"));
-				spaceConfig.add("tt:YRange.tt:Max", YRangeNodeJson.get<std::string>("Max"));
+				spaceConfig.add("tt:YRange.tt:Min", YRangeNodeJson.template get<std::string>("Min"));
+				spaceConfig.add("tt:YRange.tt:Max", YRangeNodeJson.template get<std::string>("Max"));
 			}
 
-			PTZConfigurationOptionsNode.add_child("tt:Spaces.tt:" + node.get<std::string>("space"), spaceConfig);
+			PTZConfigurationOptionsNode.add_child("tt:Spaces.tt:" + node.template get<std::string>("space"), spaceConfig);
 		}
 
 		PTZConfigurationOptionsNode.add("tt:PTZTimeout.tt:Min",
@@ -458,8 +459,8 @@ struct GetNodeHandler : public OnvifRequestBase
 			requestedToken = exns::find_hierarchy("Envelope.Body.GetNode.NodeToken", xml_tree);
 		}
 
-		auto nodeConfigIt = std::ranges::find_if(nodes_config, [&requestedToken](const auto nodesIt) {
-			return nodesIt.second.get<std::string>("token") == requestedToken;
+		auto nodeConfigIt = std::find_if(nodes_config.begin(), nodes_config.end(), [&requestedToken](const auto nodesIt) {
+			return nodesIt.second.template get<std::string>("token") == requestedToken;
 		});
 
 		if (nodeConfigIt == nodes_config.end())
@@ -509,8 +510,9 @@ public:
 		auto& ptzConfigsJson =
 				m_profilesMgr.ReaderWriter()->ConfigsTree().get_child(CONFIGURATION_ENUMERATION[CONFIGURATION_TYPE::PTZ]);
 
-		auto configIt = std::ranges::find_if(
-				ptzConfigsJson, [&requestedToken](auto& p) { return p.second.get<std::string>("token") == requestedToken; });
+		auto configIt = std::find_if(
+				ptzConfigsJson.begin(), ptzConfigsJson.end(),
+				[&requestedToken](auto& p) { return p.second.template get<std::string>("token") == requestedToken; });
 
 		if (configIt == ptzConfigsJson.end())
 		{

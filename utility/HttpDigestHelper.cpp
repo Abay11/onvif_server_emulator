@@ -40,7 +40,7 @@ std::string utility::string::search_value(const std::string& source, std::string
 
 	// key1="value1", key2 = "value2", key3=value3
 	key += "\\s?=\\s?\"?([^,\"\\s]*)\"?";
-	regex value_regex(key, regex::flag_type::icase);
+	regex value_regex(key, std::regex_constants::icase);
 	smatch matches;
 	if (regex_search(source, matches, value_regex))
 		return matches[1].str();

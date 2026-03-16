@@ -72,7 +72,7 @@ struct FindEventsHandler : public OnvifRequestBase
 
 		// TODO: select required recording
 		auto rec = rec_mgr_->Recordings().front();
-		auto re = rec->RecordingEvents();
+		auto re = rec->GetRecordingEvents();
 
 		auto ss = re->NewSearchSession(EventsSearchSessionFactory("SimpleEventsSearchSession"));
 
@@ -110,7 +110,7 @@ struct GetEventSearchResultsHandler : public OnvifRequestBase
 		std::istringstream is(request->content.string());
 		pt::xml_parser::read_xml(is, request_xml);
 		auto searchToken = exns::find_hierarchy("Envelope.Body.GetEventSearchResults.SearchToken", request_xml);
-		auto searchSession = rec_mgr_->Recordings().front()->RecordingEvents()->SearchSession(searchToken);
+		auto searchSession = rec_mgr_->Recordings().front()->GetRecordingEvents()->SearchSession(searchToken);
 
 		pt::ptree results_tree;
 

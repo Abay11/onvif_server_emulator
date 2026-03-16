@@ -731,9 +731,9 @@ MediaService::MediaService(const std::string& service_uri, const std::string& se
 	requestHandlers_.push_back(std::make_shared<media::GetCompatibleAudioSourceConfigurationsHandler>(
 			xml_namespaces_, configs_ptree_, srv->ProfilesConfig()));
 	requestHandlers_.push_back(std::make_shared<media::GetProfileHandler>(xml_namespaces_, configs_ptree_,
-																																				*srv->ServerConfigs(), srv->ProfilesConfig()));
+																																				*srv->GetServerConfigs(), srv->ProfilesConfig()));
 	requestHandlers_.push_back(std::make_shared<media::GetProfilesHandler>(xml_namespaces_, configs_ptree_,
-																																				 *srv->ServerConfigs(), srv->ProfilesConfig()));
+																																				 *srv->GetServerConfigs(), srv->ProfilesConfig()));
 	requestHandlers_.push_back(
 			std::make_shared<media::GetVideoAnalyticsConfigurationsHandler>(xml_namespaces_, configs_ptree_));
 	requestHandlers_.push_back(std::make_shared<media::GetVideoSourceConfigurationHandler>(
@@ -741,11 +741,11 @@ MediaService::MediaService(const std::string& service_uri, const std::string& se
 	requestHandlers_.push_back(std::make_shared<media::GetVideoSourceConfigurationsHandler>(
 			xml_namespaces_, configs_ptree_, srv->ProfilesConfig()));
 	requestHandlers_.push_back(std::make_shared<media::GetVideoSourcesHandler>(
-			xml_namespaces_, configs_ptree_, *srv->ServerConfigs(), srv->ProfilesConfig()));
+			xml_namespaces_, configs_ptree_, *srv->GetServerConfigs(), srv->ProfilesConfig()));
 	requestHandlers_.push_back(std::make_shared<media::GetSnapshotUriHandler>(
-			xml_namespaces_, configs_ptree_, *srv->MediaProfilesManager(), *srv->ServerConfigs()));
+			xml_namespaces_, configs_ptree_, *srv->MediaProfilesManager(), *srv->GetServerConfigs()));
 	requestHandlers_.push_back(std::make_shared<media::GetStreamUriHandler>(
-			xml_namespaces_, configs_ptree_, *srv->ServerConfigs(), srv->ProfilesConfig()));
+			xml_namespaces_, configs_ptree_, *srv->GetServerConfigs(), srv->ProfilesConfig()));
 }
 } // namespace osrv
 

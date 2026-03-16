@@ -29,7 +29,7 @@ namespace osrv
 		virtual void operator()(std::shared_ptr<HttpServer::Response> response,
 			std::shared_ptr<HttpServer::Request> request)
 		{
-			throw std::exception("Method is not implemented");
+			throw std::runtime_error("Method is not implemented");
 		}
 
 		std::string name() const

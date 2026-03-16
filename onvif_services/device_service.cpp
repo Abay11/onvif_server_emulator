@@ -287,7 +287,7 @@ DeviceService::DeviceService(const std::string& service_uri, const std::string& 
 		: IOnvifService(service_uri, service_name, srv)
 {
 	requestHandlers_.push_back(std::make_shared<GetCapabilitiesHandler>(xml_namespaces_, configs_ptree_,
-																																			*srv->ServerConfigs(), srv->ServerAddress()));
+																																			*srv->GetServerConfigs(), srv->ServerAddress()));
 	requestHandlers_.push_back(std::make_shared<GetDeviceInformationHandler>(xml_namespaces_, configs_ptree_));
 	requestHandlers_.push_back(std::make_shared<GetNetworkInterfacesHandler>(xml_namespaces_, configs_ptree_));
 	requestHandlers_.push_back(std::make_shared<GetRelayOutputsHandler>(xml_namespaces_, configs_ptree_));

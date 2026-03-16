@@ -167,12 +167,12 @@ const std::shared_ptr<ILogger> IOnvifServer::Logger() const
 	return logger_;
 }
 
-std::shared_ptr<HttpServer> IOnvifServer::HttpServer() const
+std::shared_ptr<HttpServer> IOnvifServer::GetHttpServer() const
 {
 	return http_server_;
 }
 
-std::shared_ptr<ServerConfigs> IOnvifServer::ServerConfigs()
+std::shared_ptr<ServerConfigs> IOnvifServer::GetServerConfigs()
 {
 	return server_configs_;
 }

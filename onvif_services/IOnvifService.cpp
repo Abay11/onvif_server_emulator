@@ -57,7 +57,7 @@ public:
 		auto handler_it =
 				std::ranges::find_if(handlers, [&method](const HandlerSP handler) { return handler->name() == method; });
 
-		std::shared_ptr<ServerConfigs> srv_cfg = service_->OnvifServer()->ServerConfigs();
+		std::shared_ptr<ServerConfigs> srv_cfg = service_->OnvifServer()->GetServerConfigs();
 		if (handler_it != handlers.end())
 		{
 			// check user credentials
@@ -257,7 +257,7 @@ osrv::IOnvifService::IOnvifService(const std::string& service_uri, const std::st
 																	 std::shared_ptr<IOnvifServer> srv)
 		: service_uri_(service_uri),
 			service_name_(service_name), configs_ptree_{ServiceConfigs(service_name, srv->ConfigsPath())}, onvif_server_(srv),
-			http_server_(srv->HttpServer()), server_configs_(srv->ServerConfigs()), log_(srv->Logger())
+			http_server_(srv->GetHttpServer()), server_configs_(srv->GetServerConfigs()), log_(srv->Logger())
 {
 }
 

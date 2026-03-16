@@ -1224,7 +1224,7 @@ Media2Service::Media2Service(const std::string& service_uri, const std::string& 
 														 std::shared_ptr<IOnvifServer> srv)
 		: IOnvifService(service_uri, service_name, srv)
 {
-	srv->HttpServer()->resource["^/snapshot.jpeg$"]["GET"] =
+	srv->GetHttpServer()->resource["^/snapshot.jpeg$"]["GET"] =
 			[configsPath = srv->ConfigsPath()](std::shared_ptr<HttpServer::Response> response,
 																				 std::shared_ptr<HttpServer::Request> request) {
 				try
@@ -1295,12 +1295,12 @@ Media2Service::Media2Service(const std::string& service_uri, const std::string& 
 	requestHandlers_.push_back(std::make_shared<media2::GetAudioSourceConfigurationsHandler>(
 			xml_namespaces_, configs_ptree_, srv->ProfilesConfig()));
 	requestHandlers_.push_back(std::make_shared<media2::GetProfilesHandler>(
-			xml_namespaces_, configs_ptree_, srv->MediaProfilesManager(), *srv->ServerConfigs()));
+			xml_namespaces_, configs_ptree_, srv->MediaProfilesManager(), *srv->GetServerConfigs()));
 	requestHandlers_.push_back(std::make_shared<media2::GetServiceCapabilitiesHandler>(xml_namespaces_, configs_ptree_));
 	requestHandlers_.push_back(std::make_shared<media2::GetStreamUriHandler>(
-			xml_namespaces_, configs_ptree_, srv->ProfilesConfig(), *srv->ServerConfigs()));
+			xml_namespaces_, configs_ptree_, srv->ProfilesConfig(), *srv->GetServerConfigs()));
 	requestHandlers_.push_back(std::make_shared<media2::GetSnapshotUriHandler>(
-			xml_namespaces_, configs_ptree_, *srv->MediaProfilesManager(), *srv->ServerConfigs()));
+			xml_namespaces_, configs_ptree_, *srv->MediaProfilesManager(), *srv->GetServerConfigs()));
 	requestHandlers_.push_back(std::make_shared<media2::GetVideoEncoderConfigurationOptionsHandler>(
 			xml_namespaces_, configs_ptree_, srv->ProfilesConfig()));
 	requestHandlers_.push_back(std::make_shared<media2::GetVideoEncoderConfigurationsHandler>(
@@ -1308,7 +1308,7 @@ Media2Service::Media2Service(const std::string& service_uri, const std::string& 
 	requestHandlers_.push_back(std::make_shared<media2::GetVideoSourceConfigurationOptionsHandler>(
 			xml_namespaces_, configs_ptree_, srv->ProfilesConfig()));
 	requestHandlers_.push_back(std::make_shared<media2::GetVideoSourceConfigurationsHandler>(
-			xml_namespaces_, configs_ptree_, srv->ProfilesConfig(), *srv->ServerConfigs()));
+			xml_namespaces_, configs_ptree_, srv->ProfilesConfig(), *srv->GetServerConfigs()));
 	requestHandlers_.push_back(std::make_shared<media2::RemoveConfigurationHandler>(xml_namespaces_, configs_ptree_,
 																																									srv->MediaProfilesManager()));
 	requestHandlers_.push_back(
