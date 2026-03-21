@@ -56,16 +56,19 @@ int main(int argc, char** argv)
 	logger->Info("New run. " + ss.str());
 	logger->Info("Logging level: " + logger->GetLogLevel());
 
-	if (auto env_gst_plugin_path = std::string(std::getenv("GST_PLUGIN_PATH")); env_gst_plugin_path.empty())
+#ifdef _WIN32
+	auto env_gst_plugin_path = std::getenv("GST_PLUGIN_PATH");
+	if (!env_gst_plugin_path)
 	{
 		std::cerr << "For proper work please install required GStreamer plugins and add the GST_PLUGIN_PATH environment "
-								 "variable to point at the installation directory!";
+								 "variable to point at the installation directory!" << std::endl;
 		return -1;
 	}
 	else
 	{
-		logger->Debug("Used GStreamer plugins directory: " + env_gst_plugin_path);
+		logger->Debug("Used GStreamer plugins directory: " + std::string(env_gst_plugin_path));
 	}
+#endif
 
 	try
 	{
