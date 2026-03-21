@@ -71,7 +71,12 @@ public:
 
 	std::string Encoding()
 	{
-		return EncoderPluginName() + " bitrate=" + std::to_string(bitrate_);
+		return EncoderPluginName();
+		//+ " bitrate=" + std::to_string(bitrate_);
+		/*
+		fix this because it leads to error:
+		ERROR           GST_PIPELINE gst/parse/grammar.y:718:gst_parse_element_make: no property "bitrate" in element "mulawenc"
+		*/
 	}
 
 	virtual unsigned int PayloadNum()
