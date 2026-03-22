@@ -29,9 +29,17 @@ struct GetReplayHandler : public OnvifRequestBase
 
 	void operator()(std::shared_ptr<HttpServer::Response> response, std::shared_ptr<HttpServer::Request> request) override
 	{
+		auto serverIPv4Addr = srv_configs_->ipv4_address_;
+
+		if (auto ep = request->local_endpoint(); ep != decltype(ep){})
+		{
+			auto ip = ep.address().to_v4().to_string();
+			if (!ip.empty())
+				serverIPv4Addr = ip;
+		}
 
 		// TODO: uri now is hard coded
-		const std::string uri = "rtsp://" + srv_configs_->ipv4_address_ + ":" + srv_configs_->rtsp_port_ + "/Recording0";
+		const auto uri = std::format("rtsp://{}:{}/Recording0", serverIPv4Addr, srv_configs_->rtsp_port_);
 
 		auto envelope_tree = utility::soap::getEnvelopeTree(ns_);
 		envelope_tree.add("s:Body.trp:GetReplayUriResponse.trp:Uri", uri);
