@@ -18,6 +18,7 @@
 
 #include <map>
 #include <vector>
+#include <format>
 
 using StringPairsList_t = std::vector<std::pair<std::string, std::string>>;
 
@@ -71,8 +72,16 @@ struct CreatePullPointSubscriptionHandler : public utility::http::RequestHandler
 		auto port = server_configs->http_port_;
 		if (!EVENT_CONFIGS_TREE.get<bool>("PullPoint.UseHttpServerPort"))
 			port = std::to_string(EVENT_CONFIGS_TREE.get<unsigned short>("PullPoint.Port"));
-		std::string sub_ref = "http://";
-		sub_ref += server_configs->ipv4_address_ + ":" + port + "/";
+
+		auto serverIpAddr = server_configs->ipv4_address_;
+		if (auto ep = request->local_endpoint(); ep != decltype(ep){})
+		{
+			auto ipv4Addr = ep.address().to_v4().to_string();
+			if (!ipv4Addr.empty())
+				serverIpAddr = ipv4Addr;
+		}
+
+		std::string sub_ref = std::format("http://{}:{}/", serverIpAddr, port);
 
 		auto pullpoint = notifications_manager->CreatePullPoint();
 		sub_ref += pullpoint->GetSubscriptionReference();
