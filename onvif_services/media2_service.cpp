@@ -938,9 +938,20 @@ public:
 
 		if (srcCfg.empty() || encCfg.empty())
 			throw incomplete_configuration();
+		
+		std::optional<std::string> nicIp;
+		if (auto ep = request->local_endpoint(); ep != decltype(ep){})
+		{
+			auto ipv4Addr = ep.address().to_v4().to_string();
+			if (!ipv4Addr.empty())
+			{
+				nicIp = ipv4Addr;
+			}
+		}
 
 		auto envelope_tree = utility::soap::getEnvelopeTree(ns_);
-		envelope_tree.put("s:Body.tr2:GetSnapshotUriResponse.tr2:Uri", util::generate_snapshot_url(server_cfg_));
+		envelope_tree.put("s:Body.tr2:GetSnapshotUriResponse.tr2:Uri",
+			util::generate_snapshot_url(server_cfg_, nicIp));
 
 		pt::ptree root_tree;
 		root_tree.put_child("s:Envelope", envelope_tree);
@@ -1102,6 +1113,15 @@ std::string generate_rtsp_url(const IOnvifServer& server,
 		(nicIp ? *nicIp : srvConfigs->ipv4_address_),
 		server.GetServerConfigs()->rtsp_port_,
 		profile_stream_url);
+}
+
+std::string generate_snapshot_url(const ServerConfigs& server_configs, std::optional<std::string> nicIp/* = std::nullopt*/)
+{
+	auto port = server_configs.enabled_rtsp_port_forwarding ?
+		std::to_string(server_configs.forwarded_http_port) : server_configs.http_port_;
+	return std::format("http://{}:{}/snapshot.jpeg",
+		nicIp ? *nicIp : server_configs.ipv4_address_,
+		port);
 }
 
 using ptree = boost::property_tree::ptree;
