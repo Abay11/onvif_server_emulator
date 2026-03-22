@@ -89,8 +89,62 @@ You can also use `cmake-gui` to configure the project interactively.
 
 ### Building on Linux
 
-**Step 1.** Install libgstrtspserver-1.0-dev  
-**Step 2.** Install libboost-system-dev libboost-dev libboost-thread-dev
+**Step 0.** Update package indexes:
+
+```bash
+sudo apt update
+```
+
+**Step 1.** Install toolchain and build tools:
+
+```bash
+sudo apt install -y build-essential cmake pkg-config git
+```
+
+**Step 2.** Install GStreamer libraries:
+
+```bash
+sudo apt install -y \
+  libgstreamer1.0-0 libgstreamer1.0-dev \
+  libgstreamer-plugins-base1.0-0 libgstreamer-plugins-base1.0-dev \
+  libgstreamer-plugins-good1.0-0 libgstreamer-plugins-good1.0-dev \
+  libgstreamer-plugins-ugly1.0-0 libgstreamer-plugins-ugly1.0-dev \
+  libgstreamer-plugins-bad1.0-0 libgstreamer-plugins-bad1.0-dev \
+  gstreamer1.0-rtsp libgstrtspserver-1.0-dev
+```
+
+**Step 3.** Install Boost libraries:
+
+```bash
+sudo apt install -y \
+  libboost-system-dev libboost-date-time-dev libboost-regex-dev \
+  libboost-thread-dev libboost-filesystem-dev libboost-signals-dev \
+  libboost-test-dev libboost-serialization-dev
+```
+
+**Step 4.** Clone repository (if not already) and create build directory:
+
+```bash
+git clone https://github.com/Abay11/onvif_server_emulator.git
+cd onvif_server_emulator
+mkdir -p build && cd build
+```
+
+**Step 5.** Configure and build:
+
+```bash
+cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo ..
+cmake --build . -- -j$(nproc)
+```
+
+**Step 6.** Run tests (optional):
+
+```bash
+cd build
+ctest --output-on-failure
+```
+
+**Optional:** If your distro has different package names, substitute accordingly (e.g., Fedora/RHEL use `dnf`/`yum`).
 
 ### Building Docker
 
@@ -101,13 +155,12 @@ A simple Docker-based workflow is provided to build and run the project in a rep
 docker build -f docker/Dockerfile -t osrv-image:latest .
 ```
 
-- Run the container (example: map common RTSP/HTTP ports and mount config/log directories):
+- Run the container (example: map common RTSP/HTTP ports and mount config directories):
 ```
 docker run --rm -it \
-	-p 554:554 -p 8554:8554 -p 8080:8080 \
-	-v "$(pwd)/config":/app/config \
-	-v "$(pwd)/logs":/app/logs \
-	--name onvif-server \
+	-p 8080:8080 -p 8554:8554 \
+	-v "$(pwd)/server_configs":/workspace/server_configs \
+	--name onvif-server-emul \
 	osrv-image:latest
 ```
 Adjust published ports and mount points to match your runtime configuration.
