@@ -20,6 +20,8 @@
 #include "../onvif_services/recording_search_service.h"
 #include "../onvif_services/replay_control_service.h"
 
+#include <format>
+
 static const std::string PROFILES_CONFIG_FILE{"media_profiles"};
 
 namespace osrv
@@ -184,13 +186,16 @@ const std::shared_ptr<pt::ptree>& IOnvifServer::ProfilesConfig() const
 
 std::string IOnvifServer::ServerAddress() const
 {
-	std::string address{"http://"};
-	address += http_server_->config.address;
-	address += ":" +
-						 std::to_string(server_configs_->enabled_http_port_forwarding ? server_configs_->forwarded_http_port
-																																					: http_server_->config.port) +
-						 "/";
-
-	return address;
+	return std::format("http://{}:{}/",
+		http_server_->config.address,
+		server_configs_->enabled_http_port_forwarding ?
+			server_configs_->forwarded_http_port
+			: http_server_->config.port);
 }
+
+std::string IOnvifServer::ServerAddressWithOverrideIp(std::string_view ip) const
+{
+	return std::format("http://{}:{}/", ip, http_server_->config.port);
+}
+
 } // namespace osrv

@@ -181,14 +181,26 @@ struct GetRelayOutputsHandler : public OnvifRequestBase
 struct GetServicesHandler : public OnvifRequestBase
 {
 	GetServicesHandler(const std::map<std::string, std::string>& xs, const std::shared_ptr<pt::ptree>& configs,
-										 const std::string& ip)
-			: OnvifRequestBase(GetServices, auth::SECURITY_LEVELS::PRE_AUTH, xs, configs), ipv4_address_(ip)
+		const std::shared_ptr<IOnvifServer>& srv)
+		: OnvifRequestBase(GetServices, auth::SECURITY_LEVELS::PRE_AUTH, xs, configs)
+		, ipv4_address_(srv->ServerAddress())
+		, srv_(srv)
 	{
 	}
 
 	void operator()(std::shared_ptr<HttpServer::Response> response, std::shared_ptr<HttpServer::Request> request) override
 	{
 		auto envelope_tree = utility::soap::getEnvelopeTree(ns_);
+
+		auto ipv4_bind = ipv4_address_;
+
+		if (auto endpoint = request->local_endpoint(); endpoint != decltype(endpoint){})
+		{
+			if (auto ipv4 = endpoint.address().to_v4().to_string(); !ipv4.empty())
+			{
+				ipv4_bind = srv_.lock()->ServerAddressWithOverrideIp(ipv4);
+			}
+		}
 
 		auto services_config = service_configs_->get_child(GetServices);
 		pt::ptree services_node;
@@ -201,7 +213,7 @@ struct GetServicesHandler : public OnvifRequestBase
 
 			pt::ptree xml_service_node;
 			xml_service_node.put("tds:Namespace", elements.second.get<std::string>("namespace"));
-			xml_service_node.put("tds:XAddr", ipv4_address_ + elements.second.get<std::string>("XAddr"));
+			xml_service_node.put("tds:XAddr", ipv4_bind + elements.second.get<std::string>("XAddr"));
 			if (elements.second.get<std::string>("namespace") == "http://www.onvif.org/ver20/ptz/wsdl")
 			{
 				xml_service_node.put("tds:Capabilities.tptz:Capabilities", "");
@@ -225,6 +237,7 @@ struct GetServicesHandler : public OnvifRequestBase
 
 private:
 	const std::string ipv4_address_;
+	const std::weak_ptr<IOnvifServer> srv_;
 };
 
 struct GetScopesHandler : public OnvifRequestBase
@@ -287,12 +300,12 @@ DeviceService::DeviceService(const std::string& service_uri, const std::string& 
 		: IOnvifService(service_uri, service_name, srv)
 {
 	requestHandlers_.push_back(std::make_shared<GetCapabilitiesHandler>(xml_namespaces_, configs_ptree_,
-																																			*srv->GetServerConfigs(), srv->ServerAddress()));
+		*srv->GetServerConfigs(), srv->ServerAddress()));
 	requestHandlers_.push_back(std::make_shared<GetDeviceInformationHandler>(xml_namespaces_, configs_ptree_));
 	requestHandlers_.push_back(std::make_shared<GetNetworkInterfacesHandler>(xml_namespaces_, configs_ptree_));
 	requestHandlers_.push_back(std::make_shared<GetRelayOutputsHandler>(xml_namespaces_, configs_ptree_));
 	requestHandlers_.push_back(
-			std::make_shared<GetServicesHandler>(xml_namespaces_, configs_ptree_, srv->ServerAddress()));
+			std::make_shared<GetServicesHandler>(xml_namespaces_, configs_ptree_, srv));
 	requestHandlers_.push_back(std::make_shared<GetScopesHandler>(xml_namespaces_, configs_ptree_));
 	requestHandlers_.push_back(std::make_shared<GetSystemDateAndTimeHandler>(xml_namespaces_, configs_ptree_));
 }
