@@ -26,9 +26,6 @@ namespace media2
 {
 namespace util
 {
-// TODO: The same function is used in media. Replace it with one
-std::string generate_rtsp_url(const IOnvifServer& server,
-	const std::string& profile_stream_url, std::optional<std::string> nicIp = std::nullopt);
 std::string generate_snapshot_url(const ServerConfigs& server_configs, std::optional<std::string> nicIp = std::nullopt);
 
 using ptree = boost::property_tree::ptree;

@@ -18,6 +18,7 @@
 #include <boost/property_tree/xml_parser.hpp>
 
 #include <algorithm>
+#include <format>
 
 namespace pt = boost::property_tree;
 
@@ -673,7 +674,7 @@ struct GetStreamUriHandler : public OnvifRequestBase
 		if (profile_config == profiles_config_list.end())
 			throw std::runtime_error("The media profile does not exist.");
 
-		auto encoder_token = profile_config->second.get<std::string>("VideoEncoderConfiguration");
+		auto encoder_token = profile_config->second.get<std::string>(CONFIGURATION_ENUMERATION[CONFIGURATION_TYPE::VIDEOENCODER]);
 
 		auto stream_configs_list = service_configs_->get_child("GetStreamUri");
 		auto stream_config_it =
@@ -686,7 +687,15 @@ struct GetStreamUriHandler : public OnvifRequestBase
 
 		pt::ptree response_node;
 
-		auto rtsp_url = media::util::generate_rtsp_url(server_cfg_, stream_config_it->second.get<std::string>("Uri"));
+		std::optional<std::string> nicAddr = std::nullopt;
+		if (auto ep = request->local_endpoint(); ep != decltype(ep){})
+		{
+			auto ipv4Addr = ep.address().to_v4().to_string();
+			if (!ipv4Addr.empty())
+				nicAddr = ipv4Addr;
+		}
+
+		auto rtsp_url = util::generate_rtsp_url(server_cfg_, stream_config_it->second.get<std::string>("Uri"), nicAddr);
 		response_node.put("trt:MediaUri.tt:Uri", rtsp_url);
 		response_node.put("trt:MediaUri.tt:InvalidAfterConnect",
 											stream_config_it->second.get<std::string>("InvalidAfterConnect"));
@@ -749,17 +758,7 @@ MediaService::MediaService(const std::string& service_uri, const std::string& se
 }
 } // namespace osrv
 
-std::string osrv::media::util::generate_rtsp_url(const ServerConfigs& server_configs,
-																								 const std::string& profile_stream_url)
-{
-	std::stringstream rtsp_url;
-	rtsp_url << "rtsp://" << server_configs.ipv4_address_ << ":"
-					 << (server_configs.enabled_rtsp_port_forwarding ? std::to_string(server_configs.forwarded_rtsp_port)
-																													 : server_configs.rtsp_port_)
-					 << "/" << profile_stream_url;
 
-	return rtsp_url.str();
-}
 
 void fill_soap_media_profile(const pt::ptree& profileConfigs, pt::ptree& profileOutNode, const pt::ptree& profiles_cfg)
 {
@@ -884,6 +883,15 @@ void fill_soap_media_profile(const pt::ptree& profileConfigs, pt::ptree& profile
 			profileOutNode.put_child("tt:AudioEncoderConfiguration", ae_node);
 		}
 	}
+}
+	
+std::string osrv::media::util::generate_rtsp_url(const osrv::ServerConfigs& server_configs,
+	const std::string& profile_stream_url, std::optional<std::string> nicIp /*= std::nullopt*/)
+{
+	return std::format("rtsp://{}:{}/{}",
+		(nicIp ? *nicIp : server_configs.ipv4_address_),
+		server_configs.rtsp_port_,
+		profile_stream_url);
 }
 
 void osrv::media::util::fill_soap_videosource_configuration(const pt::ptree& config_node, pt::ptree& videosource_node)

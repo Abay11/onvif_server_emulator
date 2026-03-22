@@ -24,7 +24,8 @@ namespace media
 {
 namespace util
 {
-std::string generate_rtsp_url(const ServerConfigs& server_configs, const std::string& profile_stream_url);
+std::string generate_rtsp_url(const ServerConfigs& server_configs,
+	const std::string& profile_stream_url, std::optional<std::string> nicIp /*= std::nullopt*/);
 
 namespace pt = boost::property_tree;
 void fill_soap_videosource_configuration(const pt::ptree& config_node, pt::ptree& videosource_node);

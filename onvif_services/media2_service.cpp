@@ -1024,7 +1024,7 @@ public:
 		}
 
 		pt::ptree response_node;
-		auto rtsp_url = media2::util::generate_rtsp_url(srv_, stream_config_it->second.get<std::string>("Uri"), nicIp);
+		auto rtsp_url = media::util::generate_rtsp_url(server_cfg_, stream_config_it->second.get<std::string>("Uri"), nicIp);
 		response_node.put("tr2:Uri", rtsp_url);
 
 		auto envelope_tree = utility::soap::getEnvelopeTree(ns_);
@@ -1104,16 +1104,6 @@ public:
 
 namespace util
 {
-
-std::string generate_rtsp_url(const IOnvifServer& server,
-	const std::string& profile_stream_url, std::optional<std::string> nicIp /*= std::nullopt*/)
-{
-	const auto srvConfigs = server.GetServerConfigs();
-	return std::format("rtsp://{}:{}/{}",
-		(nicIp ? *nicIp : srvConfigs->ipv4_address_),
-		server.GetServerConfigs()->rtsp_port_,
-		profile_stream_url);
-}
 
 std::string generate_snapshot_url(const ServerConfigs& server_configs, std::optional<std::string> nicIp/* = std::nullopt*/)
 {
