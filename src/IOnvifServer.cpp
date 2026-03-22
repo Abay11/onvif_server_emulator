@@ -179,6 +179,11 @@ std::shared_ptr<ServerConfigs> IOnvifServer::GetServerConfigs()
 	return server_configs_;
 }
 
+const std::shared_ptr<ServerConfigs> IOnvifServer::GetServerConfigs() const
+{
+	return server_configs_;
+}
+
 const std::shared_ptr<pt::ptree>& IOnvifServer::ProfilesConfig() const
 {
 	return profiles_config_;
