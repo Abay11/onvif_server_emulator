@@ -103,14 +103,18 @@ sudo apt install -y build-essential cmake pkg-config git
 
 **Step 2.** Install GStreamer libraries:
 
+For Debian Trixie (and later):
 ```bash
 sudo apt install -y \
-  libgstreamer1.0-0 libgstreamer1.0-dev \
-  libgstreamer-plugins-base1.0-0 libgstreamer-plugins-base1.0-dev \
-  libgstreamer-plugins-good1.0-0 libgstreamer-plugins-good1.0-dev \
-  libgstreamer-plugins-ugly1.0-0 libgstreamer-plugins-ugly1.0-dev \
-  libgstreamer-plugins-bad1.0-0 libgstreamer-plugins-bad1.0-dev \
-  gstreamer1.0-rtsp libgstrtspserver-1.0-dev
+  libgstreamer1.0-dev \
+  libgstreamer-plugins-base1.0-dev \
+  libgstreamer-plugins-bad1.0-dev \
+  gstreamer1.0-rtsp \
+  libgstrtspserver-1.0-dev \
+  gstreamer1.0-plugins-good \
+  gstreamer1.0-plugins-ugly \
+  gstreamer1.0-libav \
+  gstreamer1.0-tools
 ```
 
 **Step 3.** Install Boost libraries:
@@ -148,7 +152,7 @@ ctest --output-on-failure
 
 ### Building Docker
 
-A simple Docker-based workflow is provided to build and run the project in a reproducible environment. The repository includes a Dockerfile at docker/Dockerfile.
+A simple Docker-based workflow is provided to build and run the project in a reproducible environment. The repository includes a Dockerfile at docker/Dockerfile, which uses Debian Trixie as the base image.
 
 - Build the image (from repository root):
 ```
@@ -159,8 +163,10 @@ docker build -f docker/Dockerfile -t osrv-image:latest .
 ```
 docker run --rm -it \
 	-p 8080:8080 -p 8554:8554 \
-	-v "$(pwd)/server_configs":/workspace/server_configs \
+	-v "$(pwd)/server_configs":/app/server_configs \
 	--name onvif-server-emul \
 	osrv-image:latest
 ```
 Adjust published ports and mount points to match your runtime configuration.
+
+**Note:** The Dockerfile uses `--mount=type=cache` for the build directory to improve rebuild performance by caching intermediate build artifacts.

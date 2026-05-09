@@ -1,33 +1,39 @@
 FROM debian:trixie
 
 # Install necessary packages
-RUN apt update -y && apt install -y \
+RUN apt update -y && apt install -y --fix-missing \
 	build-essential \
-	cmake\
+	cmake \
 	pkg-config
 
-RUN apt install -y \
-	libgstreamer1.0-0 \
+RUN apt install -y --fix-missing \
 	libgstreamer1.0-dev \
-	libgstreamer-plugins-base1.0-0 \
 	libgstreamer-plugins-base1.0-dev \
-	libgstreamer-plugins-bad1.0-0 \
 	libgstreamer-plugins-bad1.0-dev \
 	gstreamer1.0-rtsp \
-	libgstrtspserver-1.0-dev
+	libgstrtspserver-1.0-dev \
+	gstreamer1.0-plugins-good \
+	gstreamer1.0-plugins-ugly \
+	gstreamer1.0-libav \
+	gstreamer1.0-tools
 
-RUN apt install -y \
-	libboost-system-dev \ 
+RUN apt install -y --fix-missing \
+	libboost-system-dev \
 	libboost-dev \
 	libboost-thread-dev \
 	libboost-regex-dev
 
 WORKDIR /workspace
 
-COPY . /workspace
+COPY . .
 
-RUN mkdir build && cd build && \
-	cmake .. && \
-	make
+# Avoid full recompilation by using build cache
+RUN --mount=type=cache,target=/workspace/build \
+    mkdir -p build && cd build && \
+    cmake .. && \
+    make -j$(nproc) && \
+    mkdir -p /app && cp main /app/main
 
-CMD ["./build/main"]
+ENV GST_DEBUG=*:3
+WORKDIR /app
+CMD ["./main"]
