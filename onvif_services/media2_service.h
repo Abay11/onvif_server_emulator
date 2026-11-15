@@ -26,7 +26,7 @@ namespace media2
 {
 namespace util
 {
-std::string generate_snapshot_url(const ServerConfigs& server_configs, std::optional<std::string> nicIp = std::nullopt);
+std::string generate_snapshot_url(const ServerConfigs& server_configs);
 
 using ptree = boost::property_tree::ptree;
 // functions throw an exception if error occured

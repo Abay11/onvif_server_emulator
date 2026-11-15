@@ -14,7 +14,10 @@ Onvif Server Emulator is an emulator of an IP device (camera, NVR) compatible wi
 
 A configuration directory may be passed as command line argument.
 As a default configuration directory is used "./server_configs".
-Example: "main.exe ./configs".
+Example: `./main ./configs`. Linux is the supported build platform.
+
+On Windows, use the [WSL2 mirrored container and firewall guide](docs/WSL2.md)
+for local VMS/VLC clients and LAN access, including WS-Discovery.
 
 
 # ⚙️ Server configurations
@@ -50,14 +53,26 @@ Each ONVIF service is implemented as a separate instance. Each service may have 
 
 "Timeout" - PullMessages timeout in seconds.
 
-"UseHttpServerPort" - specify this if you want pulling messages via PullPoint on a port differs from a http server's ports
+"UseHttpServerPort" - `true` shares the main HTTP listener; `false` creates a separate listener on `PullPoint.Port`.
 
- ## Discovery service configs
+## Network endpoint configuration
 
- #### Probe match properties
+`addresses.ipv4` is the socket bind address. `advertised.ipv4` is the concrete
+IPv4 returned to clients by discovery, ONVIF, media, snapshots, replay and events.
+It defaults to loopback; override it with `ONVIF_ADVERTISED_IPV4` for LAN clients.
+Optional `advertised.http_port`, `rtsp_port`, and `pullpoint_port` override
+client-visible ports; zero uses listening ports, with legacy forwarding settings
+as fallback for HTTP/RTSP. These settings do not create port forwarding rules.
+`rtp.port_min`/`port_max` constrain UDP server ports (default 50000–50199,
+first even and last odd). See the [network guide](docs/WSL2.md) for examples.
 
- "UseStaticResponse" - values: true/false. Points whether to response to the discovery Probe match with static message. Content will be read from `discovery_service_responses/probe_match.responses`. Currently is implemented only static variant.
+## Discovery service configs
 
+`enabled` controls IPv4 WS-Discovery Probe responses. `interface_ipv4` selects
+one local multicast interface; empty uses the system default. The environment
+variable `ONVIF_DISCOVERY_INTERFACE_IPV4` overrides it. The template is
+`server_configs/responses/ProbeMatch.response`; its XAddrs is filled from the
+advertised HTTP endpoint at startup.
 
  ## Recording Search
 

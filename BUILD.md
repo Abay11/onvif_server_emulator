@@ -32,60 +32,11 @@ To build OnvifServerEmulator:
 
 # Building
 
-### Building on Windows
+### Supported platforms
 
-For Windows it is recommended to use [vcpkg](https://vcpkg.io/en/getting-started.html).
-
-After vcpkg installation, install other dependencies. In this example we will use x64 packages.
-
-**Step 0.** Install [CMake](https://cmake.org/download/) and add it to PATH.
-
-**Step 1.** Install `GStreamer` libs and plugins:
-
-```
-vcpkg install --triplet x64-windows gstreamer gstreamer[plugins-base] gstreamer[plugins-good] gstreamer[plugins-ugly] gstreamer[plugins-bad] gstreamer[pango] gstreamer[x264] gstreamer[x265] gst-rtsp-server
-```
-
-Make sure the installation was completed successfully with command:
-```
-vcpkg list | findstr "gst"
-```
-All required GStreamer dependencies should be listed.
-
-**Step 2.** For proper work GStreamer applications require to point binaries and plugin directories.
-
-Add the `GST_PLUGIN_PATH` variable to system environment. Typical install locations:
-
-`C:\your_vcpkg_dir\packages\gstreamer_x64-windows\bin`  
-or  
-`C:\your_vcpkg_dir\packages\gstreamer_x64-windows\plugins\gstreamer`
-
-Add GStreamer binaries to PATH. Typically:
-```
-C:\your_vcpkg_dir\installed\x64-windows\bin
-```
-
-**Step 3.** Install Boost libs.
-
-```
-vcpkg install boost-system boost-date-time boost-asio boost-regex boost-thread boost-signals2 boost-property-tree --triplet x64-windows
-```
-
-Optional:
-```
-vcpkg install boost-test --triplet x64-windows
-```
-
-**Step 4.** Configure and build
-```
-cd <path_to_repository_clone>
-mkdir x64_build
-cd x64_build
-cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_TOOLCHAIN_FILE=C:/your_vcpkg_dir/scripts/buildsystems/vcpkg.cmake \
-	-DVCPKG_TARGET_TRIPLET=x64-windows -G "Visual Studio 17 2022" -A "x64" ..
-cmake --build .
-```
-You can also use `cmake-gui` to configure the project interactively.
+Builds target Linux only. On Windows use WSL2 and the Linux container. For
+Windows-host and LAN clients, including WS-Discovery and UDP media, follow the
+[WSL2 mirrored networking and firewall guide](docs/WSL2.md).
 
 ### Building on Linux
 
@@ -113,6 +64,7 @@ sudo apt install -y \
   libgstrtspserver-1.0-dev \
   gstreamer1.0-plugins-good \
   gstreamer1.0-plugins-ugly \
+  gstreamer1.0-x \
   gstreamer1.0-libav \
   gstreamer1.0-tools
 ```
@@ -122,7 +74,7 @@ sudo apt install -y \
 ```bash
 sudo apt install -y \
   libboost-system-dev libboost-date-time-dev libboost-regex-dev \
-  libboost-thread-dev libboost-filesystem-dev libboost-signals-dev \
+  libboost-thread-dev libboost-filesystem-dev \
   libboost-test-dev libboost-serialization-dev
 ```
 
@@ -141,11 +93,12 @@ cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo ..
 cmake --build . -- -j$(nproc)
 ```
 
-**Step 6.** Run tests (optional):
+**Step 6.** Run tests from the repository root (optional):
 
 ```bash
-cd build
-ctest --output-on-failure
+cmake -S . -B build -DENABLE_UNIT_TESTS=ON
+cmake --build build --parallel 2
+ctest --test-dir build --output-on-failure
 ```
 
 **Optional:** If your distro has different package names, substitute accordingly (e.g., Fedora/RHEL use `dnf`/`yum`).
@@ -171,27 +124,41 @@ fonts, and the GStreamer plugins used for live streaming and replay. Compiler,
 headers, source files, and diagnostic tools stay in the build stages. It uses
 Debian Trixie Slim and installs packages without recommendations.
 
-Run with the included configuration:
+For full network operation on native Linux, select the LAN IPv4 and interface:
 
 ```bash
-docker run --rm -p 8080:8080 -p 8554:8554 osrv-image:latest
-```
-
-To use custom configuration, mount the complete configuration directory:
-
-```bash
-docker run --rm \
-    -p 8080:8080 -p 8554:8554 \
-    -v "$(pwd)/server_configs":/app/server_configs:ro \
-    --name onvif-server-emul \
+docker run --rm --init --network host \
+    -e ONVIF_ADVERTISED_IPV4=192.168.1.10 \
+    -e ONVIF_DISCOVERY_INTERFACE_IPV4=192.168.1.10 \
     osrv-image:latest
 ```
 
-Adjust published ports to match the configuration. These mappings cover HTTP
-and RTSP control; RTP over UDP and WS-Discovery multicast require additional
-network configuration. For local Linux discovery testing, host networking is an
-option (`--network host`, without `-p`). Configure advertised addresses for the
-network used by your clients.
+Replace the example address with an IPv4 on the Docker Engine host. On Windows,
+use **Docker Engine inside WSL2 mirrored**, with the
+[documented Windows/Hyper-V firewall rules](docs/WSL2.md); Docker Desktop host
+networking is not equivalent to this profile.
+
+To customize configuration, mount the complete directory:
+
+```bash
+docker run --rm --init --network host \
+    -e ONVIF_ADVERTISED_IPV4=192.168.1.10 \
+    -e ONVIF_DISCOVERY_INTERFACE_IPV4=192.168.1.10 \
+    -v "$(pwd)/server_configs:/app/server_configs:ro" \
+    --name onvif-server-emul osrv-image:latest
+```
+
+For a local-only TCP test with manual device registration:
+
+```bash
+docker run --rm --init \
+    -p 127.0.0.1:8080:8080 -p 127.0.0.1:8554:8554 \
+    osrv-image:latest
+```
+
+In this last profile use `127.0.0.1` URLs and RTP interleaved over RTSP/TCP.
+These two port mappings do not provide multicast discovery or UDP media to LAN
+clients. Default UDP server media ports in the full profile are 50000–50199.
 
 GStreamer diagnostics are opt-in; add `-e 'GST_DEBUG=*:3'` to `docker run` when
 needed.
@@ -241,8 +208,8 @@ cmake --build build --parallel "$(nproc)"
 ```
 
 Do not share the development build volume between concurrent build containers.
-To run network services from this development container, add the same port
-mappings (or Linux host networking) shown above.
+To run network services from this development container, add Linux host networking and the advertised/discovery environment variables
+shown above (or the local-only TCP mappings for a limited test).
 
 For onboarding across machines, publish the development image to your team's
 registry after building it, then let developers pull it instead of reinstalling
@@ -258,3 +225,23 @@ docker pull registry.example.com/team/osrv-dev:trixie
 Use the pulled image name in the development `docker run` command. Rebuild and
 republish it when dependencies change. Publishing is a separate, explicit step;
 a local Docker build does not upload an image.
+
+### Network smoke test
+
+With a running emulator, Python 3 can check the default SOAP service configuration,
+returned URLs, snapshot retrieval, unicast and multicast discovery, and live video
+and audio RTP over both TCP and UDP:
+
+```bash
+python3 unit_tests/network_smoke.py \
+    --host 192.168.1.10 --advertised-ip 192.168.1.10 \
+    --multicast-interface 192.168.1.20
+```
+
+Here `--host` is the emulator address and `--multicast-interface` is a local IPv4
+on the **test client's** LAN adapter. Replace both example addresses. For a test
+in the server's own Linux network namespace use `--host 127.0.0.1` and select the
+interface joined by discovery. This automated test complements the Windows/VMS
+acceptance steps in [the mirrored guide](docs/WSL2.md); it does not configure
+firewalls. The test assumes authentication is disabled and creates a short-lived
+PullPoint subscription.

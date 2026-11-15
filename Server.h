@@ -34,10 +34,22 @@ struct ServerConfigs
 	std::string http_port_;
 	std::string rtsp_port_;
 
-	bool enabled_http_port_forwarding;
-	unsigned short forwarded_http_port;
-	bool enabled_rtsp_port_forwarding;
-	unsigned short forwarded_rtsp_port;
+	bool enabled_http_port_forwarding = false;
+	unsigned short forwarded_http_port = 0;
+	bool enabled_rtsp_port_forwarding = false;
+	unsigned short forwarded_rtsp_port = 0;
+
+	// Client-visible endpoints are independent of socket bind addresses.
+	std::string advertised_ipv4_ = "127.0.0.1";
+	unsigned short advertised_http_port_ = 0;
+	unsigned short advertised_rtsp_port_ = 0;
+	unsigned short advertised_pullpoint_port_ = 0;
+	unsigned short rtp_port_min_ = 50000;
+	unsigned short rtp_port_max_ = 50199;
+
+	std::string HttpAddress() const;
+	std::string RtspAddress() const;
+	std::string PullPointAddress(unsigned short listen_port, bool use_http_port) const;
 
 	std::vector<osrv::auth::UserAccount> system_users_;
 	AUTH_SCHEME auth_scheme_{};

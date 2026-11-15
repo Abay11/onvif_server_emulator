@@ -66,3 +66,22 @@ BOOST_AUTO_TEST_CASE(prepare_resposne_func)
 	auto actual_related_to = exns::find_hierarchy("Envelope.Header.RelatesTo", response_tree);
 	BOOST_TEST(actual_related_to == expected_relatesTo_id);
 }
+BOOST_AUTO_TEST_CASE(discovery_replaces_template_address)
+{
+    const std::string original = "<Envelope><Body><d:XAddrs xmlns:d=\"urn:test\">http://127.0.0.1/old</d:XAddrs></Body></Envelope>";
+    auto response = osrv::discovery::utility::set_xaddrs(original, "http://192.168.1.10:18080/onvif/device_service");
+    auto tree = exns::to_ptree(response);
+    BOOST_TEST(exns::find_hierarchy("Envelope.Body.XAddrs", tree) ==
+        "http://192.168.1.10:18080/onvif/device_service");
+    BOOST_CHECK_THROW(osrv::discovery::utility::set_xaddrs("<Envelope/>", "http://192.168.1.10/"), std::runtime_error);
+}
+
+BOOST_AUTO_TEST_CASE(discovery_handles_empty_datagrams_and_escapes_identifiers)
+{
+    BOOST_TEST(osrv::discovery::utility::extract_types({}).empty());
+    BOOST_TEST(osrv::discovery::utility::extract_message_id({}).empty());
+    auto response = osrv::discovery::utility::prepare_response("urn:uuid:new", "a&b<$1>",
+        "<Envelope><Header><MessageID>old</MessageID><RelatesTo>old</RelatesTo></Header></Envelope>");
+    auto tree = exns::to_ptree(response);
+    BOOST_TEST(exns::find_hierarchy("Envelope.Header.RelatesTo", tree) == "a&b<$1>");
+}

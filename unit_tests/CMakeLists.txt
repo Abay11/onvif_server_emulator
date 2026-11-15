@@ -26,7 +26,6 @@ add_executable(test_executable
 	tests_main.cpp
 	video_source_tests.cpp
 	xmlparser_tests.cpp
-	xmlparser_tests.cpp
 )
 
 # indicates the include paths
@@ -46,5 +45,10 @@ ${Boost_UNIT_TEST_FRAMEWORK_LIBRARY}
 # declares a test with our executable
 add_test(NAME test1 COMMAND test_executable)
 
-set_target_properties(main PROPERTIES VS_DEBUGGER_COMMAND_ARGUMENTS
-	"--run_test=* --detect_memory_leaks=0 --log_level=all")
+# Keep the existing relative fixture layout in the build tree. Tests that write
+# and restore configs must never modify the source checkout.
+set(FIXTURE_ROOT "${CMAKE_CURRENT_BINARY_DIR}/fixtures")
+file(MAKE_DIRECTORY "${FIXTURE_ROOT}/build/unit_tests")
+file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/test_data" DESTINATION "${FIXTURE_ROOT}/unit_tests")
+file(COPY "${CMAKE_SOURCE_DIR}/server_configs" DESTINATION "${FIXTURE_ROOT}")
+set_tests_properties(test1 PROPERTIES WORKING_DIRECTORY "${FIXTURE_ROOT}/build/unit_tests")

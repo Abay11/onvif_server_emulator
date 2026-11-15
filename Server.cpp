@@ -22,6 +22,8 @@
 #include <boost/property_tree/json_parser.hpp>
 
 #include <string>
+#include <cstdlib>
+#include <format>
 
 static const std::string COMMON_CONFIGS_NAME = "common.config";
 
@@ -93,6 +95,11 @@ void Server::init()
 
 	profiles_config_ = osrv::ServiceConfigs("media_profiles", configs_dir);
 
+	// Validate and join discovery before event generators create background threads.
+	// A wrong mirrored interface must fail startup cleanly.
+	discovery::init_service(configs_dir, *logger_, *server_configs_);
+	discovery::start();
+
 	DeviceService()->Run();
 	DeviceIOService()->Run();
 	ImagingService()->Run();
@@ -103,7 +110,6 @@ void Server::init()
 	ReplayControlService()->Run();
 
 	event::init_service(*http_server_, *server_configs_, configs_dir, *logger_);
-	discovery::init_service(configs_dir, *logger_);
 
 	// TODO: impl. logic for multichannel cannel
 	auto audio_node = profiles_config_->get_child(CONFIGURATION_ENUMERATION[CONFIGURATION_TYPE::AUDIOENCODER]).front();
@@ -152,15 +158,6 @@ void Server::run()
 	});
 
 	rtspServer_->run();
-	try
-	{
-		discovery::start();
-	}
-	catch (const std::exception& e)
-	{
-		std::string what(e.what());
-		logger_->Error("Can't start Discovery Service: " + what);
-	}
 
 	std::string msg("Server is successfully started on port: ");
 	msg += std::to_string(server_port.get_future().get());
@@ -185,6 +182,20 @@ std::shared_ptr<ServerConfigs> read_server_configs(const std::string& config_pat
 	read_configs->ipv4_address_ = configs_tree.get<std::string>("addresses.ipv4");
 	read_configs->http_port_ = configs_tree.get<std::string>("addresses.http_port");
 	read_configs->rtsp_port_ = configs_tree.get<std::string>("addresses.rtsp_port");
+	read_configs->advertised_ipv4_ = configs_tree.get<std::string>("advertised.ipv4", "127.0.0.1");
+	if (const char* value = std::getenv("ONVIF_ADVERTISED_IPV4"))
+		read_configs->advertised_ipv4_ = value;
+	const auto advertised = boost::asio::ip::make_address_v4(read_configs->advertised_ipv4_);
+	if (advertised.is_unspecified() || advertised.is_multicast() || advertised.to_uint() == 0xffffffff)
+		throw std::runtime_error("advertised.ipv4 must be a unicast IPv4 address reachable by clients");
+	read_configs->advertised_http_port_ = configs_tree.get<unsigned short>("advertised.http_port", 0);
+	read_configs->advertised_rtsp_port_ = configs_tree.get<unsigned short>("advertised.rtsp_port", 0);
+	read_configs->advertised_pullpoint_port_ = configs_tree.get<unsigned short>("advertised.pullpoint_port", 0);
+	read_configs->rtp_port_min_ = configs_tree.get<unsigned short>("rtp.port_min", 50000);
+	read_configs->rtp_port_max_ = configs_tree.get<unsigned short>("rtp.port_max", 50199);
+	if (read_configs->rtp_port_min_ == 0 || read_configs->rtp_port_min_ % 2 != 0 ||
+		read_configs->rtp_port_max_ <= read_configs->rtp_port_min_ || read_configs->rtp_port_max_ % 2 != 1)
+		throw std::runtime_error("RTP range must start at a positive even port and end at a larger odd port");
 
 	read_configs->enabled_http_port_forwarding =
 			configs_tree.get<bool>("portForwardingSimulation.enabled_for_http", false);
@@ -244,6 +255,28 @@ DigitalInputsList read_digital_inputs(const boost::property_tree::ptree& configs
 	}
 
 	return result;
+}
+
+std::string ServerConfigs::HttpAddress() const
+{
+	const auto port = advertised_http_port_ ? std::to_string(advertised_http_port_) :
+		(enabled_http_port_forwarding ? std::to_string(forwarded_http_port) : http_port_);
+	return std::format("http://{}:{}/", advertised_ipv4_, port);
+}
+
+std::string ServerConfigs::RtspAddress() const
+{
+	const auto port = advertised_rtsp_port_ ? std::to_string(advertised_rtsp_port_) :
+		(enabled_rtsp_port_forwarding ? std::to_string(forwarded_rtsp_port) : rtsp_port_);
+	return std::format("rtsp://{}:{}/", advertised_ipv4_, port);
+}
+
+std::string ServerConfigs::PullPointAddress(unsigned short listen_port, bool use_http_port) const
+{
+	if (use_http_port)
+		return HttpAddress();
+	return std::format("http://{}:{}/", advertised_ipv4_,
+		advertised_pullpoint_port_ ? advertised_pullpoint_port_ : listen_port);
 }
 
 AUTH_SCHEME str_to_auth(const std::string& scheme)

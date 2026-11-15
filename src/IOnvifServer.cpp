@@ -191,16 +191,7 @@ const std::shared_ptr<pt::ptree>& IOnvifServer::ProfilesConfig() const
 
 std::string IOnvifServer::ServerAddress() const
 {
-	return std::format("http://{}:{}/",
-		http_server_->config.address,
-		server_configs_->enabled_http_port_forwarding ?
-			server_configs_->forwarded_http_port
-			: http_server_->config.port);
-}
-
-std::string IOnvifServer::ServerAddressWithOverrideIp(std::string_view ip) const
-{
-	return std::format("http://{}:{}/", ip, http_server_->config.port);
+	return server_configs_->HttpAddress();
 }
 
 } // namespace osrv

@@ -54,3 +54,22 @@ BOOST_AUTO_TEST_CASE(profiles_to_soap_func)
 	BOOST_TEST(result_root_tree.front().second.get<std::string>("<xmlattr>.token") == "ProfileToken0");
 	BOOST_TEST(result_root_tree.back().second.get<std::string>("<xmlattr>.token") == "ProfileToken1");
 }
+
+#include "../Server.h"
+#include "../onvif_services/media_service.h"
+
+BOOST_AUTO_TEST_CASE(media_urls_use_advertised_ports)
+{
+    osrv::ServerConfigs cfg{};
+    cfg.ipv4_address_ = "0.0.0.0";
+    cfg.http_port_ = "8080";
+    cfg.rtsp_port_ = "8554";
+    cfg.advertised_ipv4_ = "192.168.1.10";
+    cfg.enabled_http_port_forwarding = true;
+    cfg.forwarded_http_port = 1080;
+    // Regression: snapshot previously tested the RTSP forwarding flag.
+    BOOST_TEST(osrv::media2::util::generate_snapshot_url(cfg) == "http://192.168.1.10:1080/snapshot.jpeg");
+    cfg.advertised_rtsp_port_ = 18554;
+    BOOST_TEST(osrv::media::util::generate_rtsp_url(cfg, "Live&HighStream") ==
+        "rtsp://192.168.1.10:18554/Live&HighStream");
+}

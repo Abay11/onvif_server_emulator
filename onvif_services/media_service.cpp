@@ -687,15 +687,7 @@ struct GetStreamUriHandler : public OnvifRequestBase
 
 		pt::ptree response_node;
 
-		std::optional<std::string> nicAddr = std::nullopt;
-		if (auto ep = request->local_endpoint(); ep != decltype(ep){})
-		{
-			auto ipv4Addr = ep.address().to_v4().to_string();
-			if (!ipv4Addr.empty())
-				nicAddr = ipv4Addr;
-		}
-
-		auto rtsp_url = util::generate_rtsp_url(server_cfg_, stream_config_it->second.get<std::string>("Uri"), nicAddr);
+		auto rtsp_url = util::generate_rtsp_url(server_cfg_, stream_config_it->second.get<std::string>("Uri"));
 		response_node.put("trt:MediaUri.tt:Uri", rtsp_url);
 		response_node.put("trt:MediaUri.tt:InvalidAfterConnect",
 											stream_config_it->second.get<std::string>("InvalidAfterConnect"));
@@ -886,12 +878,9 @@ void fill_soap_media_profile(const pt::ptree& profileConfigs, pt::ptree& profile
 }
 	
 std::string osrv::media::util::generate_rtsp_url(const osrv::ServerConfigs& server_configs,
-	const std::string& profile_stream_url, std::optional<std::string> nicIp /*= std::nullopt*/)
+	const std::string& profile_stream_url)
 {
-	return std::format("rtsp://{}:{}/{}",
-		(nicIp ? *nicIp : server_configs.ipv4_address_),
-		server_configs.rtsp_port_,
-		profile_stream_url);
+	return server_configs.RtspAddress() + profile_stream_url;
 }
 
 void osrv::media::util::fill_soap_videosource_configuration(const pt::ptree& config_node, pt::ptree& videosource_node)

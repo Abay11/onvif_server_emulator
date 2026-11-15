@@ -65,7 +65,6 @@ public:
 	const std::shared_ptr<pt::ptree>& ProfilesConfig() const;
 
 	std::string ServerAddress() const;
-	std::string ServerAddressWithOverrideIp(std::string_view ip) const;
 
 	utility::media::MediaProfilesManager* MediaProfilesManager()
 	{

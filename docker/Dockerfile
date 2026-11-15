@@ -35,6 +35,7 @@ RUN apt-get update \
         libboost-regex-dev \
         libboost-system-dev \
         libboost-thread-dev \
+        libboost-test-dev \
         libgstreamer1.0-dev \
         libgstreamer-plugins-base1.0-dev \
         libgstrtspserver-1.0-dev \

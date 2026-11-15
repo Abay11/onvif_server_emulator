@@ -69,19 +69,9 @@ struct CreatePullPointSubscriptionHandler : public utility::http::RequestHandler
 		envelope_tree.add("s:Header.wsa:Action",
 											"http://www.onvif.org/ver10/events/wsdl/EventPortType/CreatePullPointSubscriptionResponse");
 
-		auto port = server_configs->http_port_;
-		if (!EVENT_CONFIGS_TREE.get<bool>("PullPoint.UseHttpServerPort"))
-			port = std::to_string(EVENT_CONFIGS_TREE.get<unsigned short>("PullPoint.Port"));
-
-		auto serverIpAddr = server_configs->ipv4_address_;
-		if (auto ep = request->local_endpoint(); ep != decltype(ep){})
-		{
-			auto ipv4Addr = ep.address().to_v4().to_string();
-			if (!ipv4Addr.empty())
-				serverIpAddr = ipv4Addr;
-		}
-
-		std::string sub_ref = std::format("http://{}:{}/", serverIpAddr, port);
+		const bool use_http_port = EVENT_CONFIGS_TREE.get<bool>("PullPoint.UseHttpServerPort");
+		std::string sub_ref = server_configs->PullPointAddress(
+			EVENT_CONFIGS_TREE.get<unsigned short>("PullPoint.Port"), use_http_port);
 
 		auto pullpoint = notifications_manager->CreatePullPoint();
 		sub_ref += pullpoint->GetSubscriptionReference();

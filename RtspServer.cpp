@@ -247,6 +247,19 @@ Server::Server(ILogger* logger, ServerConfigs& server_configs, const AudioInfo& 
 	replayFactory_ = onvif_factory_new();
 	gst_rtsp_media_factory_set_media_gtype(replayFactory_, GST_TYPE_RTSP_ONVIF_MEDIA);
 
+	auto pool = gst_rtsp_address_pool_new();
+	if (!gst_rtsp_address_pool_add_range(pool, GST_RTSP_ADDRESS_POOL_ANY_IPV4,
+		GST_RTSP_ADDRESS_POOL_ANY_IPV4, server_configs_->rtp_port_min_, server_configs_->rtp_port_max_, 0))
+	{
+		g_object_unref(pool);
+		throw std::runtime_error("Cannot configure RTP/RTCP UDP port range");
+	}
+	for (auto factory : {factoryHighStream_, factoryLowStream_, replayFactory_})
+	{
+		gst_rtsp_media_factory_set_address_pool(factory, pool);
+	}
+	g_object_unref(pool);
+
 	gst_rtsp_mount_points_add_factory(mounts_, "/Live&HighStream", factoryHighStream_);
 	gst_rtsp_mount_points_add_factory(mounts_, "/Live&LowStream", factoryLowStream_);
 	gst_rtsp_mount_points_add_factory(mounts_, "/Recording0", replayFactory_);
@@ -280,13 +293,12 @@ void Server::run()
 		if (stoi(server_configs_->rtsp_port_) != actually_used_port)
 			logger_->Warn("RTSP Server port is binding on: " + std::to_string(actually_used_port));
 
-		gchar* server_address = gst_rtsp_server_get_address(server_);
+		const auto advertised_address = server_configs_->RtspAddress();
 		std::stringstream uris;
-		uris << "rtsp://" << server_address << ":" << actually_used_port << "/Live&HighStream";
-		uris << "\nrtsp://" << server_address << ":" << actually_used_port << "/Live&LowStream";
-		uris << "\nrtsp://" << server_address << ":" << actually_used_port << "/Recording0";
+		uris << advertised_address << "Live&HighStream";
+		uris << "\n" << advertised_address << "Live&LowStream";
+		uris << "\n" << advertised_address << "Recording0";
 
-		g_free(server_address);
 
 		logger_->Info("RTSP Server is running. Available URIs:\n" + uris.str());
 

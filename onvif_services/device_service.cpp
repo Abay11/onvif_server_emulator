@@ -184,7 +184,6 @@ struct GetServicesHandler : public OnvifRequestBase
 		const std::shared_ptr<IOnvifServer>& srv)
 		: OnvifRequestBase(GetServices, auth::SECURITY_LEVELS::PRE_AUTH, xs, configs)
 		, ipv4_address_(srv->ServerAddress())
-		, srv_(srv)
 	{
 	}
 
@@ -193,14 +192,6 @@ struct GetServicesHandler : public OnvifRequestBase
 		auto envelope_tree = utility::soap::getEnvelopeTree(ns_);
 
 		auto ipv4_bind = ipv4_address_;
-
-		if (auto endpoint = request->local_endpoint(); endpoint != decltype(endpoint){})
-		{
-			if (auto ipv4 = endpoint.address().to_v4().to_string(); !ipv4.empty())
-			{
-				ipv4_bind = srv_.lock()->ServerAddressWithOverrideIp(ipv4);
-			}
-		}
 
 		auto services_config = service_configs_->get_child(GetServices);
 		pt::ptree services_node;
@@ -237,7 +228,6 @@ struct GetServicesHandler : public OnvifRequestBase
 
 private:
 	const std::string ipv4_address_;
-	const std::weak_ptr<IOnvifServer> srv_;
 };
 
 struct GetScopesHandler : public OnvifRequestBase

@@ -938,20 +938,10 @@ public:
 
 		if (srcCfg.empty() || encCfg.empty())
 			throw incomplete_configuration();
-		
-		std::optional<std::string> nicIp;
-		if (auto ep = request->local_endpoint(); ep != decltype(ep){})
-		{
-			auto ipv4Addr = ep.address().to_v4().to_string();
-			if (!ipv4Addr.empty())
-			{
-				nicIp = ipv4Addr;
-			}
-		}
 
 		auto envelope_tree = utility::soap::getEnvelopeTree(ns_);
 		envelope_tree.put("s:Body.tr2:GetSnapshotUriResponse.tr2:Uri",
-			util::generate_snapshot_url(server_cfg_, nicIp));
+			util::generate_snapshot_url(server_cfg_));
 
 		pt::ptree root_tree;
 		root_tree.put_child("s:Envelope", envelope_tree);
@@ -1014,17 +1004,9 @@ public:
 
 		if (stream_config_it == stream_configs_list.end())
 			throw std::runtime_error("Could not find a stream for the requested Media Profile token=" + requested_token);
-		
-		std::optional<std::string> nicIp;
-		if (auto ep = request->local_endpoint(); ep != decltype(ep) {})
-		{
-			std::string addr = ep.address().to_v4().to_string();
-			if (!addr.empty())
-				nicIp = addr;
-		}
 
 		pt::ptree response_node;
-		auto rtsp_url = media::util::generate_rtsp_url(server_cfg_, stream_config_it->second.get<std::string>("Uri"), nicIp);
+		auto rtsp_url = media::util::generate_rtsp_url(server_cfg_, stream_config_it->second.get<std::string>("Uri"));
 		response_node.put("tr2:Uri", rtsp_url);
 
 		auto envelope_tree = utility::soap::getEnvelopeTree(ns_);
@@ -1105,13 +1087,9 @@ public:
 namespace util
 {
 
-std::string generate_snapshot_url(const ServerConfigs& server_configs, std::optional<std::string> nicIp/* = std::nullopt*/)
+std::string generate_snapshot_url(const ServerConfigs& server_configs)
 {
-	auto port = server_configs.enabled_rtsp_port_forwarding ?
-		std::to_string(server_configs.forwarded_http_port) : server_configs.http_port_;
-	return std::format("http://{}:{}/snapshot.jpeg",
-		nicIp ? *nicIp : server_configs.ipv4_address_,
-		port);
+	return server_configs.HttpAddress() + "snapshot.jpeg";
 }
 
 using ptree = boost::property_tree::ptree;
