@@ -38,7 +38,7 @@ boost::posix_time::ptime osrv::Recording::DateUntil() const
 	return fixed_until_;
 }
 
-std::shared_ptr<osrv::RecordingEvents> osrv::Recording::RecordingEvents()
+std::shared_ptr<osrv::RecordingEvents> osrv::Recording::GetRecordingEvents()
 {
 	if (!recordingEvents_)
 		recordingEvents_ = std::make_shared<osrv::RecordingEvents>(shared_from_this());

@@ -113,7 +113,7 @@ BOOST_AUTO_TEST_CASE(EventsSearchSession0)
 	std::string until{"20210523T060000"};
 
 	auto r = std::make_shared<osrv::Recording>("rtoken0", "vtoken", from, until);
-	auto re = r->RecordingEvents();
+	auto re = r->GetRecordingEvents();
 	EventsSearchSessionFactory factory("SimpleEventsSearchSession");
 
 	std::string searchStartPoint = "20210523T000000";
@@ -143,7 +143,7 @@ BOOST_AUTO_TEST_CASE(EventsSearchSession1)
 	std::string until{"20210523T060000"};
 
 	auto r = std::make_shared<osrv::Recording>("rtoken0", "vtoken", from, until);
-	auto re = r->RecordingEvents();
+	auto re = r->GetRecordingEvents();
 	EventsSearchSessionFactory factory("SimpleEventsSearchSession");
 
 	std::string searchStartPoint = "20210523T030000";
@@ -173,7 +173,7 @@ BOOST_AUTO_TEST_CASE(EventsSearchSession2)
 	std::string until{"20210523T060000"};
 
 	auto r = std::make_shared<osrv::Recording>("rtoken0", "vtoken", from, until);
-	auto re = r->RecordingEvents();
+	auto re = r->GetRecordingEvents();
 	EventsSearchSessionFactory factory("SimpleEventsSearchSession");
 
 	std::string searchStartPoint = "20210523T030000";

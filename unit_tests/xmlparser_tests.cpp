@@ -136,7 +136,7 @@ BOOST_AUTO_TEST_CASE(find_hierarchy_elements0)
 
 	{
 		auto elements = exns::find_hierarchy_elements("root.some_node", test_xml);
-		BOOST_ASSERT(1, elements.size());
+		BOOST_TEST(elements.size() == 1);
 		BOOST_CHECK_EQUAL("some_node", elements.at(0)->first.data());
 		BOOST_CHECK_EQUAL("data", elements.at(0)->second.data());
 	}

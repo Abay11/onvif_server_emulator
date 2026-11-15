@@ -7,6 +7,7 @@
 #include <memory>
 #include <string>
 #include <vector>
+#include <string_view>
 
 namespace pt = boost::property_tree;
 
@@ -58,8 +59,9 @@ public:
 	std::shared_ptr<IOnvifService> ReplayControlService();
 
 	const std::shared_ptr<ILogger> Logger() const;
-	std::shared_ptr<HttpServer> HttpServer() const;
-	std::shared_ptr<ServerConfigs> ServerConfigs();
+	std::shared_ptr<HttpServer> GetHttpServer() const;
+	std::shared_ptr<ServerConfigs> GetServerConfigs();
+	const std::shared_ptr<ServerConfigs> GetServerConfigs() const;
 	const std::shared_ptr<pt::ptree>& ProfilesConfig() const;
 
 	std::string ServerAddress() const;

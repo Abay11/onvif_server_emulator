@@ -11,10 +11,8 @@ endif()
 
 add_executable(main main.cpp)
 
-if (MSVC)
-	if ("${CMAKE_TOOLCHAIN_FILE}" STREQUAL "")
-		message( FATAL_ERROR "Please install vcpkg and set the path! Ex.:  -DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake" )
-	endif()
+if (NOT CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    message(FATAL_ERROR "Only Linux builds are supported. On Windows use WSL2 and the Linux container; see docs/WSL2.md.")
 endif()
 
 find_package(Boost REQUIRED
@@ -24,14 +22,6 @@ find_package(Boost REQUIRED
 )
 include_directories(${Boost_INCLUDE_DIRS})
 add_definitions(-DBOOST_ASIO_USE_TS_EXECUTOR_AS_DEFAULT) # helps to solve errors while building Simple-Web-Server with BOOST.Asio version greater or equal 1.74
-if (MSVC)
-	if (WIN32)
-		add_definitions(-D_WIN32_WINDOWS=0x0601) # helps to supress BOOST warnings
-	endif()
-endif()
-add_definitions(-DBOOST_ASIO_USE_TS_EXECUTOR_AS_DEFAULT)
-
-
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(GSTREAMER REQUIRED gstreamer-rtsp-server-1.0)
 message(STATUS "gstreamer lib dir: ${GSTREAMER_LIBRARY_DIRS}")
@@ -152,10 +142,6 @@ add_library(onvif_server STATIC
 	include/MediaFormats.h
 )
 
-#pass application CONFIGS_FILES directory as command line arguments
-set_target_properties(main PROPERTIES VS_DEBUGGER_COMMAND_ARGUMENTS
-	"${CMAKE_CURRENT_SOURCE_DIR}/server_configs")
-
 include_directories(main
 	"${CMAKE_CURRENT_SOURCE_DIR}/include"
 	"${CMAKE_CURRENT_SOURCE_DIR}/Simple-Web-Server"
@@ -169,16 +155,8 @@ target_link_libraries(main PUBLIC
 	Boost::date_time
 )
 
-if (MSVC)
-	set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT main)
-endif()
-
-option(ENABLE_UNIT_TESTS OFF)
-
+option(ENABLE_UNIT_TESTS "Build the emulator unit tests" OFF)
 if(ENABLE_UNIT_TESTS)
+	enable_testing()
 	add_subdirectory(unit_tests)
 endif()
-
-#copy config files to the same folder with the execution for standalone running .exe outside IDE
-execute_process(COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_CURRENT_SOURCE_DIR}/server_configs"
-	"${CMAKE_CURRENT_BINARY_DIR}/Debug/server_configs")

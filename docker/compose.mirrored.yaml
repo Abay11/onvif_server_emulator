@@ -1,0 +1,12 @@
+# Run with Docker Engine installed inside the WSL distribution, not Docker Desktop.
+services:
+  emulator:
+    image: osrv-image:latest
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    network_mode: host
+    environment:
+      ONVIF_ADVERTISED_IPV4: ${ONVIF_ADVERTISED_IPV4:?Set the Windows LAN IPv4 address}
+      ONVIF_DISCOVERY_INTERFACE_IPV4: ${ONVIF_DISCOVERY_INTERFACE_IPV4:?Set the mirrored LAN interface IPv4 address}
+    init: true

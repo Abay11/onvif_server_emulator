@@ -29,9 +29,7 @@ struct GetReplayHandler : public OnvifRequestBase
 
 	void operator()(std::shared_ptr<HttpServer::Response> response, std::shared_ptr<HttpServer::Request> request) override
 	{
-
-		// TODO: uri now is hard coded
-		const std::string uri = "rtsp://" + srv_configs_->ipv4_address_ + ":" + srv_configs_->rtsp_port_ + "/Recording0";
+		const auto uri = srv_configs_->RtspAddress() + "Recording0";
 
 		auto envelope_tree = utility::soap::getEnvelopeTree(ns_);
 		envelope_tree.add("s:Body.trp:GetReplayUriResponse.trp:Uri", uri);
@@ -54,6 +52,6 @@ ReplayControlService::ReplayControlService(const std::string& service_uri, const
 		: IOnvifService(service_uri, service_name, srv)
 
 {
-	requestHandlers_.push_back(std::make_shared<GetReplayHandler>(xml_namespaces_, srv->ServerConfigs(), configs_ptree_));
+	requestHandlers_.push_back(std::make_shared<GetReplayHandler>(xml_namespaces_, srv->GetServerConfigs(), configs_ptree_));
 }
 } // namespace osrv

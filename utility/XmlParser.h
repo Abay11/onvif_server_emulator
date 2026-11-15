@@ -2,7 +2,7 @@
 
 #include <string>
 
-#include <boost\property_tree\ptree.hpp>
+#include <boost/property_tree/ptree.hpp>
 
 static const char UNEXPECTED_FORMAT[] = "Parsing error: XML content has unexpected format";
 

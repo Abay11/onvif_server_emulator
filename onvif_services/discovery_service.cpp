@@ -1,12 +1,13 @@
 #include "discovery_service.h"
 
 #include "../Logger.h"
+#include "../Server.h"
+#include <boost/property_tree/json_parser.hpp>
+#include <cstdlib>
 #include "../utility/XmlParser.h"
 
-#include <algorithm>
 #include <fstream>
 #include <memory>
-#include <regex>
 #include <thread>
 
 #include <boost/asio.hpp>
@@ -23,139 +24,128 @@ static const std::string DISCOVERY_RESPONSE_FILE = "responses/ProbeMatch.respons
 
 namespace ba = boost::asio;
 
+namespace
+{
+std::string discovery_value(const boost::property_tree::ptree& tree, std::string_view path)
+{
+	const auto elements = exns::find_hierarchy_elements(path, tree);
+	return elements.empty() ? std::string{} : elements.front()->second.get_value<std::string>();
+}
+
+bool replace_element(boost::property_tree::ptree& tree, std::string_view element, const std::string& value)
+{
+	bool replaced = false;
+	for (auto& [name, child] : tree)
+	{
+		if (name.substr(name.find_last_of(':') + 1) == element)
+		{
+			child.put_value(value);
+			replaced = true;
+		}
+		else
+			replaced = replace_element(child, element, value) || replaced;
+	}
+	return replaced;
+}
+} // namespace
+
 class DiscoveryManager
 {
 public:
-	DiscoveryManager(ILogger& logger, std::string&& response)
-			: logger_(&logger), response_(std::move(response)), remote_endpoint_()
+	DiscoveryManager(ILogger& logger, std::string response, std::string interface_ipv4)
+		: logger_(&logger), response_(std::move(response)), interface_ipv4_(std::move(interface_ipv4)), socket_(io_)
 	{
-		io_ = std::make_shared<ba::io_context>();
-		io_work_ = std::make_shared<ba::io_context::work>(*io_);
 	}
 
 	void Start()
 	{
-		if (worker_)
+		if (worker_.joinable())
 			return;
-
-		socket_ = std::make_shared<ba::ip::udp::socket>(*io_);
-		socket_->open(ba::ip::udp::v4());
-		socket_->set_option(ba::socket_base::reuse_address(true));
-		socket_->set_option(ba::socket_base::broadcast(true));
-		socket_->set_option(ba::ip::multicast::join_group(ba::ip::address::from_string("239.255.255.250")));
-
-		boost::system::error_code ec;
-		socket_->bind(ba::ip::udp::endpoint(ba::ip::udp::v4(), 3702), ec);
-		if (ec)
-		{
-			logger_->Error("Can't bind the Discovery's socket to the port 3702: " + ec.message());
-		}
-
-		io_->post([this]() { do_receive(); });
-
-		worker_ = std::make_shared<std::thread>([this]() { io_->run(); });
+		io_.restart();
+		socket_.open(ba::ip::udp::v4());
+		socket_.set_option(ba::socket_base::reuse_address(true));
+		socket_.bind(ba::ip::udp::endpoint(ba::ip::udp::v4(), 3702));
+		const auto group = ba::ip::make_address_v4("239.255.255.250");
+		if (interface_ipv4_.empty())
+			socket_.set_option(ba::ip::multicast::join_group(group));
+		else
+			socket_.set_option(ba::ip::multicast::join_group(group, ba::ip::make_address_v4(interface_ipv4_)));
+		logger_->Info("WS-Discovery listening on UDP 3702, multicast interface: " +
+			(interface_ipv4_.empty() ? std::string("system default") : interface_ipv4_));
+		do_receive();
+		worker_ = std::thread([this]() { io_.run(); });
 	}
 
 	void Stop()
 	{
-		if (!io_work_ || !worker_)
-			return;
-
-		io_work_.reset();
-
-		try
+		if (worker_.joinable())
 		{
-			worker_->join();
+			ba::post(io_, [this]() { socket_.close(); });
+			worker_.join();
 		}
-		catch (const std::exception&)
+		else
 		{
+			boost::system::error_code ec;
+			socket_.close(ec);
 		}
 	}
+
+	~DiscoveryManager() { Stop(); }
 
 private:
 	void do_receive()
 	{
-		socket_->async_receive_from(ba::buffer(data_, max_length), remote_endpoint_,
-																[this](boost::system::error_code ec, std::size_t bytes_recvd) {
-																	logger_->Info("Received a probe from: " + remote_endpoint_.address().to_string() +
-																								":" + std::to_string(remote_endpoint_.port()));
-
-																	if (!ec && bytes_recvd > 0)
-																	{
-																		return do_send(bytes_recvd);
-																	}
-
-																	do_receive();
-																});
+		socket_.async_receive_from(ba::buffer(data_), remote_endpoint_,
+			[this](boost::system::error_code ec, std::size_t length) {
+				if (ec == ba::error::operation_aborted || !socket_.is_open())
+					return;
+				if (!ec)
+				{
+					try
+					{
+						auto tree = exns::to_ptree(std::string(data_, length));
+						const auto types = osrv::discovery::utility::extract_types(tree);
+						const auto id = osrv::discovery::utility::extract_message_id(tree);
+						if (!id.empty() && (types.empty() || types.find("NetworkVideoTransmitter") != std::string::npos ||
+							types.find("NetworkVideoDisplay") != std::string::npos || types.find("Device") != std::string::npos))
+						{
+							// Only a Probe may trigger a response (not arbitrary WS-Discovery messages).
+							if (!discovery_value(tree, "Envelope.Header.Action").ends_with("/Probe") ||
+								exns::find_hierarchy_elements("Envelope.Body.Probe", tree).empty())
+							{
+								do_receive();
+								return;
+							}
+							pending_response_ = osrv::discovery::utility::prepare_response(
+								osrv::discovery::utility::generate_uuid(), id, std::string(response_));
+							socket_.async_send_to(ba::buffer(pending_response_), remote_endpoint_,
+								[this](boost::system::error_code error, std::size_t) {
+									if (error && error != ba::error::operation_aborted)
+										logger_->Warn("WS-Discovery response failed: " + error.message());
+									if (socket_.is_open())
+										do_receive();
+								});
+							return;
+						}
+					}
+					catch (const std::exception& error)
+					{
+						logger_->Warn("Ignoring malformed WS-Discovery datagram: " + std::string(error.what()));
+					}
+				}
+				do_receive();
+			});
 	}
 
-	void do_send(std::size_t length)
-	{
-		std::string probe_msg(std::begin(data_), std::begin(data_) + length);
-		logger_->Trace("Probe message: " + probe_msg);
-
-		auto probe_tree = exns::to_ptree(probe_msg);
-
-		const std::vector ONVIF_TYPES = {"NetworkVideoTransmitter", "NetworkVideoDisplay", "Device"};
-		auto types = osrv::discovery::utility::extract_types(probe_tree);
-		if (std::any_of(ONVIF_TYPES.begin(), ONVIF_TYPES.end(), [&types](const auto& t) {
-					// here is very poor logic, but I think it's should be enough
-					// and it's supposed to reply only for ONVIF devices and ignoring others
-					return types.find(t) != std::string::npos;
-				}))
-		{
-			const auto relatesTo = osrv::discovery::utility::extract_message_id(probe_tree);
-
-			if (relatesTo.empty())
-			{
-				logger_->Error("Probe's messageID is empty! Probe match dropped!");
-			}
-			else
-			{
-				response_ = osrv::discovery::utility::prepare_response(osrv::discovery::utility::generate_uuid(), relatesTo,
-																															 std::move(response_));
-
-				socket_->async_send_to(
-						ba::buffer(response_), remote_endpoint_,
-						[this](const boost::system::error_code& ec, std::size_t bytes_transferred) {
-							if (ec)
-							{
-								logger_->Error("Something went wrong while sending a response to the Probe: " + ec.message());
-							}
-							else if (bytes_transferred != response_.size())
-							{
-								logger_->Warn("Sending message length on the Probe not match actual required size Probe!");
-							}
-
-							logger_->Info("Response a probe match to: " + remote_endpoint_.address().to_string() + ":" +
-														std::to_string(remote_endpoint_.port()));
-						});
-			}
-		}
-		else
-		{
-			logger_->Debug("Ignoring a Probe with Types: " + types);
-		}
-
-		io_->post([this]() { do_receive(); });
-	}
-
-private:
-	ILogger* logger_ = nullptr;
-
-	std::string response_;
-
-	std::shared_ptr<std::thread> worker_;
-	std::shared_ptr<ba::io_context> io_;
-	std::shared_ptr<ba::io_context::work> io_work_;
-
-	std::shared_ptr<ba::ip::udp::socket> socket_;
+	ILogger* logger_;
+	const std::string response_;
+	const std::string interface_ipv4_;
+	std::string pending_response_;
+	ba::io_context io_;
+	ba::ip::udp::socket socket_;
 	ba::ip::udp::endpoint remote_endpoint_;
-	enum
-	{
-		max_length = 4096
-	};
-	char data_[max_length];
+	std::thread worker_;
+	char data_[4096];
 };
 
 std::shared_ptr<DiscoveryManager> discovery_manager_;
@@ -164,13 +154,30 @@ namespace osrv
 {
 namespace discovery
 {
-void init_service(const std::string& configs_path, ILogger& logger)
+void init_service(const std::string& configs_path, ILogger& logger, const ServerConfigs& server_configs)
 {
 	logger_ = &logger;
 
 	logger_->Info("Initiating Discovery Service");
 
 	CONFIGS_PATH = configs_path;
+	boost::property_tree::ptree config;
+	boost::property_tree::read_json(CONFIGS_PATH + "discovery.config", config);
+	discovery_manager_.reset();
+	if (!config.get<bool>("enabled", true))
+	{
+		logger_->Info("WS-Discovery disabled");
+		return;
+	}
+	auto interface_ipv4 = config.get<std::string>("interface_ipv4", "");
+	if (const char* value = std::getenv("ONVIF_DISCOVERY_INTERFACE_IPV4"))
+		interface_ipv4 = value;
+	if (!interface_ipv4.empty())
+	{
+		const auto interface = ba::ip::make_address_v4(interface_ipv4);
+		if (interface.is_unspecified() || interface.is_multicast() || interface.to_uint() == 0xffffffff)
+			throw std::runtime_error("discovery.interface_ipv4 must identify a local unicast IPv4 interface");
+	}
 
 	std::ifstream ifs(CONFIGS_PATH + DISCOVERY_RESPONSE_FILE);
 	if (!ifs.is_open())
@@ -181,7 +188,8 @@ void init_service(const std::string& configs_path, ILogger& logger)
 	std::string response;
 	response.assign(std::istreambuf_iterator<char>(ifs), std::istreambuf_iterator<char>());
 
-	discovery_manager_ = std::make_shared<DiscoveryManager>(logger, std::move(response));
+	response = utility::set_xaddrs(response, server_configs.HttpAddress() + "onvif/device_service");
+	discovery_manager_ = std::make_shared<DiscoveryManager>(logger, std::move(response), interface_ipv4);
 }
 
 void start()
@@ -191,7 +199,8 @@ void start()
 
 	logger_->Info("Starting Discovery Service");
 
-	discovery_manager_->Start();
+	if (discovery_manager_)
+		discovery_manager_->Start();
 }
 
 void stop()
@@ -201,32 +210,46 @@ void stop()
 
 	logger_->Info("Stopping Discovery Service");
 
-	discovery_manager_->Stop();
+	if (discovery_manager_)
+		discovery_manager_->Stop();
 
 	logger_ = nullptr;
 }
 
 namespace utility
 {
+std::string set_xaddrs(const std::string& response, const std::string& address)
+{
+	boost::property_tree::ptree tree;
+	std::istringstream input(response);
+	boost::property_tree::read_xml(input, tree);
+	if (!replace_element(tree, "XAddrs", address))
+		throw std::runtime_error("Discovery response template has no XAddrs element");
+	std::ostringstream output;
+	boost::property_tree::write_xml(output, tree);
+	return output.str();
+}
+
 std::string extract_types(const boost::property_tree::ptree& tree)
 {
-	return exns::find_hierarchy("Envelope.Body.Probe.Types", tree);
+	return discovery_value(tree, "Envelope.Body.Probe.Types");
 }
 
 std::string extract_message_id(const boost::property_tree::ptree& tree)
 {
-	return exns::find_hierarchy("Envelope.Header.MessageID", tree);
+	return discovery_value(tree, "Envelope.Header.MessageID");
 }
 
 std::string prepare_response(const std::string& messageID, const std::string& relatesTo, std::string&& response)
 {
-	// TODO: replace MessageID
-	std::regex re_msg_id("(<.*MessageID>)(.*)(</.*MessageID>)");
-	response = std::regex_replace(response, re_msg_id, "$1" + messageID + "$3");
-
-	// replace RelatesTo uuid
-	std::regex re_rel_to("(<.*RelatesTo>)(.*)(</.*RelatesTo>)");
-	return std::regex_replace(response, re_rel_to, "$1" + relatesTo + "$3");
+	boost::property_tree::ptree tree;
+	std::istringstream input(response);
+	boost::property_tree::read_xml(input, tree);
+	replace_element(tree, "MessageID", messageID);
+	replace_element(tree, "RelatesTo", relatesTo);
+	std::ostringstream output;
+	boost::property_tree::write_xml(output, tree);
+	return output.str();
 }
 
 std::string generate_uuid(std::string uuid)

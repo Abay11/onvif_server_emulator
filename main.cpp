@@ -56,17 +56,6 @@ int main(int argc, char** argv)
 	logger->Info("New run. " + ss.str());
 	logger->Info("Logging level: " + logger->GetLogLevel());
 
-	if (auto env_gst_plugin_path = std::string(std::getenv("GST_PLUGIN_PATH")); env_gst_plugin_path.empty())
-	{
-		std::cerr << "For proper work please install required GStreamer plugins and add the GST_PLUGIN_PATH environment "
-								 "variable to point at the installation directory!";
-		return -1;
-	}
-	else
-	{
-		logger->Debug("Used GStreamer plugins directory: " + env_gst_plugin_path);
-	}
-
 	try
 	{
 		// std::shared_ptr<osrv::IOnvifServer> server = std::make_shared<osrv::Server>(configs_dir, logger);
@@ -79,10 +68,9 @@ int main(int argc, char** argv)
 		std::string msg = "Issues with the Server's work: ";
 		msg += e.what();
 		logger->Error(msg);
+		return EXIT_FAILURE;
 	}
 
 	logger->Info("Server is stopped");
 
-	std::cout << "\n\nPress any key to exit";
-	getchar();
 }

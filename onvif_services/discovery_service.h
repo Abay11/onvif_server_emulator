@@ -5,13 +5,14 @@
 #include <boost/property_tree/ptree.hpp>
 
 class ILogger;
+namespace osrv { struct ServerConfigs; }
 
 namespace osrv
 {
 namespace discovery
 {
 // should be called before before start
-void init_service(const std::string& /*configs_path*/, ILogger& /*logger*/);
+void init_service(const std::string& configs_path, ILogger& logger, const ServerConfigs& server_configs);
 
 /**
  * will throw an exception if it's called before @init
@@ -22,6 +23,8 @@ void stop();
 
 namespace utility
 {
+std::string set_xaddrs(const std::string& response, const std::string& address);
+
 std::string extract_types(const boost::property_tree::ptree& /*tree*/);
 
 std::string extract_message_id(const boost::property_tree::ptree& /*probe_msg*/);

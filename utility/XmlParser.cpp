@@ -4,7 +4,7 @@
 #include <vector>
 
 #include <boost/algorithm/string.hpp>
-#include <boost\property_tree\xml_parser.hpp>
+#include <boost/property_tree/xml_parser.hpp>
 
 // return XML Element without NS
 // Example: if passed value equal "ns:element", returned value is "element"

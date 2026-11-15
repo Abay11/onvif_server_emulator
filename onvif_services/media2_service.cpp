@@ -940,7 +940,8 @@ public:
 			throw incomplete_configuration();
 
 		auto envelope_tree = utility::soap::getEnvelopeTree(ns_);
-		envelope_tree.put("s:Body.tr2:GetSnapshotUriResponse.tr2:Uri", util::generate_snapshot_url(server_cfg_));
+		envelope_tree.put("s:Body.tr2:GetSnapshotUriResponse.tr2:Uri",
+			util::generate_snapshot_url(server_cfg_));
 
 		pt::ptree root_tree;
 		root_tree.put_child("s:Envelope", envelope_tree);
@@ -956,13 +957,16 @@ struct GetStreamUriHandler : public OnvifRequestBase
 {
 private:
 	const std::shared_ptr<pt::ptree>& profiles_configs_;
+	const osrv::IOnvifServer& srv_;
 	const osrv::ServerConfigs& server_cfg_;
 
 public:
 	GetStreamUriHandler(const std::map<std::string, std::string>& xs, const std::shared_ptr<pt::ptree>& configs,
-											const std::shared_ptr<pt::ptree>& profiles_configs, const osrv::ServerConfigs& server_cfg)
+											const std::shared_ptr<pt::ptree>& profiles_configs, osrv::IOnvifServer& srv)
 			: OnvifRequestBase(GetStreamUri, auth::SECURITY_LEVELS::READ_MEDIA, xs, configs),
-				profiles_configs_(profiles_configs), server_cfg_(server_cfg)
+				profiles_configs_(profiles_configs),
+				srv_(srv),
+				server_cfg_(*srv.GetServerConfigs())
 	{
 	}
 
@@ -1002,7 +1006,7 @@ public:
 			throw std::runtime_error("Could not find a stream for the requested Media Profile token=" + requested_token);
 
 		pt::ptree response_node;
-		auto rtsp_url = media2::util::generate_rtsp_url(server_cfg_, stream_config_it->second.get<std::string>("Uri"));
+		auto rtsp_url = media::util::generate_rtsp_url(server_cfg_, stream_config_it->second.get<std::string>("Uri"));
 		response_node.put("tr2:Uri", rtsp_url);
 
 		auto envelope_tree = utility::soap::getEnvelopeTree(ns_);
@@ -1082,15 +1086,10 @@ public:
 
 namespace util
 {
-std::string generate_rtsp_url(const ServerConfigs& server_configs, const std::string& profile_stream_url)
-{
-	std::stringstream rtsp_url;
-	rtsp_url << "rtsp://" << server_configs.ipv4_address_ << ":"
-					 << (server_configs.enabled_rtsp_port_forwarding ? std::to_string(server_configs.forwarded_rtsp_port)
-																													 : server_configs.rtsp_port_)
-					 << "/" << profile_stream_url;
 
-	return rtsp_url.str();
+std::string generate_snapshot_url(const ServerConfigs& server_configs)
+{
+	return server_configs.HttpAddress() + "snapshot.jpeg";
 }
 
 using ptree = boost::property_tree::ptree;
@@ -1224,7 +1223,7 @@ Media2Service::Media2Service(const std::string& service_uri, const std::string& 
 														 std::shared_ptr<IOnvifServer> srv)
 		: IOnvifService(service_uri, service_name, srv)
 {
-	srv->HttpServer()->resource["^/snapshot.jpeg$"]["GET"] =
+	srv->GetHttpServer()->resource["^/snapshot.jpeg$"]["GET"] =
 			[configsPath = srv->ConfigsPath()](std::shared_ptr<HttpServer::Response> response,
 																				 std::shared_ptr<HttpServer::Request> request) {
 				try
@@ -1295,12 +1294,12 @@ Media2Service::Media2Service(const std::string& service_uri, const std::string& 
 	requestHandlers_.push_back(std::make_shared<media2::GetAudioSourceConfigurationsHandler>(
 			xml_namespaces_, configs_ptree_, srv->ProfilesConfig()));
 	requestHandlers_.push_back(std::make_shared<media2::GetProfilesHandler>(
-			xml_namespaces_, configs_ptree_, srv->MediaProfilesManager(), *srv->ServerConfigs()));
+			xml_namespaces_, configs_ptree_, srv->MediaProfilesManager(), *srv->GetServerConfigs()));
 	requestHandlers_.push_back(std::make_shared<media2::GetServiceCapabilitiesHandler>(xml_namespaces_, configs_ptree_));
 	requestHandlers_.push_back(std::make_shared<media2::GetStreamUriHandler>(
-			xml_namespaces_, configs_ptree_, srv->ProfilesConfig(), *srv->ServerConfigs()));
+			xml_namespaces_, configs_ptree_, srv->ProfilesConfig(), *srv));
 	requestHandlers_.push_back(std::make_shared<media2::GetSnapshotUriHandler>(
-			xml_namespaces_, configs_ptree_, *srv->MediaProfilesManager(), *srv->ServerConfigs()));
+			xml_namespaces_, configs_ptree_, *srv->MediaProfilesManager(), *srv->GetServerConfigs()));
 	requestHandlers_.push_back(std::make_shared<media2::GetVideoEncoderConfigurationOptionsHandler>(
 			xml_namespaces_, configs_ptree_, srv->ProfilesConfig()));
 	requestHandlers_.push_back(std::make_shared<media2::GetVideoEncoderConfigurationsHandler>(
@@ -1308,7 +1307,7 @@ Media2Service::Media2Service(const std::string& service_uri, const std::string& 
 	requestHandlers_.push_back(std::make_shared<media2::GetVideoSourceConfigurationOptionsHandler>(
 			xml_namespaces_, configs_ptree_, srv->ProfilesConfig()));
 	requestHandlers_.push_back(std::make_shared<media2::GetVideoSourceConfigurationsHandler>(
-			xml_namespaces_, configs_ptree_, srv->ProfilesConfig(), *srv->ServerConfigs()));
+			xml_namespaces_, configs_ptree_, srv->ProfilesConfig(), *srv->GetServerConfigs()));
 	requestHandlers_.push_back(std::make_shared<media2::RemoveConfigurationHandler>(xml_namespaces_, configs_ptree_,
 																																									srv->MediaProfilesManager()));
 	requestHandlers_.push_back(
