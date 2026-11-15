@@ -152,21 +152,109 @@ ctest --output-on-failure
 
 ### Building Docker
 
-A simple Docker-based workflow is provided to build and run the project in a reproducible environment. The repository includes a Dockerfile at docker/Dockerfile, which uses Debian Trixie as the base image.
+Initialize the bundled Simple-Web-Server submodule before building. The Docker
+build context excludes `.git`, so CMake cannot download the submodule inside the
+image:
 
-- Build the image (from repository root):
+```bash
+git submodule update --init --recursive
 ```
+
+Build the application image from the repository root:
+
+```bash
 docker build -f docker/Dockerfile -t osrv-image:latest .
 ```
 
-- Run the container (example: map common RTSP/HTTP ports and mount config directories):
-```
-docker run --rm -it \
-	-p 8080:8080 -p 8554:8554 \
-	-v "$(pwd)/server_configs":/app/server_configs \
-	--name onvif-server-emul \
-	osrv-image:latest
-```
-Adjust published ports and mount points to match your runtime configuration.
+The default `runtime` stage includes the executable, default `server_configs`,
+fonts, and the GStreamer plugins used for live streaming and replay. Compiler,
+headers, source files, and diagnostic tools stay in the build stages. It uses
+Debian Trixie Slim and installs packages without recommendations.
 
-**Note:** The Dockerfile uses `--mount=type=cache` for the build directory to improve rebuild performance by caching intermediate build artifacts.
+Run with the included configuration:
+
+```bash
+docker run --rm -p 8080:8080 -p 8554:8554 osrv-image:latest
+```
+
+To use custom configuration, mount the complete configuration directory:
+
+```bash
+docker run --rm \
+    -p 8080:8080 -p 8554:8554 \
+    -v "$(pwd)/server_configs":/app/server_configs:ro \
+    --name onvif-server-emul \
+    osrv-image:latest
+```
+
+Adjust published ports to match the configuration. These mappings cover HTTP
+and RTSP control; RTP over UDP and WS-Discovery multicast require additional
+network configuration. For local Linux discovery testing, host networking is an
+option (`--network host`, without `-p`). Configure advertised addresses for the
+network used by your clients.
+
+GStreamer diagnostics are opt-in; add `-e 'GST_DEBUG=*:3'` to `docker run` when
+needed.
+
+The build type defaults to `Debug` for a quick development build. To produce an
+optimized executable:
+
+```bash
+docker build -f docker/Dockerfile \
+    --build-arg CMAKE_BUILD_TYPE=Release -t osrv-image:release .
+```
+
+Parallel compilation defaults to the available CPU count. On machines with
+limited RAM, add `--build-arg BUILD_JOBS=2` to reduce peak memory usage.
+
+BuildKit caches the CMake build directory and ccache data on the current builder.
+Cache mounts use exclusive access to prevent simultaneous builds from modifying
+the same build tree. Clearing the builder cache removes these accelerators.
+
+#### Reusable development environment
+
+Build the `dev` target once. It includes the compiler, CMake, Git, ccache, and
+`gst-inspect-1.0` / `gst-launch-1.0`, and does not copy or compile the project:
+
+```bash
+docker build -f docker/Dockerfile --target dev -t osrv-dev:latest .
+```
+
+Mount the repository to build interactively. Named volumes retain build output
+and ccache data independently of the container:
+
+```bash
+docker run --rm -it \
+    -v "$(pwd)":/workspace \
+    -v osrv-dev-build:/workspace/build \
+    -v osrv-dev-ccache:/root/.cache/ccache \
+    osrv-dev:latest
+```
+
+Inside the container:
+
+```bash
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug \
+    -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+cmake --build build --parallel "$(nproc)"
+./build/main ./server_configs
+```
+
+Do not share the development build volume between concurrent build containers.
+To run network services from this development container, add the same port
+mappings (or Linux host networking) shown above.
+
+For onboarding across machines, publish the development image to your team's
+registry after building it, then let developers pull it instead of reinstalling
+the toolchain. Replace the registry and namespace with your own:
+
+```bash
+docker tag osrv-dev:latest registry.example.com/team/osrv-dev:trixie
+docker push registry.example.com/team/osrv-dev:trixie
+# On another machine:
+docker pull registry.example.com/team/osrv-dev:trixie
+```
+
+Use the pulled image name in the development `docker run` command. Rebuild and
+republish it when dependencies change. Publishing is a separate, explicit step;
+a local Docker build does not upload an image.

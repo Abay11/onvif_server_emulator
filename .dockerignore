@@ -1,3 +1,8 @@
 build/
+build_*/
+x64_build/
+cmake-build-*/
 .git/
 .vscode/
+**/*.log
+**/*~
