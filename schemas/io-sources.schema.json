@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Physical I/O sources",
+  "type": "object",
+  "properties": {
+    "AudioSource": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "Token": {
+            "$ref": "types.schema.json#/$defs/token"
+          }
+        },
+        "required": [
+          "Token"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "AudioSource"
+  ],
+  "additionalProperties": false
+}

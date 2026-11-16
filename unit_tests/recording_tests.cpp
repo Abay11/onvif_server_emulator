@@ -13,7 +13,7 @@ using namespace std::string_literals;
 namespace bpt = boost::posix_time;
 namespace pt = boost::property_tree;
 
-const std::string config_file = "../../server_configs/Recording Search.config";
+const std::string config_file = "../../server_configs/recording_search.config";
 
 BOOST_AUTO_TEST_CASE(ConfigPathTest)
 {
@@ -92,7 +92,7 @@ BOOST_AUTO_TEST_CASE(RecordingManager0)
 
 BOOST_AUTO_TEST_CASE(RecordingManager1)
 {
-	const std::string config_file = "../../server_configs/Recording Search.config";
+	const std::string config_file = "../../server_configs/recording_search.config";
 	auto recordings = osrv::RecordingsMgr(config_file).Recordings();
 
 	const std::string expected_name = "Recording_0";

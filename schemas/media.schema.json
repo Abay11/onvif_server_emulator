@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Media service settings",
+  "type": "object",
+  "properties": {
+    "Namespaces": {
+      "$ref": "types.schema.json#/$defs/namespaces"
+    },
+    "GetVideoSources": {
+      "type": "array",
+      "items": {
+        "$ref": "types.schema.json#/$defs/videoSource"
+      }
+    },
+    "GetStreamUri": {
+      "type": "array",
+      "items": {
+        "$ref": "types.schema.json#/$defs/streamUri"
+      }
+    }
+  },
+  "required": [
+    "Namespaces",
+    "GetVideoSources",
+    "GetStreamUri"
+  ],
+  "additionalProperties": false
+}

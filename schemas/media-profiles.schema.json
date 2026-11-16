@@ -1,0 +1,704 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Media profiles and configuration catalogs",
+  "type": "object",
+  "properties": {
+    "MediaProfiles": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "$ref": "types.schema.json#/$defs/token"
+          },
+          "fixed": {
+            "$ref": "types.schema.json#/$defs/boolean"
+          },
+          "Name": {
+            "type": "string"
+          },
+          "VideoSource": {
+            "type": "string"
+          },
+          "VideoEncoder": {
+            "type": "string"
+          },
+          "AudioSource": {
+            "type": "string"
+          },
+          "AudioEncoder": {
+            "type": "string"
+          },
+          "AudioOutput": {
+            "type": "string"
+          },
+          "AudioDecoder": {
+            "type": "string"
+          },
+          "Metadata": {
+            "type": "string"
+          },
+          "Analytics": {
+            "type": "string"
+          },
+          "PTZ": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "token",
+          "fixed",
+          "Name"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "VideoSource": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "$ref": "types.schema.json#/$defs/token"
+          },
+          "Name": {
+            "type": "string"
+          },
+          "UseCount": {
+            "$ref": "types.schema.json#/$defs/nonNegativeInteger"
+          },
+          "ViewMode": {
+            "type": "string"
+          },
+          "SourceToken": {
+            "$ref": "types.schema.json#/$defs/token"
+          },
+          "Bounds": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "$ref": "types.schema.json#/$defs/nonNegativeInteger"
+              },
+              "y": {
+                "$ref": "types.schema.json#/$defs/nonNegativeInteger"
+              },
+              "width": {
+                "$ref": "types.schema.json#/$defs/positiveInteger"
+              },
+              "height": {
+                "$ref": "types.schema.json#/$defs/positiveInteger"
+              }
+            },
+            "required": [
+              "x",
+              "y",
+              "width",
+              "height"
+            ],
+            "additionalProperties": false
+          },
+          "Options": {
+            "type": "object",
+            "properties": {
+              "MaximumNumberOfProfiles": {
+                "$ref": "types.schema.json#/$defs/positiveInteger"
+              },
+              "BoundsRange": {
+                "type": "object",
+                "properties": {
+                  "XRange": {
+                    "$ref": "types.schema.json#/$defs/range"
+                  },
+                  "YRange": {
+                    "$ref": "types.schema.json#/$defs/range"
+                  },
+                  "WidthRange": {
+                    "$ref": "types.schema.json#/$defs/range"
+                  },
+                  "HeightRange": {
+                    "$ref": "types.schema.json#/$defs/range"
+                  }
+                },
+                "required": [
+                  "XRange",
+                  "YRange",
+                  "WidthRange",
+                  "HeightRange"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "MaximumNumberOfProfiles",
+              "BoundsRange"
+            ],
+            "additionalProperties": false
+          },
+          "CompatiblePtzNodes": {
+            "type": "array",
+            "items": {
+              "$ref": "types.schema.json#/$defs/token"
+            }
+          }
+        },
+        "required": [
+          "token",
+          "Name",
+          "UseCount",
+          "ViewMode",
+          "SourceToken",
+          "Bounds",
+          "Options",
+          "CompatiblePtzNodes"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "VideoEncoderConfigurations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "$ref": "types.schema.json#/$defs/token"
+          },
+          "Name": {
+            "type": "string"
+          },
+          "UseCount": {
+            "$ref": "types.schema.json#/$defs/nonNegativeInteger"
+          },
+          "GuaranteedFrameRate": {
+            "$ref": "types.schema.json#/$defs/boolean"
+          },
+          "Encoding": {
+            "$ref": "types.schema.json#/$defs/token"
+          },
+          "Resolution": {
+            "$ref": "types.schema.json#/$defs/resolution"
+          },
+          "Quality": {
+            "$ref": "types.schema.json#/$defs/nonNegativeNumber"
+          },
+          "RateControl": {
+            "type": "object",
+            "properties": {
+              "FrameRateLimit": {
+                "$ref": "types.schema.json#/$defs/positiveInteger"
+              },
+              "EncodingInterval": {
+                "$ref": "types.schema.json#/$defs/positiveInteger"
+              },
+              "BitrateLimit": {
+                "$ref": "types.schema.json#/$defs/nonNegativeInteger"
+              }
+            },
+            "required": [
+              "FrameRateLimit",
+              "EncodingInterval",
+              "BitrateLimit"
+            ],
+            "additionalProperties": false
+          },
+          "H264": {
+            "type": "object",
+            "properties": {
+              "GovLength": {
+                "$ref": "types.schema.json#/$defs/positiveInteger"
+              },
+              "H264Profile": {
+                "$ref": "types.schema.json#/$defs/token"
+              }
+            },
+            "required": [
+              "GovLength",
+              "H264Profile"
+            ],
+            "additionalProperties": false
+          },
+          "Multicast": {
+            "type": "object",
+            "properties": {
+              "Address": {
+                "type": "object",
+                "properties": {
+                  "Type": {
+                    "enum": [
+                      "IPv4",
+                      "IPv6"
+                    ]
+                  },
+                  "IPv4Address": {
+                    "$ref": "types.schema.json#/$defs/ipv4"
+                  },
+                  "IPv6Address": {
+                    "type": "string",
+                    "format": "ipv6"
+                  }
+                },
+                "required": [
+                  "Type"
+                ],
+                "additionalProperties": false
+              },
+              "Port": {
+                "$ref": "types.schema.json#/$defs/port"
+              },
+              "TTL": {
+                "$ref": "types.schema.json#/$defs/nonNegativeInteger"
+              },
+              "AutoStart": {
+                "$ref": "types.schema.json#/$defs/boolean"
+              }
+            },
+            "required": [
+              "Address",
+              "Port",
+              "TTL",
+              "AutoStart"
+            ],
+            "additionalProperties": false
+          },
+          "SessionTimeout": {
+            "$ref": "types.schema.json#/$defs/duration"
+          }
+        },
+        "required": [
+          "token",
+          "Name",
+          "UseCount",
+          "GuaranteedFrameRate",
+          "Encoding",
+          "Resolution",
+          "Quality",
+          "RateControl",
+          "H264",
+          "Multicast",
+          "SessionTimeout"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "VideoEncoder": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "$ref": "types.schema.json#/$defs/token"
+          },
+          "Name": {
+            "type": "string"
+          },
+          "UseCount": {
+            "$ref": "types.schema.json#/$defs/nonNegativeInteger"
+          },
+          "GuaranteedFrameRate": {
+            "$ref": "types.schema.json#/$defs/boolean"
+          },
+          "Encoding": {
+            "$ref": "types.schema.json#/$defs/token"
+          },
+          "Resolution": {
+            "$ref": "types.schema.json#/$defs/resolution"
+          },
+          "Quality": {
+            "$ref": "types.schema.json#/$defs/nonNegativeNumber"
+          },
+          "GovLength": {
+            "$ref": "types.schema.json#/$defs/positiveInteger"
+          },
+          "Profile": {
+            "$ref": "types.schema.json#/$defs/token"
+          },
+          "RateControl": {
+            "type": "object",
+            "properties": {
+              "ConstantBitRate": {
+                "$ref": "types.schema.json#/$defs/boolean"
+              },
+              "FrameRateLimit": {
+                "$ref": "types.schema.json#/$defs/nonNegativeNumber"
+              },
+              "BitrateLimit": {
+                "$ref": "types.schema.json#/$defs/nonNegativeInteger"
+              }
+            },
+            "required": [
+              "ConstantBitRate",
+              "FrameRateLimit",
+              "BitrateLimit"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "token",
+          "Name",
+          "UseCount",
+          "GuaranteedFrameRate",
+          "Encoding",
+          "Resolution",
+          "Quality",
+          "GovLength",
+          "Profile",
+          "RateControl"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "VideoEncoderConfigurationOptions2": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "GovLengthRange": {
+            "type": "string",
+            "pattern": "^[0-9]+ [0-9]+$"
+          },
+          "FrameRatesSupported": {
+            "type": "array",
+            "items": {
+              "$ref": "types.schema.json#/$defs/nonNegativeNumber"
+            }
+          },
+          "ProfilesSupported": {
+            "type": "array",
+            "items": {
+              "$ref": "types.schema.json#/$defs/token"
+            }
+          },
+          "ConstantBitRateSupported": {
+            "$ref": "types.schema.json#/$defs/boolean"
+          },
+          "GuaranteedFrameRateSupported": {
+            "$ref": "types.schema.json#/$defs/boolean"
+          },
+          "Encoding": {
+            "$ref": "types.schema.json#/$defs/token"
+          },
+          "QualityRange": {
+            "$ref": "types.schema.json#/$defs/range"
+          },
+          "ResolutionsAvailable": {
+            "$ref": "types.schema.json#/$defs/resolution"
+          },
+          "BitrateRange": {
+            "$ref": "types.schema.json#/$defs/range"
+          }
+        },
+        "required": [
+          "GovLengthRange",
+          "FrameRatesSupported",
+          "ProfilesSupported",
+          "ConstantBitRateSupported",
+          "GuaranteedFrameRateSupported",
+          "Encoding",
+          "QualityRange",
+          "ResolutionsAvailable",
+          "BitrateRange"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "AudioSources": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "Token": {
+            "$ref": "types.schema.json#/$defs/token"
+          }
+        },
+        "required": [
+          "Token"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "AudioSource": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "$ref": "types.schema.json#/$defs/token"
+          },
+          "Name": {
+            "type": "string"
+          },
+          "UseCount": {
+            "$ref": "types.schema.json#/$defs/nonNegativeInteger"
+          },
+          "SourceToken": {
+            "$ref": "types.schema.json#/$defs/token"
+          }
+        },
+        "required": [
+          "token",
+          "Name",
+          "UseCount",
+          "SourceToken"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "AudioEncoder": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "$ref": "types.schema.json#/$defs/token"
+          },
+          "Name": {
+            "type": "string"
+          },
+          "UseCount": {
+            "$ref": "types.schema.json#/$defs/nonNegativeInteger"
+          },
+          "Encoding": {
+            "$ref": "types.schema.json#/$defs/token"
+          },
+          "Bitrate": {
+            "$ref": "types.schema.json#/$defs/positiveInteger"
+          },
+          "SampleRate": {
+            "$ref": "types.schema.json#/$defs/positiveInteger"
+          }
+        },
+        "required": [
+          "token",
+          "Name",
+          "UseCount",
+          "Encoding",
+          "Bitrate",
+          "SampleRate"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "AudioEncoderConfigurationOptions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "AudioEncoderConfigurationToken": {
+            "$ref": "types.schema.json#/$defs/token"
+          },
+          "Encoding": {
+            "$ref": "types.schema.json#/$defs/token"
+          },
+          "BitrateList": {
+            "type": "array",
+            "items": {
+              "$ref": "types.schema.json#/$defs/positiveInteger"
+            }
+          },
+          "SampleRateList": {
+            "type": "array",
+            "items": {
+              "$ref": "types.schema.json#/$defs/positiveInteger"
+            }
+          }
+        },
+        "required": [
+          "AudioEncoderConfigurationToken",
+          "Encoding",
+          "BitrateList",
+          "SampleRateList"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "PTZ": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "$ref": "types.schema.json#/$defs/token"
+          },
+          "Name": {
+            "type": "string"
+          },
+          "NodeToken": {
+            "$ref": "types.schema.json#/$defs/token"
+          },
+          "DefaultContinuousPanTiltVelocitySpace": {
+            "type": "string"
+          },
+          "DefaultContinuousZoomVelocitySpace": {
+            "type": "string"
+          },
+          "DefaultPTZSpeed": {
+            "type": "object",
+            "properties": {
+              "PanTilt": {
+                "type": "object",
+                "properties": {
+                  "x": {
+                    "$ref": "types.schema.json#/$defs/number"
+                  },
+                  "y": {
+                    "$ref": "types.schema.json#/$defs/number"
+                  },
+                  "space": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "x",
+                  "y",
+                  "space"
+                ],
+                "additionalProperties": false
+              },
+              "Zoom": {
+                "type": "object",
+                "properties": {
+                  "x": {
+                    "$ref": "types.schema.json#/$defs/number"
+                  },
+                  "space": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "x",
+                  "space"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "PanTilt",
+              "Zoom"
+            ],
+            "additionalProperties": false
+          },
+          "DefaultPTZTimeout": {
+            "$ref": "types.schema.json#/$defs/duration"
+          },
+          "PanTiltLimits": {
+            "type": "object",
+            "properties": {
+              "Range": {
+                "type": "object",
+                "properties": {
+                  "URI": {
+                    "type": "string",
+                    "format": "uri",
+                    "pattern": "^[A-Za-z][A-Za-z0-9+.-]*:[^\\s]+$"
+                  },
+                  "XRange": {
+                    "$ref": "types.schema.json#/$defs/range"
+                  },
+                  "YRange": {
+                    "$ref": "types.schema.json#/$defs/range"
+                  }
+                },
+                "required": [
+                  "URI",
+                  "XRange"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "Range"
+            ],
+            "additionalProperties": false
+          },
+          "ZoomLimits": {
+            "type": "object",
+            "properties": {
+              "Range": {
+                "type": "object",
+                "properties": {
+                  "URI": {
+                    "type": "string",
+                    "format": "uri",
+                    "pattern": "^[A-Za-z][A-Za-z0-9+.-]*:[^\\s]+$"
+                  },
+                  "XRange": {
+                    "$ref": "types.schema.json#/$defs/range"
+                  },
+                  "YRange": {
+                    "$ref": "types.schema.json#/$defs/range"
+                  }
+                },
+                "required": [
+                  "URI",
+                  "XRange"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "Range"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "token",
+          "Name",
+          "NodeToken",
+          "DefaultContinuousPanTiltVelocitySpace",
+          "DefaultContinuousZoomVelocitySpace",
+          "DefaultPTZTimeout",
+          "PanTiltLimits",
+          "ZoomLimits"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "PTZConfigurationOptions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "$ref": "types.schema.json#/$defs/token"
+          },
+          "PTZTimeout": {
+            "type": "object",
+            "properties": {
+              "Min": {
+                "$ref": "types.schema.json#/$defs/duration"
+              },
+              "Max": {
+                "$ref": "types.schema.json#/$defs/duration"
+              }
+            },
+            "required": [
+              "Min",
+              "Max"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "token",
+          "PTZTimeout"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "MediaProfiles",
+    "VideoSource",
+    "VideoEncoderConfigurations",
+    "VideoEncoder",
+    "VideoEncoderConfigurationOptions2",
+    "AudioSources",
+    "AudioSource",
+    "AudioEncoder",
+    "AudioEncoderConfigurationOptions",
+    "PTZ",
+    "PTZConfigurationOptions"
+  ],
+  "additionalProperties": false
+}

@@ -118,7 +118,7 @@ BOOST_AUTO_TEST_CASE(network_config_parsing_and_validation)
     tree.put("advertised.pullpoint_port", 15550);
     tree.put("rtp.port_min", 51000);
     tree.put("rtp.port_max", 51099);
-    const std::string path = "network-validation.config";
+    const std::string path = "network_validation.config";
     pt::write_json(path, tree);
     const auto cfg = osrv::read_server_configs(path);
     BOOST_TEST(cfg->HttpAddress() == "http://192.168.1.10:18080/");

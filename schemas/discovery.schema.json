@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Discovery settings",
+  "type": "object",
+  "properties": {
+    "enabled": {
+      "$ref": "types.schema.json#/$defs/boolean"
+    },
+    "interface_ipv4": {
+      "anyOf": [
+        {
+          "enum": [
+            ""
+          ]
+        },
+        {
+          "$ref": "types.schema.json#/$defs/ipv4"
+        }
+      ]
+    }
+  },
+  "required": [],
+  "additionalProperties": false
+}

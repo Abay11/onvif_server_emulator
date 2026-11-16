@@ -103,7 +103,7 @@ context in `Server` handles simulated network delays in the Event service.
 
 Most services inherit from `IOnvifService`. `OnvifServiceFactory` maps a service URI
 to a class and configuration file name. `IOnvifService::Run()` reads XML namespaces
-from the service settings, obtains the XAddr path from `Device.config` /
+from the service settings, obtains the XAddr path from `device.config` /
 `GetServices`, and registers a POST route on the shared HTTP server.
 
 A typical request follows this path:
@@ -130,14 +130,15 @@ not establish that WS-Security or the combined mode is implemented.
 ## Configuration and State
 
 `ServiceConfigs` reads JSON through Boost.PropertyTree from `<service name>.config`.
-Names are case-sensitive and can contain spaces, such as `Device.config`,
-`Media2.config`, `Recording Search.config`, and `Replay Control.config`.
+Names are case-sensitive and use lowercase snake_case without spaces, such as
+`device.config`, `device_io.config`, `media2.config`, `recording_search.config`,
+and `replay_control.config`.
 Settings are read during component construction or initialization; there is no
 shared hot-reload mechanism.
 
 - `common.config`: bind/advertised endpoints, RTP range, users, authentication,
   logging, delay and channel simulation, and the RTSP input file.
-- `Device.config`: device description, service list and XAddrs, and emulated digital
+- `device.config`: device description, service list and XAddrs, and emulated digital
   inputs. `Enabled` in `GetServices` controls service advertisement;
   `Server::init()` still calls `Run()` on all eight services.
 - `media_profiles.config`: profiles and associated source/encoder configurations.

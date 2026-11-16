@@ -1,0 +1,190 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Event service settings",
+  "type": "object",
+  "properties": {
+    "Namespaces": {
+      "$ref": "types.schema.json#/$defs/namespaces"
+    },
+    "GetEventProperties": {
+      "type": "object",
+      "properties": {
+        "ReadResponseFromFile": {
+          "$ref": "types.schema.json#/$defs/boolean"
+        },
+        "ResponseFilePath": {
+          "$ref": "types.schema.json#/$defs/token"
+        }
+      },
+      "required": [
+        "ReadResponseFromFile",
+        "ResponseFilePath"
+      ],
+      "additionalProperties": false
+    },
+    "PullPoint": {
+      "type": "object",
+      "properties": {
+        "IgnoreClientsTimeout": {
+          "$ref": "types.schema.json#/$defs/boolean",
+          "description": "Currently ignored; configured Timeout is always used."
+        },
+        "Timeout": {
+          "oneOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 2147483647
+            },
+            {
+              "type": "string",
+              "pattern": "^[0-9]+$"
+            }
+          ]
+        },
+        "UseHttpServerPort": {
+          "$ref": "types.schema.json#/$defs/boolean"
+        },
+        "Port": {
+          "$ref": "types.schema.json#/$defs/listeningPort"
+        }
+      },
+      "required": [
+        "Timeout",
+        "UseHttpServerPort",
+        "Port"
+      ],
+      "additionalProperties": false
+    },
+    "DigitalInputsAlarm": {
+      "type": "object",
+      "properties": {
+        "Topic": {
+          "$ref": "types.schema.json#/$defs/token"
+        },
+        "EventGenerationTimeout": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        }
+      },
+      "required": [
+        "Topic",
+        "EventGenerationTimeout"
+      ],
+      "additionalProperties": false
+    },
+    "MotionAlarm": {
+      "type": "object",
+      "properties": {
+        "Topic": {
+          "$ref": "types.schema.json#/$defs/token"
+        },
+        "GenerateEvents": {
+          "$ref": "types.schema.json#/$defs/boolean"
+        },
+        "EventGenerationTimeout": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "Source": {
+          "$ref": "types.schema.json#/$defs/token"
+        }
+      },
+      "required": [
+        "Topic",
+        "GenerateEvents",
+        "EventGenerationTimeout",
+        "Source"
+      ],
+      "additionalProperties": false
+    },
+    "CellMotion": {
+      "type": "object",
+      "properties": {
+        "Topic": {
+          "$ref": "types.schema.json#/$defs/token"
+        },
+        "GenerateEvents": {
+          "$ref": "types.schema.json#/$defs/boolean"
+        },
+        "EventGenerationTimeout": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "VideoSourceConfigurationToken": {
+          "$ref": "types.schema.json#/$defs/token"
+        },
+        "VideoAnalyticsConfigurationToken": {
+          "$ref": "types.schema.json#/$defs/token"
+        },
+        "Rule": {
+          "$ref": "types.schema.json#/$defs/token"
+        },
+        "DataItemName": {
+          "$ref": "types.schema.json#/$defs/token"
+        }
+      },
+      "required": [
+        "Topic",
+        "GenerateEvents",
+        "EventGenerationTimeout",
+        "VideoSourceConfigurationToken",
+        "VideoAnalyticsConfigurationToken",
+        "Rule",
+        "DataItemName"
+      ],
+      "additionalProperties": false
+    },
+    "AudioDetection": {
+      "type": "object",
+      "properties": {
+        "Topic": {
+          "$ref": "types.schema.json#/$defs/token"
+        },
+        "GenerateEvents": {
+          "$ref": "types.schema.json#/$defs/boolean"
+        },
+        "EventGenerationTimeout": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "SourceConfigurationToken": {
+          "$ref": "types.schema.json#/$defs/token"
+        },
+        "AnalyticsConfigurationToken": {
+          "$ref": "types.schema.json#/$defs/token"
+        },
+        "Rule": {
+          "$ref": "types.schema.json#/$defs/token"
+        },
+        "DataItemName": {
+          "$ref": "types.schema.json#/$defs/token"
+        }
+      },
+      "required": [
+        "Topic",
+        "GenerateEvents",
+        "EventGenerationTimeout",
+        "SourceConfigurationToken",
+        "AnalyticsConfigurationToken",
+        "Rule",
+        "DataItemName"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "Namespaces",
+    "GetEventProperties",
+    "PullPoint",
+    "DigitalInputsAlarm",
+    "MotionAlarm",
+    "CellMotion",
+    "AudioDetection"
+  ],
+  "additionalProperties": false
+}

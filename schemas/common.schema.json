@@ -1,0 +1,321 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Shared server settings",
+  "type": "object",
+  "properties": {
+    "loggingLevel": {
+      "enum": [
+        "ERROR",
+        "WARN",
+        "INFO",
+        "DEBUG",
+        "TRACE"
+      ]
+    },
+    "loggingOutput": {
+      "enum": [
+        "console",
+        "file"
+      ]
+    },
+    "addresses": {
+      "type": "object",
+      "properties": {
+        "ipv4": {
+          "$ref": "types.schema.json#/$defs/ipv4"
+        },
+        "http_port": {
+          "$ref": "types.schema.json#/$defs/listeningPort"
+        },
+        "rtsp_port": {
+          "$ref": "types.schema.json#/$defs/listeningPort"
+        }
+      },
+      "required": [
+        "ipv4",
+        "http_port",
+        "rtsp_port"
+      ],
+      "additionalProperties": false,
+      "description": "Socket bind endpoints. These are separate from client-visible advertised endpoints."
+    },
+    "advertised": {
+      "type": "object",
+      "properties": {
+        "ipv4": {
+          "allOf": [
+            {
+              "$ref": "types.schema.json#/$defs/ipv4"
+            },
+            {
+              "not": {
+                "anyOf": [
+                  {
+                    "enum": [
+                      "0.0.0.0",
+                      "255.255.255.255"
+                    ]
+                  },
+                  {
+                    "pattern": "^(22[4-9]|23[0-9])\\."
+                  }
+                ]
+              }
+            }
+          ],
+          "default": "127.0.0.1"
+        },
+        "http_port": {
+          "$ref": "types.schema.json#/$defs/port",
+          "default": 0,
+          "description": "Zero selects the runtime fallback endpoint port."
+        },
+        "rtsp_port": {
+          "$ref": "types.schema.json#/$defs/port",
+          "default": 0,
+          "description": "Zero selects the runtime fallback endpoint port."
+        },
+        "pullpoint_port": {
+          "$ref": "types.schema.json#/$defs/port",
+          "default": 0,
+          "description": "Zero selects the runtime fallback endpoint port."
+        }
+      },
+      "required": [],
+      "additionalProperties": false,
+      "description": "Endpoints returned to clients. Environment overrides are applied at runtime, outside schema validation."
+    },
+    "rtp": {
+      "type": "object",
+      "properties": {
+        "port_min": {
+          "type": "integer",
+          "minimum": 2,
+          "maximum": 65534,
+          "multipleOf": 2,
+          "default": 50000
+        },
+        "port_max": {
+          "type": "integer",
+          "minimum": 3,
+          "maximum": 65535,
+          "not": {
+            "multipleOf": 2
+          },
+          "default": 50199
+        }
+      },
+      "required": [],
+      "additionalProperties": false,
+      "description": "UDP RTP/RTCP pool. The lower port must also be less than the upper port; check this separately."
+    },
+    "authenticationMethods": {
+      "type": "array",
+      "items": {
+        "enum": [
+          "none",
+          "ws-security",
+          "digest",
+          "digest/ws-security"
+        ]
+      },
+      "uniqueItems": true,
+      "description": "Informational list from the sample configuration; does not enable authentication mechanisms."
+    },
+    "authentication": {
+      "enum": [
+        "none",
+        "ws-security",
+        "digest",
+        "digest/ws-security"
+      ],
+      "description": "Only digest enforces credentials in the shared SOAP and Event dispatchers."
+    },
+    "users": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "login": {
+            "$ref": "types.schema.json#/$defs/token"
+          },
+          "password": {
+            "type": "string"
+          },
+          "type": {
+            "enum": [
+              "administrator",
+              "operator",
+              "user"
+            ]
+          }
+        },
+        "required": [
+          "login",
+          "password",
+          "type"
+        ],
+        "additionalProperties": false
+      },
+      "minItems": 1,
+      "description": "Accounts used by digest authentication. Login uniqueness must be checked separately."
+    },
+    "portForwardingSimulation": {
+      "type": "object",
+      "properties": {
+        "enabled_for_http": {
+          "$ref": "types.schema.json#/$defs/boolean"
+        },
+        "http_port": {
+          "$ref": "types.schema.json#/$defs/listeningPort"
+        },
+        "enabled_for_rtsp": {
+          "$ref": "types.schema.json#/$defs/boolean"
+        },
+        "rtsp_port": {
+          "$ref": "types.schema.json#/$defs/listeningPort"
+        }
+      },
+      "required": [],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "enabled_for_http": {
+                "enum": [
+                  true,
+                  "true"
+                ]
+              }
+            },
+            "required": [
+              "enabled_for_http"
+            ]
+          },
+          "then": {
+            "required": [
+              "http_port"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "enabled_for_rtsp": {
+                "enum": [
+                  true,
+                  "true"
+                ]
+              }
+            },
+            "required": [
+              "enabled_for_rtsp"
+            ]
+          },
+          "then": {
+            "required": [
+              "rtsp_port"
+            ]
+          }
+        }
+      ],
+      "description": "Legacy client URL overrides. Explicit advertised ports take precedence; no forwarding rules are created."
+    },
+    "networkDelaySimulation": {
+      "type": "object",
+      "properties": {
+        "milliseconds": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 65535
+        }
+      },
+      "required": [
+        "milliseconds"
+      ],
+      "additionalProperties": false,
+      "description": "Simulated Event service response delay in milliseconds."
+    },
+    "multichannelSimulation": {
+      "type": "object",
+      "properties": {
+        "description": {
+          "type": "string"
+        },
+        "enabled": {
+          "$ref": "types.schema.json#/$defs/boolean"
+        },
+        "channelCount": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 255
+        }
+      },
+      "required": [
+        "enabled",
+        "channelCount"
+      ],
+      "additionalProperties": false,
+      "description": "Reuses first-channel configurations for simulated channels; does not define independent pipelines."
+    },
+    "fileStreaming": {
+      "type": "object",
+      "properties": {
+        "description": {
+          "type": "string"
+        },
+        "enabled": {
+          "$ref": "types.schema.json#/$defs/boolean"
+        },
+        "filePath": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "enabled"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "enabled": {
+                "enum": [
+                  true,
+                  "true"
+                ]
+              }
+            },
+            "required": [
+              "enabled"
+            ]
+          },
+          "then": {
+            "required": [
+              "filePath"
+            ],
+            "properties": {
+              "filePath": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        }
+      ],
+      "description": "File input for the high live stream. Enabling requires an accessible media file."
+    }
+  },
+  "required": [
+    "loggingLevel",
+    "loggingOutput",
+    "addresses",
+    "authentication",
+    "users",
+    "networkDelaySimulation",
+    "multichannelSimulation",
+    "fileStreaming"
+  ],
+  "additionalProperties": false
+}

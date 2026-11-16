@@ -1,0 +1,111 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Media2 service settings",
+  "type": "object",
+  "properties": {
+    "Namespaces": {
+      "$ref": "types.schema.json#/$defs/namespaces"
+    },
+    "GetVideoSources": {
+      "type": "array",
+      "items": {
+        "$ref": "types.schema.json#/$defs/videoSource"
+      }
+    },
+    "GetStreamUri": {
+      "type": "array",
+      "items": {
+        "$ref": "types.schema.json#/$defs/streamUri"
+      }
+    },
+    "GetServiceCapabilities2": {
+      "type": "object",
+      "properties": {
+        "SnapshotUri": {
+          "$ref": "types.schema.json#/$defs/boolean"
+        },
+        "Rotation": {
+          "$ref": "types.schema.json#/$defs/boolean"
+        },
+        "VideoSourceMode": {
+          "$ref": "types.schema.json#/$defs/boolean"
+        },
+        "OSD": {
+          "$ref": "types.schema.json#/$defs/boolean"
+        },
+        "TemporaryOSDText": {
+          "$ref": "types.schema.json#/$defs/boolean"
+        },
+        "Mask": {
+          "$ref": "types.schema.json#/$defs/boolean"
+        },
+        "SourceMask": {
+          "$ref": "types.schema.json#/$defs/boolean"
+        },
+        "ProfileCapabilities": {
+          "type": "object",
+          "properties": {
+            "MaximumNumberOfProfiles": {
+              "$ref": "types.schema.json#/$defs/positiveInteger"
+            },
+            "ConfigurationsSupported": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "MaximumNumberOfProfiles",
+            "ConfigurationsSupported"
+          ],
+          "additionalProperties": false
+        },
+        "StreamingCapabilities": {
+          "type": "object",
+          "properties": {
+            "RTSPStreaming": {
+              "$ref": "types.schema.json#/$defs/boolean"
+            },
+            "RTPMulticast": {
+              "$ref": "types.schema.json#/$defs/boolean"
+            },
+            "RTP_RTSP_TCP": {
+              "$ref": "types.schema.json#/$defs/boolean"
+            },
+            "NonAggregateControl": {
+              "$ref": "types.schema.json#/$defs/boolean"
+            },
+            "AutoStartMulticast": {
+              "$ref": "types.schema.json#/$defs/boolean"
+            }
+          },
+          "required": [
+            "RTSPStreaming",
+            "RTPMulticast",
+            "RTP_RTSP_TCP",
+            "NonAggregateControl",
+            "AutoStartMulticast"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "SnapshotUri",
+        "Rotation",
+        "VideoSourceMode",
+        "OSD",
+        "TemporaryOSDText",
+        "Mask",
+        "SourceMask",
+        "ProfileCapabilities",
+        "StreamingCapabilities"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "Namespaces",
+    "GetVideoSources",
+    "GetStreamUri",
+    "GetServiceCapabilities2"
+  ],
+  "additionalProperties": false
+}

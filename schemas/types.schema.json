@@ -1,0 +1,205 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Shared emulator configuration types",
+  "$defs": {
+    "token": {
+      "type": "string",
+      "minLength": 1
+    },
+    "boolean": {
+      "oneOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "enum": [
+            "true",
+            "false"
+          ]
+        }
+      ]
+    },
+    "nonNegativeInteger": {
+      "oneOf": [
+        {
+          "type": "integer",
+          "minimum": 0
+        },
+        {
+          "type": "string",
+          "pattern": "^[0-9]+$"
+        }
+      ]
+    },
+    "positiveInteger": {
+      "oneOf": [
+        {
+          "type": "integer",
+          "minimum": 1
+        },
+        {
+          "type": "string",
+          "pattern": "^[0-9]*[1-9][0-9]*$"
+        }
+      ]
+    },
+    "number": {
+      "oneOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "string",
+          "pattern": "^-?[0-9]+(\\.[0-9]+)?$"
+        }
+      ]
+    },
+    "nonNegativeNumber": {
+      "oneOf": [
+        {
+          "type": "number",
+          "minimum": 0
+        },
+        {
+          "type": "string",
+          "pattern": "^[0-9]+(\\.[0-9]+)?$"
+        }
+      ]
+    },
+    "port": {
+      "oneOf": [
+        {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 65535
+        },
+        {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]{0,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5])$"
+        }
+      ]
+    },
+    "listeningPort": {
+      "allOf": [
+        {
+          "$ref": "types.schema.json#/$defs/port"
+        },
+        {
+          "not": {
+            "enum": [
+              0,
+              "0"
+            ]
+          }
+        }
+      ]
+    },
+    "ipv4": {
+      "type": "string",
+      "format": "ipv4",
+      "pattern": "^(?:(?:25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])\\.){3}(?:25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])$"
+    },
+    "namespaces": {
+      "type": "object",
+      "required": [
+        "s"
+      ],
+      "propertyNames": {
+        "pattern": "^[A-Za-z_][A-Za-z0-9_-]*$"
+      },
+      "additionalProperties": {
+        "type": "string",
+        "format": "uri",
+        "minLength": 1,
+        "pattern": "^[A-Za-z][A-Za-z0-9+.-]*:[^\\s]+$"
+      }
+    },
+    "duration": {
+      "type": "string",
+      "description": "Nonnegative day/time duration used by emulator settings.",
+      "pattern": "^P(?=.+)([0-9]+D)?(T(?=[0-9])([0-9]+H)?([0-9]+M)?([0-9]+(\\.[0-9]+)?S)?)?$"
+    },
+    "resolution": {
+      "type": "object",
+      "properties": {
+        "Width": {
+          "$ref": "types.schema.json#/$defs/positiveInteger"
+        },
+        "Height": {
+          "$ref": "types.schema.json#/$defs/positiveInteger"
+        }
+      },
+      "required": [
+        "Width",
+        "Height"
+      ],
+      "additionalProperties": false
+    },
+    "range": {
+      "type": "object",
+      "properties": {
+        "Min": {
+          "$ref": "types.schema.json#/$defs/number"
+        },
+        "Max": {
+          "$ref": "types.schema.json#/$defs/number"
+        }
+      },
+      "required": [
+        "Min",
+        "Max"
+      ],
+      "additionalProperties": false
+    },
+    "videoSource": {
+      "type": "object",
+      "properties": {
+        "token": {
+          "$ref": "types.schema.json#/$defs/token"
+        },
+        "Framerate": {
+          "$ref": "types.schema.json#/$defs/nonNegativeNumber"
+        },
+        "Resolution": {
+          "$ref": "types.schema.json#/$defs/resolution"
+        }
+      },
+      "required": [
+        "token",
+        "Framerate",
+        "Resolution"
+      ],
+      "additionalProperties": false
+    },
+    "streamUri": {
+      "type": "object",
+      "properties": {
+        "VideoEncoderToken": {
+          "$ref": "types.schema.json#/$defs/token"
+        },
+        "Uri": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[^/:?#\\s][^\\s]*$"
+        },
+        "InvalidAfterConnect": {
+          "$ref": "types.schema.json#/$defs/boolean"
+        },
+        "InvalidAfterReboot": {
+          "$ref": "types.schema.json#/$defs/boolean"
+        },
+        "Timeout": {
+          "$ref": "types.schema.json#/$defs/duration"
+        }
+      },
+      "required": [
+        "VideoEncoderToken",
+        "Uri",
+        "InvalidAfterConnect",
+        "InvalidAfterReboot",
+        "Timeout"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

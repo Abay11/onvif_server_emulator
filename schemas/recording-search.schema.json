@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Recording Search service settings",
+  "type": "object",
+  "properties": {
+    "Namespaces": {
+      "$ref": "types.schema.json#/$defs/namespaces"
+    },
+    "Recordings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "Token": {
+            "$ref": "types.schema.json#/$defs/token"
+          },
+          "VideoTrack": {
+            "$ref": "types.schema.json#/$defs/token"
+          },
+          "DateFrom": {
+            "type": "string",
+            "pattern": "^(|[0-9]{8}T[0-9]{6})$",
+            "description": "Basic UTC date/time (YYYYMMDDTHHMMSS); empty selects a runtime default."
+          },
+          "DateUntil": {
+            "type": "string",
+            "pattern": "^(|[0-9]{8}T[0-9]{6})$",
+            "description": "Basic UTC date/time (YYYYMMDDTHHMMSS); empty selects a runtime default."
+          }
+        },
+        "required": [
+          "Token",
+          "VideoTrack",
+          "DateFrom",
+          "DateUntil"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "Namespaces",
+    "Recordings"
+  ],
+  "additionalProperties": false
+}

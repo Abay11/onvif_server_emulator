@@ -1,0 +1,3 @@
+# Optional offline configuration validation; not a server runtime dependency.
+# jsonschema uses the MIT license; its referencing dependency uses the MIT license.
+jsonschema>=4.18,<5

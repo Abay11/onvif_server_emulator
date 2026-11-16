@@ -1,0 +1,362 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Device service settings",
+  "type": "object",
+  "properties": {
+    "Namespaces": {
+      "$ref": "types.schema.json#/$defs/namespaces"
+    },
+    "GetCapabilities": {
+      "type": "object",
+      "properties": {
+        "Device": {
+          "type": "object",
+          "properties": {
+            "XAddr": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^[^/:?#\\s][^\\s]*$",
+              "description": "Path relative to the advertised HTTP base URL, without a leading slash."
+            },
+            "IO": {
+              "type": "object",
+              "properties": {
+                "RelayOutputs": {
+                  "$ref": "types.schema.json#/$defs/nonNegativeInteger"
+                }
+              },
+              "required": [
+                "RelayOutputs"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "XAddr",
+            "IO"
+          ],
+          "additionalProperties": false
+        },
+        "Events": {
+          "type": "object",
+          "properties": {
+            "XAddr": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^[^/:?#\\s][^\\s]*$",
+              "description": "Path relative to the advertised HTTP base URL, without a leading slash."
+            },
+            "WSSubscriptionPolicySupport": {
+              "$ref": "types.schema.json#/$defs/boolean"
+            },
+            "WSPullPointSupport": {
+              "$ref": "types.schema.json#/$defs/boolean"
+            },
+            "WSPausableSubscriptionManagerInterfaceSupport": {
+              "$ref": "types.schema.json#/$defs/boolean"
+            }
+          },
+          "required": [
+            "XAddr",
+            "WSSubscriptionPolicySupport",
+            "WSPullPointSupport",
+            "WSPausableSubscriptionManagerInterfaceSupport"
+          ],
+          "additionalProperties": false
+        },
+        "Imaging": {
+          "type": "object",
+          "properties": {
+            "XAddr": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^[^/:?#\\s][^\\s]*$",
+              "description": "Path relative to the advertised HTTP base URL, without a leading slash."
+            }
+          },
+          "required": [
+            "XAddr"
+          ],
+          "additionalProperties": false
+        },
+        "Media": {
+          "type": "object",
+          "properties": {
+            "XAddr": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^[^/:?#\\s][^\\s]*$",
+              "description": "Path relative to the advertised HTTP base URL, without a leading slash."
+            },
+            "StreamingCapabilities": {
+              "type": "object",
+              "properties": {
+                "RTPMulticast": {
+                  "$ref": "types.schema.json#/$defs/boolean"
+                },
+                "RTP_TCP": {
+                  "$ref": "types.schema.json#/$defs/boolean"
+                },
+                "RTP_RTSP_TCP": {
+                  "$ref": "types.schema.json#/$defs/boolean"
+                }
+              },
+              "required": [
+                "RTPMulticast",
+                "RTP_TCP",
+                "RTP_RTSP_TCP"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "XAddr",
+            "StreamingCapabilities"
+          ],
+          "additionalProperties": false
+        },
+        "PTZ": {
+          "type": "object",
+          "properties": {
+            "XAddr": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^[^/:?#\\s][^\\s]*$",
+              "description": "Path relative to the advertised HTTP base URL, without a leading slash."
+            }
+          },
+          "required": [
+            "XAddr"
+          ],
+          "additionalProperties": false
+        },
+        "Search": {
+          "type": "object",
+          "properties": {
+            "XAddr": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^[^/:?#\\s][^\\s]*$",
+              "description": "Path relative to the advertised HTTP base URL, without a leading slash."
+            }
+          },
+          "required": [
+            "XAddr"
+          ],
+          "additionalProperties": false
+        },
+        "Extension": {
+          "type": "object",
+          "properties": {
+            "DeviceIO": {
+              "type": "object",
+              "properties": {
+                "XAddr": {
+                  "type": "string",
+                  "minLength": 1,
+                  "pattern": "^[^/:?#\\s][^\\s]*$",
+                  "description": "Path relative to the advertised HTTP base URL, without a leading slash."
+                },
+                "VideoSources": {
+                  "$ref": "types.schema.json#/$defs/nonNegativeInteger"
+                },
+                "VideoOutputs": {
+                  "$ref": "types.schema.json#/$defs/nonNegativeInteger"
+                },
+                "AudioSources": {
+                  "$ref": "types.schema.json#/$defs/nonNegativeInteger"
+                },
+                "AudioOutputs": {
+                  "$ref": "types.schema.json#/$defs/nonNegativeInteger"
+                },
+                "RelayOutputs": {
+                  "$ref": "types.schema.json#/$defs/nonNegativeInteger"
+                }
+              },
+              "required": [
+                "XAddr",
+                "VideoSources",
+                "VideoOutputs",
+                "AudioSources",
+                "AudioOutputs",
+                "RelayOutputs"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "DeviceIO"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "Device",
+        "Events",
+        "Imaging",
+        "Media",
+        "PTZ",
+        "Search",
+        "Extension"
+      ],
+      "additionalProperties": false
+    },
+    "GetDeviceInformation": {
+      "type": "object",
+      "properties": {
+        "Manufacturer": {
+          "type": "string"
+        },
+        "Model": {
+          "type": "string"
+        },
+        "FirmwareVersion": {
+          "type": "string"
+        },
+        "SerialNumber": {
+          "type": "string"
+        },
+        "HardwareID": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "Manufacturer",
+        "Model",
+        "FirmwareVersion",
+        "SerialNumber",
+        "HardwareID"
+      ],
+      "additionalProperties": false
+    },
+    "GetNetworkInterfaces": {
+      "type": "object",
+      "properties": {
+        "NetworkInterfaces": {
+          "type": "object",
+          "properties": {
+            "token": {
+              "$ref": "types.schema.json#/$defs/token"
+            },
+            "Enabled": {
+              "$ref": "types.schema.json#/$defs/boolean"
+            }
+          },
+          "required": [
+            "token",
+            "Enabled"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "NetworkInterfaces"
+      ],
+      "additionalProperties": false
+    },
+    "GetServices": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "namespace": {
+            "type": "string",
+            "format": "uri",
+            "pattern": "^[A-Za-z][A-Za-z0-9+.-]*:[^\\s]+$"
+          },
+          "XAddr": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^[^/:?#\\s][^\\s]*$",
+            "description": "Path relative to the advertised HTTP base URL, without a leading slash."
+          },
+          "Version": {
+            "type": "object",
+            "properties": {
+              "Major": {
+                "$ref": "types.schema.json#/$defs/nonNegativeInteger"
+              },
+              "Minor": {
+                "$ref": "types.schema.json#/$defs/nonNegativeInteger"
+              }
+            },
+            "required": [
+              "Major",
+              "Minor"
+            ],
+            "additionalProperties": false
+          },
+          "Enabled": {
+            "$ref": "types.schema.json#/$defs/boolean"
+          }
+        },
+        "required": [
+          "namespace",
+          "XAddr",
+          "Version"
+        ],
+        "additionalProperties": false
+      },
+      "minItems": 1
+    },
+    "GetScopes": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "GetSystemDateAndTime": {
+      "type": "object",
+      "properties": {
+        "DateTimeType": {
+          "enum": [
+            "NTP",
+            "Manual"
+          ]
+        },
+        "DaylightSavings": {
+          "$ref": "types.schema.json#/$defs/boolean"
+        }
+      },
+      "required": [
+        "DateTimeType",
+        "DaylightSavings"
+      ],
+      "additionalProperties": false
+    },
+    "DigitalInputs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "Token": {
+            "$ref": "types.schema.json#/$defs/token"
+          },
+          "GenerateEvent": {
+            "$ref": "types.schema.json#/$defs/boolean"
+          },
+          "InitialState": {
+            "$ref": "types.schema.json#/$defs/boolean"
+          }
+        },
+        "required": [
+          "Token",
+          "GenerateEvent",
+          "InitialState"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "Namespaces",
+    "GetCapabilities",
+    "GetDeviceInformation",
+    "GetNetworkInterfaces",
+    "GetServices",
+    "GetScopes",
+    "GetSystemDateAndTime",
+    "DigitalInputs"
+  ],
+  "additionalProperties": false
+}

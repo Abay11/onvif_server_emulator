@@ -1,0 +1,79 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "PTZ service settings",
+  "type": "object",
+  "properties": {
+    "Namespaces": {
+      "$ref": "types.schema.json#/$defs/namespaces"
+    },
+    "Nodes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "$ref": "types.schema.json#/$defs/token"
+          },
+          "FixedHomePosition": {
+            "$ref": "types.schema.json#/$defs/boolean"
+          },
+          "GeoMove": {
+            "$ref": "types.schema.json#/$defs/boolean"
+          },
+          "Name": {
+            "type": "string"
+          },
+          "SupportedPTZSpaces": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "space": {
+                  "$ref": "types.schema.json#/$defs/token"
+                },
+                "URI": {
+                  "type": "string",
+                  "format": "uri",
+                  "pattern": "^[A-Za-z][A-Za-z0-9+.-]*:[^\\s]+$"
+                },
+                "XRange": {
+                  "$ref": "types.schema.json#/$defs/range"
+                },
+                "YRange": {
+                  "$ref": "types.schema.json#/$defs/range"
+                }
+              },
+              "required": [
+                "space",
+                "URI",
+                "XRange"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "MaximumNumberOfPresets": {
+            "$ref": "types.schema.json#/$defs/nonNegativeInteger"
+          },
+          "HomeSupported": {
+            "$ref": "types.schema.json#/$defs/boolean"
+          }
+        },
+        "required": [
+          "token",
+          "FixedHomePosition",
+          "GeoMove",
+          "Name",
+          "SupportedPTZSpaces",
+          "MaximumNumberOfPresets",
+          "HomeSupported"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "Namespaces",
+    "Nodes"
+  ],
+  "additionalProperties": false
+}

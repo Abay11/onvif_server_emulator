@@ -31,42 +31,42 @@ std::shared_ptr<IOnvifService> OnvifServiceFactory::Create(const std::string& se
 {
 	if (SERVICE_URI::DEVICE == service_uri)
 	{
-		return std::make_shared<DeviceService>(service_uri, "Device", srv);
+		return std::make_shared<DeviceService>(service_uri, "device", srv);
 	}
 
 	if (SERVICE_URI::DEVICEIO == service_uri)
 	{
-		return std::make_shared<DeviceIOService>(service_uri, "DeviceIO", srv);
+		return std::make_shared<DeviceIOService>(service_uri, "device_io", srv);
 	}
 
 	if (SERVICE_URI::IMAGING == service_uri)
 	{
-		return std::make_shared<ImagingService>(service_uri, "Imaging", srv);
+		return std::make_shared<ImagingService>(service_uri, "imaging", srv);
 	}
 
 	if (SERVICE_URI::MEDIA == service_uri)
 	{
-		return std::make_shared<MediaService>(service_uri, "Media", srv);
+		return std::make_shared<MediaService>(service_uri, "media", srv);
 	}
 
 	if (SERVICE_URI::MEDIA2 == service_uri)
 	{
-		return std::make_shared<Media2Service>(service_uri, "Media2", srv);
+		return std::make_shared<Media2Service>(service_uri, "media2", srv);
 	}
 
 	if (SERVICE_URI::PTZ == service_uri)
 	{
-		return std::make_shared<PTZService>(service_uri, "PTZ", srv);
+		return std::make_shared<PTZService>(service_uri, "ptz", srv);
 	}
 
 	if (SERVICE_URI::REPLAY == service_uri)
 	{
-		return std::make_shared<ReplayControlService>(service_uri, "Replay Control", srv);
+		return std::make_shared<ReplayControlService>(service_uri, "replay_control", srv);
 	}
 
 	if (SERVICE_URI::SEARCH == service_uri)
 	{
-		return std::make_shared<RecordingSearchService>(service_uri, "Recording Search", srv);
+		return std::make_shared<RecordingSearchService>(service_uri, "recording_search", srv);
 	}
 
 	throw std::runtime_error("Unknown service URI!");

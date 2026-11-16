@@ -40,9 +40,20 @@ clients and LAN access, including WS-Discovery.
 
 ## Configuration
 
-Configuration files use JSON and have case-sensitive `.config` filenames.
+Configuration files use JSON and have case-sensitive `lower_snake_case.config`
+filenames (lowercase letters, with underscores between words and no spaces).
 Shared settings are stored in `common.config`; service-specific settings are
-stored in files such as `Device.config` and `event.config`.
+stored in files such as `device.config` and `event.config`.
+
+Existing configuration directories must use the same names: `device.config`,
+`device_io.config`, `imaging.config`, `media.config`, `media2.config`, `ptz.config`,
+`recording_search.config`, and `replay_control.config`. Rename older capitalized
+filenames and replace spaces with underscores before running this version.
+
+Optional [JSON Schema validation](schemas/README.md) checks edited files before
+startup. Schemas cover every bundled `.config` file and can also be used by
+editors or a future GUI configurator. The checker reports structural errors;
+cross-file token references and topology consistency need separate validation.
 
 Configuration support varies by operation. Some settings are hardcoded or only
 partially implemented, so verify the relevant handler before relying on a
@@ -94,7 +105,7 @@ port must be larger and odd.
 Advertised endpoint settings do not configure NAT or firewall rules. See the
 [networking guide](docs/WSL2.md) for deployment examples.
 
-### Device Service (`Device.config`)
+### Device Service (`device.config`)
 
 `DigitalInputs` is an array of emulated digital inputs. Each entry specifies a
 `Token`, an `InitialState`, and a `GenerateEvent` flag that controls simulated
@@ -135,7 +146,7 @@ At startup, the server fills the `XAddrs` field in
 `server_configs/responses/ProbeMatch.response` with the advertised HTTP endpoint.
 Hello, Bye, Resolve, and IPv6 discovery are not implemented.
 
-### Recording Search (`Recording Search.config`)
+### Recording Search (`recording_search.config`)
 
 The `Recordings` array describes emulated recordings. Each entry requires a
 `Token`, a `VideoTrack` token, and the following time fields:

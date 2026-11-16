@@ -9,7 +9,7 @@ namespace pt = boost::property_tree;
 BOOST_AUTO_TEST_CASE(device_service_configs_test)
 {
 	// check real config file
-	std::fstream config_file("../../server_configs/Device.config", std::ios_base::in);
+	std::fstream config_file("../../server_configs/device.config", std::ios_base::in);
 	if (!config_file.is_open())
 		BOOST_TEST_FAIL("Could not open device config");
 
