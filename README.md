@@ -10,6 +10,149 @@ full range of ONVIF features.
 See the [architecture overview](docs/architecture.md) for implementation details
 and current limitations.
 
+## Run the Published Docker Image
+
+The public image includes the application, default configuration and runtime
+dependencies. No Git clone, compiler or local build is required. Use Docker Engine
+on Linux with an x86-64 CPU (`linux/amd64`); the current release workflow does not
+publish an ARM64 image. The Compose instructions below also require Docker Compose v2.
+
+Download the image without signing in to GHCR:
+
+```bash
+docker pull ghcr.io/abay11/onvif_server_emulator:latest
+```
+
+### Linux: LAN access and discovery
+
+Run with the Docker host's LAN IPv4 (replace `192.168.1.10` in both variables):
+
+```bash
+docker run -d --init --network host \
+  -e ONVIF_ADVERTISED_IPV4=192.168.1.10 \
+  -e ONVIF_DISCOVERY_INTERFACE_IPV4=192.168.1.10 \
+  --name onvif-emulator \
+  ghcr.io/abay11/onvif_server_emulator:latest
+```
+
+The discovery interface must exist on the Docker Engine host. Host networking
+uses the host's ports directly; do not add `-p`. Default ports are TCP `8080`
+(HTTP/SOAP) and `8554` (RTSP), UDP `3702` (discovery), and UDP `50000–50199`
+(RTP/RTCP). Allow the required traffic through the host firewall. A separate
+PullPoint listener, if enabled in configuration, also needs its configured port.
+
+Connect an ONVIF client to `http://192.168.1.10:8080/onvif/device_service` or use
+automatic discovery. In VLC, test
+`rtsp://192.168.1.10:8554/Live&HighStream` (quote the URL in a shell).
+Check HTTP with `curl --fail http://192.168.1.10:8080/snapshot.jpeg -o snapshot.jpeg`.
+The bundled configuration has authentication disabled.
+
+```bash
+docker logs -f onvif-emulator
+# Stop and remove the container when finished:
+docker stop onvif-emulator
+docker rm onvif-emulator
+```
+
+### Windows, macOS and local TCP testing
+
+For Windows clients and LAN discovery, use **Docker Engine inside WSL2 mirrored
+networking** and follow [the Windows/WSL2 guide](docs/WSL2.md), including firewall
+setup. Docker Desktop's WSL integration is a different network topology.
+
+For a limited local test on Linux or Docker Desktop, use:
+
+```bash
+docker run -d --init \
+  -p 127.0.0.1:8080:8080 -p 127.0.0.1:8554:8554 \
+  --name onvif-emulator \
+  ghcr.io/abay11/onvif_server_emulator:latest
+```
+
+Manually add `http://127.0.0.1:8080/onvif/device_service` to the client and select
+RTP interleaved over RTSP/TCP, for example
+`vlc --rtsp-tcp 'rtsp://127.0.0.1:8554/Live&HighStream'`.
+These TCP mappings do not provide LAN discovery or UDP media. On macOS, full
+WS-Discovery/UDP operation through Docker Desktop is not a validated deployment
+profile. Apple Silicon also requires amd64 emulation (`--platform linux/amd64`);
+native ARM64 images and their operation are not currently provided by the workflow.
+
+### Docker Compose
+
+Download the raw [compose.yaml](compose.yaml) into an otherwise empty directory, or use
+the copy in this repository. From that directory, on Linux or inside the configured
+WSL2 distribution:
+
+```bash
+export ONVIF_ADVERTISED_IPV4=192.168.1.10
+export ONVIF_DISCOVERY_INTERFACE_IPV4=192.168.1.10
+docker compose pull
+docker compose up -d
+docker compose logs -f
+# Stop and remove the deployment:
+docker compose down
+```
+
+This Compose file uses the published image and host networking with the ports
+listed above. It does not build source code. Run either the Compose deployment or
+the equivalent `docker run` deployment: both use the same host ports.
+
+### Custom configuration and persistence
+
+Extract the complete bundled configuration into a new local directory:
+
+```bash
+docker create --name onvif-config-export ghcr.io/abay11/onvif_server_emulator:latest
+docker cp onvif-config-export:/app/server_configs ./server_configs
+docker rm onvif-config-export
+```
+
+Edit the JSON `.config` files described below, then add this option **before the
+image name** in the `docker run` command:
+
+```bash
+--mount "type=bind,src=$(pwd)/server_configs,dst=/app/server_configs"
+```
+
+For Compose, uncomment the `volumes` block in `compose.yaml`; its relative path
+is resolved from the Compose file's directory. Mount the complete directory,
+including `responses` and `rs`. Restart the container after editing configuration.
+The environment variables in the examples override the corresponding IPv4 settings.
+
+The application must be able to write `media_profiles.config` to persist SOAP
+profile changes. A read-only mount is suitable only when those operations are not
+needed. Without a mount, changes inside the container are lost when it is removed.
+See [the file streaming example](docs/WSL2.md#5-addresses-configuration-and-files)
+for an additional media mount.
+
+### Updates and rollback
+
+Before updating, save the current immutable image reference:
+
+```bash
+docker image inspect --format '{{index .RepoDigests 0}}' \
+  ghcr.io/abay11/onvif_server_emulator:latest
+```
+
+Keep the printed `ghcr.io/abay11/onvif_server_emulator@sha256:...` reference and a
+backup of your mounted configuration. Then pull the new image and recreate the
+container with the same network, environment and mount options:
+
+```bash
+docker pull ghcr.io/abay11/onvif_server_emulator:latest
+docker stop onvif-emulator
+docker rm onvif-emulator
+# Repeat your docker run command above.
+```
+
+For Compose, use `docker compose pull` followed by `docker compose up -d`.
+Pulling alone does not update an existing container, and restarting it does not
+switch images. To roll back, use the saved digest instead of `:latest` in
+`docker run`, or set `ONVIF_IMAGE` to that full reference and run
+`docker compose up -d`. Restore the matching configuration backup if necessary.
+Published version tags can also be selected instead of `latest`; use a tag that
+exists on the [package page](https://github.com/Abay11/onvif_server_emulator/pkgs/container/onvif_server_emulator).
+
 ## Third-Party Libraries
 
 - [Boost](https://www.boost.org/)

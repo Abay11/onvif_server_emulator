@@ -1,4 +1,31 @@
 # How to Build OnvifServerEmulator
+
+## Run Without Building
+
+To use the emulator, download the public runtime image instead of installing
+the build dependencies below. No repository checkout or registry login is needed:
+
+```bash
+docker pull ghcr.io/abay11/onvif_server_emulator:latest
+docker run -d --init --network host \
+  -e ONVIF_ADVERTISED_IPV4=192.168.1.10 \
+  -e ONVIF_DISCOVERY_INTERFACE_IPV4=192.168.1.10 \
+  --name onvif-emulator \
+  ghcr.io/abay11/onvif_server_emulator:latest
+```
+
+This command targets Docker Engine on native Linux (`linux/amd64`). Replace both
+IPv4 values with the host's LAN interface address. The image includes the
+executable, `/app/server_configs`, fonts and GStreamer runtime plugins.
+Host networking uses TCP 8080/8554, UDP 3702 and UDP 50000–50199 by default;
+do not add port mappings. On Windows, first follow the
+[WSL2 mirrored networking and firewall guide](docs/WSL2.md).
+
+See [README: Run the Published Docker Image](README.md#run-the-published-docker-image)
+for a local TCP-only command, macOS limitations, configuration extraction/mounts,
+updates and rollback. The root [compose.yaml](compose.yaml) runs the published
+image without a build; `docker/compose.mirrored.yaml` below is for source builds.
+
 ## Getting the Source
 
 This project is [hosted on GitHub](https://github.com/Abay11/onvif_server_emulator). You can clone this project directly using this command:
@@ -105,6 +132,9 @@ ctest --test-dir build --output-on-failure
 
 ### Building Docker
 
+This section is for building your own image from source. For the published image,
+use [Run Without Building](#run-without-building) above.
+
 Initialize the bundled Simple-Web-Server submodule before building. The Docker
 build context excludes `.git`, so CMake cannot download the submodule inside the
 image:
@@ -147,6 +177,10 @@ docker run --rm --init --network host \
     -v "$(pwd)/server_configs:/app/server_configs:ro" \
     --name onvif-server-emul osrv-image:latest
 ```
+
+This read-only example is for scenarios without SOAP profile changes. Remove
+`:ro` and ensure write access when profile changes must persist to
+`media_profiles.config`; see [custom configuration](README.md#custom-configuration-and-persistence).
 
 For a local-only TCP test with manual device registration:
 

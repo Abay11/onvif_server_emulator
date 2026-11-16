@@ -1,0 +1,15 @@
+# Use Docker Engine on native Linux or inside WSL2 mirrored networking.
+services:
+  emulator:
+    image: ${ONVIF_IMAGE:-ghcr.io/abay11/onvif_server_emulator:latest}
+    init: true
+    # Host networking uses TCP 8080/8554, UDP 3702 and UDP 50000-50199 by default.
+    # Do not add ports mappings; configure the host firewall as needed.
+    network_mode: host
+    environment:
+      ONVIF_ADVERTISED_IPV4: ${ONVIF_ADVERTISED_IPV4:?Set the Docker host LAN IPv4 address}
+      ONVIF_DISCOVERY_INTERFACE_IPV4: ${ONVIF_DISCOVERY_INTERFACE_IPV4:?Set the local multicast interface IPv4 address}
+    # Optional: extract the complete configuration directory as described in README.md,
+    # then uncomment this mount. Write access allows profile changes to persist.
+    # volumes:
+    #   - ./server_configs:/app/server_configs

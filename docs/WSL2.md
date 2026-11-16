@@ -50,8 +50,9 @@ The networking mode must be `mirrored`. If `wslinfo` is unavailable, update WSL.
 
 ## 2. Install/select Docker Engine inside WSL
 
-Install Docker Engine and its Compose plugin using the official instructions
+Install Docker Engine using the official instructions
 for your distribution, for example [Ubuntu](https://docs.docker.com/engine/install/ubuntu/).
+Install the Compose plugin too if you want to use either Compose example below.
 Start it with `sudo systemctl enable --now docker` (requires systemd in WSL).
 Use `sudo docker` below if your user does not have Docker socket access.
 
@@ -70,7 +71,45 @@ server is not this profile. Remove stale `DOCKER_HOST`/`DOCKER_CONTEXT` override
 if they select another daemon. Merely running `docker` from a WSL terminal does
 not establish which daemon runs the container.
 
-## 3. Build and run
+## 3. Download and run
+
+Run these commands in WSL after completing the networking and Docker Engine setup:
+
+```bash
+docker pull ghcr.io/abay11/onvif_server_emulator:latest
+docker run -d --init --network host \
+  -e ONVIF_ADVERTISED_IPV4=192.168.1.10 \
+  -e ONVIF_DISCOVERY_INTERFACE_IPV4=192.168.1.10 \
+  --name onvif-emulator \
+  ghcr.io/abay11/onvif_server_emulator:latest
+docker logs -f onvif-emulator
+```
+
+Replace both IPv4 values with the mirrored LAN IPv4 checked in step 1. The public
+image includes the default configuration and requires no registry login, source
+checkout or compiler. The release workflow currently publishes `linux/amd64`;
+Windows on ARM is not a validated deployment profile.
+
+Alternatively, download the root [compose.yaml](../compose.yaml) into a local WSL
+directory and follow [the published-image Compose commands](../README.md#docker-compose).
+It pulls the image without building it. See
+[updates and rollback](../README.md#updates-and-rollback) before changing versions.
+
+To stop and remove the `docker run` deployment:
+
+```bash
+docker stop onvif-emulator
+docker rm onvif-emulator
+```
+
+Host networking shares the WSL distribution's network namespace. Do not combine
+it with `-p`; only one emulator can occupy these ports at a time. No privileged
+container or additional Linux capabilities are required. If Linux firewall rules
+are enabled in your distribution, allow the same inbound ports there as well.
+These requirements apply to both downloaded and locally built images. Choose
+one deployment method; do not run the published and source-built containers together.
+
+### Optional: build from source
 
 From the repository root in WSL:
 
@@ -91,21 +130,17 @@ docker run --rm --init --network host \
   --name onvif-emulator osrv-image:latest
 ```
 
-Host networking shares the WSL distribution's network namespace. Do not combine
-it with `-p`; only one emulator can occupy these ports at a time. No privileged
-container or additional Linux capabilities are required. If Linux firewall rules
-are enabled in your distribution, allow the same inbound ports there as well.
-
 ## 4. Configure the firewall
 
-Run **Windows PowerShell as Administrator**, from the repository's Windows path
-(or copy `scripts/windows/Configure-OnvifFirewall.ps1` to Windows first):
+Download the raw [Configure-OnvifFirewall.ps1](../scripts/windows/Configure-OnvifFirewall.ps1)
+to Windows; a repository clone is not required. Run **Windows PowerShell as
+Administrator** from the directory containing the downloaded script:
 
 ```powershell
-.\scripts\windows\Configure-OnvifFirewall.ps1 `
+.\Configure-OnvifFirewall.ps1 `
   -LanSubnet 192.168.1.0/24 -HostIPv4 192.168.1.10 -WhatIf
 
-.\scripts\windows\Configure-OnvifFirewall.ps1 `
+.\Configure-OnvifFirewall.ps1 `
   -LanSubnet 192.168.1.0/24 -HostIPv4 192.168.1.10
 ```
 
@@ -115,6 +150,8 @@ and loopback. Ensure your trusted physical LAN is classified as Private. Do not
 change an untrusted/public network to Private just to run the emulator.
 The script leaves default firewall policies and other applications' rules alone.
 Rerunning replaces only its three named rules in each firewall.
+If using a source checkout instead, the script is at
+`scripts/windows/Configure-OnvifFirewall.ps1` relative to the repository root.
 
 | Traffic | Default local server ports | Purpose |
 | --- | --- | --- |
@@ -130,7 +167,7 @@ does not open arbitrary client ports or configure other computers' firewalls.
 For custom listening ports, rerun with matching parameters:
 
 ```powershell
-.\scripts\windows\Configure-OnvifFirewall.ps1 `
+.\Configure-OnvifFirewall.ps1 `
   -LanSubnet 192.168.1.0/24 -HostIPv4 192.168.1.10 `
   -HttpPort 8080 -RtspPort 8554 -RtpPortMin 50000 -RtpPortMax 50199
 ```
@@ -150,7 +187,7 @@ Get-NetFirewallHyperVVMSetting -PolicyStore ActiveStore `
 Remove this deployment's rules:
 
 ```powershell
-.\scripts\windows\Configure-OnvifFirewall.ps1 -Remove
+.\Configure-OnvifFirewall.ps1 -Remove
 ```
 
 Corporate policy can prevent local allow rules or loopback traffic. Ask the
@@ -197,9 +234,12 @@ for identity/types/scopes; its XAddrs is replaced at startup with the advertised
 HTTP endpoint. IPv6 discovery, WS-Discovery Hello/Bye/Resolve, and multicast RTP
 are not added by this deployment; discovery currently answers IPv4 Probes.
 
-Mount the **complete** configuration directory to `/app/server_configs:ro` when
-customizing it. Changes require restarting the container. Do not edit only the
-ProbeMatch XAddr or use a container's `172.x` address as the public endpoint.
+For a downloaded image, first [extract the bundled configuration](../README.md#custom-configuration-and-persistence)
+without cloning the repository. Mount the **complete** directory to
+`/app/server_configs` when customizing it. Use a writable mount to persist SOAP
+profile changes, or add `:ro` when those operations are not needed. Changes made
+by editing files require restarting the container. Do not edit only the ProbeMatch
+XAddr or use a container's `172.x` address as the public endpoint.
 
 For file streaming, mount media separately:
 
@@ -208,7 +248,8 @@ docker run --rm --init --network host \
   -e ONVIF_ADVERTISED_IPV4=192.168.1.10 \
   -e ONVIF_DISCOVERY_INTERFACE_IPV4=192.168.1.10 \
   -v "$(pwd)/server_configs:/app/server_configs:ro" \
-  -v /mnt/c/Videos:/media:ro osrv-image:latest
+  -v /mnt/c/Videos:/media:ro \
+  ghcr.io/abay11/onvif_server_emulator:latest
 ```
 
 Set `fileStreaming.enabled=true` and `fileStreaming.filePath=/media/video.mp4`
