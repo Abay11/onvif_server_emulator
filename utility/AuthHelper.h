@@ -1,11 +1,11 @@
 #pragma once
 
 #include "../HttpServerFwd.h"
-#include "HttpDigestHelper.h"
 
 #include <chrono>
 #include <memory>
 #include <stdexcept>
+#include <string>
 #include <vector>
 
 namespace osrv

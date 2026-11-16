@@ -1,5 +1,6 @@
 #include "AuthHelper.h"
 
+#include <algorithm>
 #include <fstream>
 #include <vector>
 

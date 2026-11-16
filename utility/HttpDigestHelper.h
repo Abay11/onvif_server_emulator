@@ -1,19 +1,16 @@
 #pragma once
 
+#include <algorithm>
 #include <chrono>
 #include <map>
 #include <memory>
 #include <string>
+#include <vector>
 
 #include "../HttpServerFwd.h"
 #include "AuthHelper.h"
 
 #include <boost/optional/optional_io.hpp>
-
-namespace osrv::auth
-{
-struct UserAccount;
-}
 
 namespace utility
 {
