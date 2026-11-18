@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Rules and PullPoint checks. Run against a disposable configuration with auth disabled.
 
-Creates three rules and removes them on completion. Requires Python 3 only.
+Creates four rules and removes them on completion. Requires Python 3 only.
 """
 import argparse
+from datetime import datetime, timedelta, timezone
 import http.client
 import time
 import uuid
@@ -69,6 +70,7 @@ def run(args):
     name = "smoke_" + uuid.uuid4().hex[:12]
     second = name + "_disarmed"
     line_name = name + "_line"
+    count_name = name + "_count"
     subscription = None
 
     def rule(rule_name, armed=True):
@@ -82,6 +84,17 @@ def run(args):
                 f'<tt:SimpleItem Name="Direction" Value="{direction}"/>'
                 f'<tt:ElementItem Name="Segments"><tt:Polyline>{points}</tt:Polyline>'
                 '</tt:ElementItem></tt:Parameters></tan:Rule>')
+
+    def count_rule(params=None):
+        if params is None:
+            params = ('<tt:SimpleItem Name="ReportTimeInterval" Value="PT3S"/>'
+                      '<tt:SimpleItem Name="PassAllPolylines" Value="false"/>')
+            for x in (-0.1, 0.1):
+                params += ('<tt:ElementItem Name="Segments"><tt:Polyline>'
+                           f'<tt:Point x="{x}" y="-1"/><tt:Point x="{x}" y="1"/>'
+                           '</tt:Polyline></tt:ElementItem>')
+        return (f'<tan:Rule Name="{count_name}" Type="tt:LineCounting"><tt:Parameters>'
+                + params + '</tt:Parameters></tan:Rule>')
 
     try:
 
@@ -97,12 +110,19 @@ def run(args):
             "VideoSource", "AnalyticsConfiguration", "Rule"}
         assert line_desc.find("tt:Data/tt:SimpleItemDescription", NS).attrib == {
             "Name": "ObjectId", "Type": "tt:StringList"}
+        count_desc = properties.find(".//CountAggregation/Counter/tt:MessageDescription", NS)
+        assert count_desc is not None and count_desc.attrib["IsProperty"] == "true"
+        assert count_desc.find("tt:Data/tt:SimpleItemDescription", NS).attrib == {
+            "Name": "Count", "Type": "xsd:int"}
         supported = soap("GetSupportedRules", token)
         desc = supported.find(".//tt:RuleDescription", NS)
         assert desc.attrib["Name"] == "tt:MotionRegionDetector" and desc.attrib["maxInstances"] == "4"
         line_desc = next(d for d in supported.findall(".//tt:RuleDescription", NS)
                          if d.attrib["Name"] == "tt:LineDetector")
         assert line_desc.find("tt:Messages", NS).attrib["IsProperty"] == "false"
+        count_desc = next(d for d in supported.findall(".//tt:RuleDescription", NS)
+                          if d.attrib["Name"] == "tt:LineCounting")
+        assert count_desc.find("tt:Messages", NS).attrib["IsProperty"] == "true"
         options = soap("GetRuleOptions", token)
         option = options.find(".//tan:RuleOptions", NS)
         assert option.attrib["RuleType"] == "tt:MotionRegionDetector"
@@ -114,17 +134,25 @@ def run(args):
         assert line_options["Direction"].find("tt:StringList", NS).text.split() == ["Left", "Right", "Any"]
         assert line_options["Segments"].find("tt:IntRange/tt:Min", NS).text == "2"
         assert line_options["Segments"].find("tt:IntRange/tt:Max", NS).text == "8"
+        count_options = soap("GetRuleOptions", "<tan:RuleType>tt:LineCounting</tan:RuleType>" + token)
+        count_options = {o.attrib["Name"]: o for o in count_options.findall(".//tan:RuleOptions", NS)}
+        assert count_options["Segments"].attrib["maxOccurs"] == "4"
+        assert count_options["ReportTimeInterval"].find("tt:DurationRange/tt:Min", NS).text == "PT0S"
         soap("GetRules", "<tan:ConfigurationToken>missing</tan:ConfigurationToken>", fault="NoConfig")
         soap("GetRuleOptions", "<tan:RuleType>tt:Unknown</tan:RuleType>" + token, fault="RuleNotExistent")
         soap("CreateRules", token + line_rule("Entering"), fault="InvalidRule")
         soap("CreateRules", token + line_rule(points="<tt:Point x='0' y='0'/><tt:Point x='0' y='0'/>"),
              fault="InvalidRule")
-        soap("CreateRules", token + rule(name) + rule(second, False) + line_rule())
+        soap("CreateRules", token + count_rule('<tt:SimpleItem Name="ResetTime" Value="25:00:00"/>'),
+             fault="InvalidRule")
+        soap("CreateRules", token + rule(name) + rule(second, False) + line_rule() + count_rule())
         soap("CreateRules", token + rule(name + "_rollback") + rule(name), fault="RuleAlreadyExistent")
         rules = soap("GetRules", token).findall(".//tan:Rule", NS)
         names = {r.attrib["Name"] for r in rules}
         assert name in names and second in names and name + "_rollback" not in names
         assert line_name in names
+        assert count_name in names
+        soap("CreateRules", token + rule(name + "_overflow"), fault="TooManyRules")
         soap("ModifyRules", token + rule(line_name), fault="TypeChangeProhibited")
         for service, prefix, operation in [("media", "trt", "GetVideoAnalyticsConfigurations"),
                                             ("media2", "tr2", "GetAnalyticsConfigurations")]:
@@ -141,16 +169,35 @@ def run(args):
                         if r.attrib["Name"] == line_name)
             assert line.attrib["Type"] == "tt:LineDetector"
             assert len(line.findall("tt:Parameters/tt:ElementItem/tt:Polyline/tt:Point", NS)) == 2
+            counter = next(r for r in cfg.findall("tt:RuleEngineConfiguration/tt:Rule", NS)
+                           if r.attrib["Name"] == count_name)
+            assert counter.attrib["Type"] == "tt:LineCounting"
+            assert len(counter.findall("tt:Parameters/tt:ElementItem", NS)) == 2
         created = soap("CreatePullPointSubscription", service="event", prefix="tet")
         subscription = next(n.text for n in created.iter() if n.tag.endswith("}Address"))
         soap("SetSynchronizationPoint", prefix="tet", url=subscription)
         seen_on = seen_off = seen_initialized = seen_crossed = False
+        count_initialized = count_changed = False
         deadline = time.monotonic() + 20
-        while time.monotonic() < deadline and not (seen_on and seen_off and seen_initialized and seen_crossed):
+        while time.monotonic() < deadline and not (
+                seen_on and seen_off and seen_initialized and seen_crossed and count_initialized and count_changed):
             events = soap("PullMessages", "<tet:Timeout>PT2S</tet:Timeout><tet:MessageLimit>100</tet:MessageLimit>",
                           prefix="tet", url=subscription)
             for notification in events.findall(".//wsnt:NotificationMessage", NS):
                 topic = notification.find("wsnt:Topic", NS).text or ""
+                if topic.endswith("RuleEngine/CountAggregation/Counter"):
+                    message = notification.find("wsnt:Message/tt:Message", NS)
+                    source = {n.attrib["Name"]: n.attrib["Value"]
+                              for n in message.findall("tt:Source/tt:SimpleItem", NS)}
+                    if source["Rule"] == count_name:
+                        assert source["AnalyticsConfiguration"] == args.token
+                        value = message.find("tt:Data/tt:SimpleItem", NS)
+                        assert value.attrib["Name"] == "Count"
+                        count = int(value.attrib["Value"])
+                        assert count >= 0 and count % 2 == 0
+                        count_initialized |= message.attrib["PropertyOperation"] == "Initialized"
+                        count_changed |= message.attrib["PropertyOperation"] == "Changed" and count > 0
+                    continue
                 if topic.endswith("RuleEngine/LineDetector/Crossed"):
                     message = notification.find("wsnt:Message/tt:Message", NS)
                     assert "PropertyOperation" not in message.attrib
@@ -179,6 +226,7 @@ def run(args):
                         seen_off |= value.attrib["Value"] == "false"
         assert seen_on and seen_off and seen_initialized and seen_crossed, (
             seen_on, seen_off, seen_initialized, seen_crossed)
+        assert count_initialized and count_changed, (count_initialized, count_changed)
         soap("ModifyRules", token + rule(name, False))
         result = soap("GetRules", token)
         modified = next(r for r in result.findall(".//tan:Rule", NS) if r.attrib["Name"] == name)
@@ -187,13 +235,34 @@ def run(args):
         modified = next(r for r in soap("GetRules", token).findall(".//tan:Rule", NS)
                         if r.attrib["Name"] == line_name)
         assert modified.find("tt:Parameters/tt:SimpleItem", NS).attrib["Value"] == "Left"
-        print("PASS Motion Region and Line Detector: discovery, options, CRUD, faults, Media/Media2 and PullPoint")
+        reset_time = (datetime.now(timezone.utc) + timedelta(seconds=4)).strftime("%H:%M:%SZ")
+        soap("ModifyRules", token + count_rule(
+            '<tt:SimpleItem Name="ReportTimeInterval" Value="PT0S"/>'
+            '<tt:SimpleItem Name="PassAllPolylines" Value="true"/>'
+            f'<tt:SimpleItem Name="ResetTime" Value="{reset_time}"/>'))
+        seen_reset = False
+        deadline = time.monotonic() + 10
+        while time.monotonic() < deadline and not seen_reset:
+            events = soap("PullMessages", "<tet:Timeout>PT2S</tet:Timeout><tet:MessageLimit>100</tet:MessageLimit>",
+                          prefix="tet", url=subscription)
+            for notification in events.findall(".//wsnt:NotificationMessage", NS):
+                if not (notification.find("wsnt:Topic", NS).text or "").endswith("CountAggregation/Counter"):
+                    continue
+                message = notification.find("wsnt:Message/tt:Message", NS)
+                source = {n.attrib["Name"]: n.attrib["Value"]
+                          for n in message.findall("tt:Source/tt:SimpleItem", NS)}
+                value = message.find("tt:Data/tt:SimpleItem", NS)
+                seen_reset |= (source["Rule"] == count_name and message.attrib["PropertyOperation"] == "Changed"
+                               and value.attrib["Name"] == "Count" and value.attrib["Value"] == "0")
+        assert seen_reset, "LineCounting did not report its scheduled reset"
+        print("PASS Motion Region, Line Detector and LineCounting: CRUD, options, faults, Media/Media2, "
+              "PullPoint, aggregated counts and scheduled reset")
     finally:
         if subscription:
             soap("Unsubscribe", prefix="wsnt", url=subscription)
         existing = soap("GetRules", token).findall(".//tan:Rule", NS)
         cleanup = [r.attrib["Name"] for r in existing
-                   if r.attrib["Name"] in {name, second, line_name, name + "_rollback"}]
+                   if r.attrib["Name"] in {name, second, line_name, count_name, name + "_rollback", name + "_overflow"}]
         if cleanup:
             soap("DeleteRules", token + "".join(f"<tan:RuleName>{n}</tan:RuleName>" for n in cleanup))
 

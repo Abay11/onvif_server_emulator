@@ -1,12 +1,12 @@
-# Analytics Rules: Motion Region and Line Detector
+# Analytics Rules: Motion Region, Line Detector and LineCounting
 
 The Analytics endpoint `/onvif/analytics_service` implements the Rules interface
-for `tt:MotionRegionDetector` and `tt:LineDetector`. This is an emulator with
+for `tt:MotionRegionDetector`, `tt:LineDetector` and `tt:LineCounting`. This is an emulator with
 deterministic synthetic input. It does not inspect the RTSP stream or claim Profile M certification.
 
 ## Contract and references
 
-The implementation targets sections 5.2.2, 6.1, 6.2, Annex A.1/A.2 and Annex C.1 of the
+The implementation targets sections 5.2.2, 6.1, 6.2, Annex A.1/A.2/A.5 and Annex C.1 of the
 [Analytics Service Specification 26.06](https://www.onvif.org/specs/srv/analytics/ONVIF-Analytics-Service-Spec.pdf).
 The wire format uses the published
 [Analytics WSDL 20.12](https://www.onvif.org/ver20/analytics/wsdl/analytics.wsdl),
@@ -30,8 +30,9 @@ check this structure. A response containing `tt:Count` indicates an older or
 different implementation; rebuild and restart the executable or container
 actually serving the tested endpoint.
 
-The Motion Region references were inspected on 2026-11-17; the Line Detector
-contract was checked against the same versions on 2026-11-18. SHA-256 values for reproducibility:
+The Motion Region references were inspected on 2026-11-17; the Line Detector and
+LineCounting contracts were checked against the same versions on 2026-11-18.
+SHA-256 values for reproducibility:
 
 | File | SHA-256 |
 | --- | --- |
@@ -49,7 +50,7 @@ and `DeleteRules` use a VideoAnalyticsConfiguration token, by default
 `GetAnalyticsConfigurations` return the same persisted rules. Read operations use
 READ_MEDIA access; mutations use ACTUATE under the existing digest authorization.
 
-The device supports up to four rules in total across both types and all analytics
+The device supports up to four rules in total across all three types and all analytics
 configurations.
 
 ## Motion Region Detector (Annex C.1)
@@ -144,7 +145,7 @@ The topic is also described by `GetEventProperties`.
 
 Line Detector uses the same six Rules operations, access levels, configuration
 token and persistence transaction as Motion Region. `GetSupportedRules` describes
-both rule types. `GetRuleOptions` without a type returns options for both; with
+all three rule types. `GetRuleOptions` without a type returns their options; with
 `tt:LineDetector` it returns `Direction` (`tt:StringList`: `Left Right Any`) and
 `Segments` (`tt:IntRange`: 2–8 points). The optional RuleType precedes
 ConfigurationToken in the request, as required by Analytics WSDL 20.12.
@@ -189,7 +190,7 @@ CreateRules after ConfigurationToken, with the namespace bindings shown above:
 In `media_profiles.config`, a line rule has `Name`, `Type: "tt:LineDetector"`,
 `Direction: "Any"` and `Segments: [{"x": 0, "y": -1}, {"x": 0, "y": 1}]`.
 Rules are stored in the existing `Analytics[].rules` array. Media/Media2 serialize
-both types from the media manager's current tree.
+all rule types from the media manager's current tree.
 
 `LineDetector.EventGenerationTimeout` in `event.config` is the positive tick
 interval in seconds (default 2). A synthetic object with ID `1` moves horizontally
@@ -210,6 +211,95 @@ Notifications use `tns1:RuleEngine/LineDetector/Crossed`, with Source items
 (`tt:StringList`, containing the synthetic ID). `IsProperty=false` is advertised
 in both GetSupportedRules and GetEventProperties. Messages omit PropertyOperation.
 Create, modify, delete and synchronization do not emit line crossing events.
+
+## Line crossing counting rule (Annex A.5)
+
+The rule's QName is `tt:LineCounting`. Its property topic is
+`tns1:RuleEngine/CountAggregation/Counter`. Source contains `VideoSource`,
+`AnalyticsConfiguration` and `Rule`; Data contains `Count` of type `xs:int`.
+The same Rules CRUD, configuration token, access levels, atomic persistence and
+shared four-rule limit apply. Media and Media2 return the persisted rule configuration.
+
+The supported parameters follow A.5 of Analytics 26.06 and the ItemList / Polyline
+definitions in ONVIF schema 25.12, using Analytics WSDL 20.12 as linked above:
+
+| Parameter | Wire representation | Supported values and defaults |
+| --- | --- | --- |
+| `Segments` | One or more ElementItems containing `tt:Polyline` | 1–4 polylines, each with 2–8 points in `[-1,1]`; defaults to the A.2 vertical line |
+| `Direction` | Optional SimpleItem, `tt:Direction` | `Any` (default), `Left`, `Right`; orientation follows A.2 |
+| `PassAllPolylines` | Optional SimpleItem, `xs:boolean` | `false` (default): each crossed polyline counts separately; `true`: one object must cross every polyline |
+| `ReportTimeInterval` | Optional SimpleItem, `xs:duration` | `PT0S` (default, immediate) through `P1D`; fixed durations only, no nonzero year/month components |
+| `ResetTime` | Repeated optional SimpleItems, `xs:time` | Daily reset schedule; omitted on creation means no scheduled reset |
+
+An empty Parameters element on creation selects these defaults. Omitted fields on
+modification retain their values. A supplied list of Segments or ResetTime items
+replaces that entire list. To remove all reset times, delete and recreate the rule;
+an empty time is invalid. SimpleItems must precede ElementItems. `GetRuleOptions`
+advertises direction choices, point and polyline limits, and the duration range.
+Boolean and unconstrained time parameters need no value-range option.
+
+For `PassAllPolylines=false`, crossing two polylines in one sample adds two.
+For `true`, each object's progress is independent, the order is unrestricted and
+one count completes a passage through all polylines. Completion clears that
+object's progress so it may complete another passage. `ForgetObject` clears
+unfinished progress when a track ends. Crossing tolerance, touching, vertices,
+outer endpoints and interpolation follow the A.2 implementation described above;
+at most one crossing per polyline and object is recognized per sample. These
+sampling limits are intentional simulation deviations. Different polylines may
+intersect each other, but each individual polyline must be simple.
+
+The count starts at zero on creation and restart. Configuration changes preserve
+the current count but clear object histories and restart report/reset scheduling.
+Failed mutations preserve both configuration and runtime state. Runtime counts,
+unfinished passages and timing state are not persisted; configuration is.
+The count saturates at 2147483647 until reset, keeping events inside `xs:int`.
+
+Unzoned ResetTime values use the process's local time (`TZ`, UTC in the supplied
+Docker image), following A.5's local-time convention. As an explicit emulator
+extension, timezone-qualified `Z` or `±hh:mm` values are also accepted and their
+offset is honored. Multiple daily reset times, fractional seconds and `24:00:00`
+are supported. Reset clears the count and all partial passages, and reports a
+changed zero immediately when needed, regardless of the report interval. Skipped
+ticks or days still cause a reset when a scheduled boundary was crossed. System
+clock adjustments use wall-clock time; moving backward does not itself reset a
+count. DST normalization of local reset times follows the platform C library.
+Duration and time fractions have microsecond resolution, rounded upward.
+
+With a positive ReportTimeInterval, counts accumulate and Changed reports are
+limited to that interval, starting at rule creation or modification. A dedicated
+one-second timer checks resets and pending reports even when no objects cross.
+Notifications therefore have timer resolution rather than hard real-time delivery.
+Synchronization always returns the latest evaluated count as Initialized.
+Creation queues Initialized, modification queues Changed, and deletion queues
+Deleted with its final count. A pending lifecycle notification precedes subsequent
+sample-driven reports. Unchanged counts do not generate periodic duplicates.
+
+Counting uses the same synthetic object and `LineDetector.EventGenerationTimeout`
+as A.2; it does not add a separate video analysis pipeline or metadata track.
+For example, this independently written rule counts passage across two lines:
+
+```xml
+<tan:Rule Name="EntranceCounter" Type="tt:LineCounting">
+  <tt:Parameters>
+    <tt:SimpleItem Name="ReportTimeInterval" Value="PT5S"/>
+    <tt:SimpleItem Name="ResetTime" Value="00:00:00"/>
+    <tt:SimpleItem Name="Direction" Value="Any"/>
+    <tt:SimpleItem Name="PassAllPolylines" Value="true"/>
+    <tt:ElementItem Name="Segments">
+      <tt:Polyline><tt:Point x="-0.25" y="-1"/><tt:Point x="-0.25" y="1"/></tt:Polyline>
+    </tt:ElementItem>
+    <tt:ElementItem Name="Segments">
+      <tt:Polyline><tt:Point x="0.25" y="-1"/><tt:Point x="0.25" y="1"/></tt:Polyline>
+    </tt:ElementItem>
+  </tt:Parameters>
+</tan:Rule>
+```
+
+The corresponding `Analytics[].rules` JSON entry has `Name`,
+`Type: "tt:LineCounting"`, `Direction`, `PassAllPolylines`, `ReportTimeInterval`,
+`ResetTime` as an array of strings and `Segments` as an array of point arrays.
+For example, `Segments: [[{"x": 0, "y": -1}, {"x": 0, "y": 1}]]` defines one line.
+Use an empty `ResetTime` array for a persisted configuration without resets.
 
 The former branch's experimental MotionRegionDetector AnalyticsModule and sample
 vehicle metadata are no longer exposed: MotionRegionDetector is a rule. Analytics
@@ -234,9 +324,10 @@ python3 unit_tests/analytics_smoke.py --host 127.0.0.1 --capture /tmp/analytics-
 python3 unit_tests/network_smoke.py --host 127.0.0.1 --advertised-ip 127.0.0.1 --multicast-interface LOCAL_IPV4
 ```
 
-The Analytics smoke test creates two Motion Region rules and one Line Detector,
-checks SOAP faults, Media/Media2, PullPoint state transitions and crossing events,
-and deletes its rules. It needs three free rule slots
+The Analytics smoke test creates two Motion Region rules, one Line Detector and
+one LineCounting rule, checks SOAP faults, Media/Media2, PullPoint motion/crossing
+events, aggregated counts and a scheduled reset, and deletes its rules.
+It needs four free rule slots
 and the default synthetic tick interval. Optional response capture supports
 external schema validation without adding a runtime XML library dependency.
 
@@ -246,6 +337,17 @@ crossings, object/source isolation, history reset, mixed-type atomic batches,
 resource limits and persistence failures. Builds and CTest can run in the Docker
 `dev` environment documented in BUILD.md; use a separate build volume and a
 disposable configuration copy for network checks.
+
+The LineCounting suite uses an injected clock to test per-line counts, direction,
+PassAllPolylines object isolation, aggregation without new samples, report-boundary
+crossings, repeated/local/offset reset times, skipped days, atomic failures,
+reload, lifecycle notifications and integer saturation. Its Docker Debug build
+and all 119 Boost test cases passed through CTest. The combined Analytics smoke
+test and the complete network smoke test passed against a configuration copy in
+an isolated Docker network, including unicast/multicast discovery and RTP/TCP/UDP.
+For LineCounting, 71 captured response, fault and payload documents passed XSD 1.1
+validation with the same WSDL/XSD imports and `xmlschema` 4.3.2, including
+DurationRange options, Media/Media2 analytics configurations and PullPoint messages.
 
 For the Line Detector integration, the Docker Debug build and all 110 Boost test
 cases passed through CTest. The combined Analytics smoke test passed against a

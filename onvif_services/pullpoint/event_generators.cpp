@@ -55,6 +55,23 @@ namespace osrv
 				event_signal_(event);
 	}
 
+	LineCountingEventGenerator::LineCountingEventGenerator(std::shared_ptr<utility::AnalyticsRules> detector,
+			boost::asio::io_context& io, const ILogger& logger)
+			: IEventGenerator(1, utility::counting::Topic, io, logger), detector_(std::move(detector))
+	{
+	}
+
+	std::deque<NotificationMessage> LineCountingEventGenerator::GenerateSynchronizationEvent() const
+	{
+		return detector_->SynchronizeCounts();
+	}
+
+	void LineCountingEventGenerator::generate_event()
+	{
+		for (const auto& event : detector_->TickCounting())
+			event_signal_(event);
+	}
+
 	DInputEventGenerator::DInputEventGenerator(int interval, const std::string& topic,
 																						 boost::asio::io_context& io_context, const ILogger& logger_)
 			: IEventGenerator(interval, topic, io_context, logger_)

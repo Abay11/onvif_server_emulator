@@ -129,7 +129,13 @@ void Server::init()
 			 },
 			 {utility::line::Topic,
 				{{"VideoSource", "tt:ReferenceToken"}, {"AnalyticsConfiguration", "tt:ReferenceToken"}, {"Rule", "xsd:string"}},
-				{{"ObjectId", "tt:StringList"}}, false}}};
+				{{"ObjectId", "tt:StringList"}}, false}},
+			{[detector = Rules()](const boost::property_tree::ptree&, boost::asio::io_context& io, const ILogger& logger) {
+				 return std::make_shared<event::LineCountingEventGenerator>(detector, io, logger);
+			 },
+			 {utility::counting::Topic,
+				{{"VideoSource", "tt:ReferenceToken"}, {"AnalyticsConfiguration", "tt:ReferenceToken"}, {"Rule", "xsd:string"}},
+				{{"Count", "xsd:int"}}}}};
 	event::init_service(*http_server_, *server_configs_, configs_dir, *logger_, event_generators);
 
 	// TODO: impl. logic for multichannel cannel

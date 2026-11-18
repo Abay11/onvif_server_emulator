@@ -19,6 +19,7 @@ add_executable(test_executable
 	event_service_tests.cpp	
 	http_da_tests.cpp
 	line_detector_tests.cpp
+	line_counting_tests.cpp
 	motion_region_tests.cpp
 	media2_tests.cpp
 	mediaprofiles_manager_tests.cpp

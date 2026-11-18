@@ -59,8 +59,8 @@ BOOST_FIXTURE_TEST_SUITE(line_detectors, Fixture)
 BOOST_AUTO_TEST_CASE(discovery_options_defaults_and_reload)
 {
 	auto supported = call("GetSupportedRules").get_child("tan:SupportedRules");
-	BOOST_TEST(supported.count("tt:RuleDescription") == 2u);
-	const auto& desc = supported.back().second;
+	BOOST_TEST(supported.count("tt:RuleDescription") == 3u);
+	const auto& desc = std::next(supported.begin(), 2)->second;
 	BOOST_TEST(desc.get<std::string>("<xmlattr>.Name") == "tt:LineDetector");
 	BOOST_TEST(!desc.get<bool>("tt:Messages.<xmlattr>.IsProperty"));
 	BOOST_TEST(desc.get<std::string>("tt:Messages.tt:ParentTopic") == utility::line::Topic);
@@ -69,7 +69,7 @@ BOOST_AUTO_TEST_CASE(discovery_options_defaults_and_reload)
 	BOOST_TEST(options.front().second.get<std::string>("tt:StringList") == "Left Right Any");
 	BOOST_TEST(options.back().second.get<int>("tt:IntRange.tt:Min") == 2);
 	BOOST_TEST(options.back().second.get<int>("tt:IntRange.tt:Max") == 8);
-	BOOST_TEST(call("GetRuleOptions").count("tan:RuleOptions") == 3u);
+	BOOST_TEST(call("GetRuleOptions").count("tan:RuleOptions") == 6u);
 	call("CreateRules", rule("entrance"));
 	auto xml = call("GetRules").get_child("tan:Rule");
 	BOOST_TEST(xml.get<std::string>("tt:Parameters.tt:SimpleItem.<xmlattr>.Value") == "Any");

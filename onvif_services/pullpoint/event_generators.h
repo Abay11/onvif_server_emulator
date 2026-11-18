@@ -116,6 +116,18 @@ namespace osrv
 			unsigned step_ = 0;
 		};
 
+		class LineCountingEventGenerator : public IEventGenerator
+		{
+		public:
+			LineCountingEventGenerator(std::shared_ptr<utility::AnalyticsRules> detector,
+				boost::asio::io_context& io, const ILogger& logger);
+			std::deque<NotificationMessage> GenerateSynchronizationEvent() const override;
+		protected:
+			void generate_event() override;
+		private:
+			std::shared_ptr<utility::AnalyticsRules> detector_;
+		};
+
 		class DInputEventGenerator : public IEventGenerator
 		{
 		public:

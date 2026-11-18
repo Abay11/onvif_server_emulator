@@ -201,14 +201,20 @@ it does not record live video to disk.
 ## Analytics Rules
 
 The Analytics service implements the Rules interface for
-`tt:MotionRegionDetector` and `tt:LineDetector`. A shared `utility::AnalyticsRules`
+`tt:MotionRegionDetector`, `tt:LineDetector` and `tt:LineCounting`. A shared `utility::AnalyticsRules`
 validates and stores rule snapshots, alarm state and object history under a mutex.
 `utility::line` handles Line Detector parameters and geometry. SOAP mutations persist rules
 through the media manager; synthetic event generators read the shared snapshot
 without accessing the manager from the event thread. Media and Media2 serialize
 rules from the manager's current tree. Scene analytics modules and RTSP metadata
 are not advertised. Line crossing notifications are non-property events and have no
-synchronization state. See [Analytics Rules](ANALYTICS.md) for the normative
+synchronization state. `utility::counting::State` tracks counts, per-object passages,
+report deadlines and daily resets; only its rule configuration is persisted.
+Counting reuses the Line Detector synthetic object samples. A separate one-second
+event timer flushes aggregated counts and evaluates reset schedules even without
+object motion. Counting is a property and participates in synchronization through
+its own generator. The injected clock in `AnalyticsRules` makes deadlines testable
+without sleeping. See [Analytics Rules](ANALYTICS.md) for the normative
 references, configuration, simulation deviations, and validation commands.
 
 ## Events and Lifecycle

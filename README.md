@@ -307,8 +307,9 @@ record live video to disk.
 ## Analytics Rules
 
 The Analytics Rules interface supports Motion Region Detector (polygon regions,
-arming and sensitivity) and Line Detector (polylines and crossing direction).
-Both generate PullPoint events using deterministic synthetic input.
+arming and sensitivity), Line Detector (polylines and crossing direction), and
+LineCounting (crossing counts, multiple polylines, report intervals and daily resets).
+They generate PullPoint events using deterministic synthetic input.
 See [Analytics Rules](docs/ANALYTICS.md) for SOAP operations,
 configuration, examples and limitations. This feature does not claim Profile M
 certification or analyze live video.

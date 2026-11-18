@@ -123,6 +123,8 @@ Tree defaults(const Tree& src)
 
 Tree readRule(const Tree& xml, const Tree& src, const Tree* previous)
 {
+	if (xml.get<std::string>("<xmlattr>.Type") == counting::Type)
+		return counting::ReadRule(xml, previous);
 	if (xml.get<std::string>("<xmlattr>.Type") == line::Type)
 		return line::ReadRule(xml, previous);
 	if (xml.get<std::string>("<xmlattr>.Type") != "tt:MotionRegionDetector")
@@ -197,7 +199,8 @@ Tree readRule(const Tree& xml, const Tree& src, const Tree* previous)
 }
 } // namespace
 
-AnalyticsRules::AnalyticsRules(const Tree& profiles, SaveRules save) : profiles_(profiles), save_(std::move(save))
+AnalyticsRules::AnalyticsRules(const Tree& profiles, SaveRules save, Clock clock)
+		: profiles_(profiles), save_(std::move(save)), clock_(std::move(clock))
 {
 	size_t count = 0;
 	for (auto& [_, cfg] : profiles_.get_child("Analytics"))
@@ -210,6 +213,8 @@ AnalyticsRules::AnalyticsRules(const Tree& profiles, SaveRules save) : profiles_
 			if (!names.insert(rule.get<std::string>("Name")).second)
 				throw RuleFault("RuleAlreadyExistent");
 			rule = readRule(RuleXml(rule), source(profiles_, cfg.get<std::string>("token")), nullptr);
+			if (rule.get<std::string>("Type") == counting::Type)
+				counters_.try_emplace({cfg.get<std::string>("token"), rule.get<std::string>("Name")}, clock_());
 			++count;
 		}
 	}
@@ -219,6 +224,8 @@ AnalyticsRules::AnalyticsRules(const Tree& profiles, SaveRules save) : profiles_
 
 AnalyticsRules::Tree AnalyticsRules::RuleXml(const Tree& rule)
 {
+	if (rule.get<std::string>("Type") == counting::Type)
+		return counting::RuleXml(rule);
 	if (rule.get<std::string>("Type") == line::Type)
 		return line::RuleXml(rule);
 	Tree result, points;
@@ -306,15 +313,18 @@ AnalyticsRules::Tree AnalyticsRules::Execute(const std::string& operation, const
 			response.put("tan:SupportedRules.tt:RuleContentSchemaLocation", "http://www.onvif.org/ver20/analytics/rules.xsd");
 			response.add_child("tan:SupportedRules.tt:RuleDescription", desc);
 			response.add_child("tan:SupportedRules.tt:RuleDescription", line::Description());
+			response.add_child("tan:SupportedRules.tt:RuleDescription", counting::Description());
 			return response;
 		}
 		if (operation == "GetRuleOptions")
 		{
 			auto type = request.get<std::string>("tan:RuleType", "");
-			if (!type.empty() && type != "tt:MotionRegionDetector" && type != line::Type)
+			if (!type.empty() && type != "tt:MotionRegionDetector" && type != line::Type && type != counting::Type)
 				throw RuleFault("RuleNotExistent");
 			if (type == line::Type)
 				return line::Options();
+			if (type == counting::Type)
+				return counting::Options();
 			Tree options;
 			options.put("<xmlattr>.Name", "MotionRegion");
 			options.put("<xmlattr>.RuleType", "tt:MotionRegionDetector");
@@ -329,13 +339,18 @@ AnalyticsRules::Tree AnalyticsRules::Execute(const std::string& operation, const
 			options.put(path + "axt:RuleNotification", true);
 			response.add_child("tan:RuleOptions", options);
 			if (type.empty())
+			{
 				for (const auto& option : line::Options())
 					response.push_back(option);
+				for (const auto& option : counting::Options())
+					response.push_back(option);
+			}
 			return response;
 		}
 		auto candidate = current;
 		std::set<std::string> names;
 		std::deque<Message> events;
+		std::deque<Message> countEvents;
 		for (const auto& [key, item] : request)
 		{
 			if (key == "<xmlattr>" || key == "tan:ConfigurationToken")
@@ -357,6 +372,8 @@ AnalyticsRules::Tree AnalyticsRules::Execute(const std::string& operation, const
 			{
 				if (it->second.get<std::string>("Type") == "tt:MotionRegionDetector")
 					events.push_back(Notification(token, it->second, "Deleted", false));
+				if (it->second.get<std::string>("Type") == counting::Type)
+					countEvents.push_back(CountNotification(token, it->second, "Deleted", counters_.at({token, name}).count));
 				candidate.erase(it);
 			}
 			else
@@ -370,6 +387,9 @@ AnalyticsRules::Tree AnalyticsRules::Execute(const std::string& operation, const
 					candidate.push_back({"", rule});
 				if (rule.get<std::string>("Type") == "tt:MotionRegionDetector")
 					events.push_back(Notification(token, rule, exists ? "Changed" : "Initialized", false));
+				if (rule.get<std::string>("Type") == counting::Type)
+					countEvents.push_back(CountNotification(token, rule, exists ? "Changed" : "Initialized",
+																									exists ? counters_.at({token, name}).count : 0));
 			}
 		}
 		if (names.empty())
@@ -398,6 +418,15 @@ AnalyticsRules::Tree AnalyticsRules::Execute(const std::string& operation, const
 			});
 		}
 		pending_.insert(pending_.end(), events.begin(), events.end());
+		for (const auto& event : countEvents)
+		{
+			const auto& name = event.source_item_descriptions.back().second;
+			int value = event.property_operation == "Initialized" ? 0 : counters_.at({token, name}).count;
+			counters_.erase({token, name});
+			if (event.property_operation != "Deleted")
+				counters_.try_emplace({token, name}, clock_(), value);
+		}
+		pending_counts_.insert(pending_counts_.end(), countEvents.begin(), countEvents.end());
 		return response;
 	}
 	catch (const boost::property_tree::ptree_error&)
@@ -466,6 +495,7 @@ std::deque<AnalyticsRules::Message> AnalyticsRules::SampleObject(const std::stri
 	if (objectId.empty() || objectId.find_first_of(" \t\r\n") != std::string::npos || !std::isfinite(x) ||
 			!std::isfinite(y) || x < -1 || x > 1 || y < -1 || y > 1)
 		return result;
+	result.swap(pending_counts_);
 	for (const auto& [_, cfg] : profiles_.get_child("Analytics"))
 	{
 		auto token = cfg.get<std::string>("token");
@@ -473,6 +503,13 @@ std::deque<AnalyticsRules::Message> AnalyticsRules::SampleObject(const std::stri
 			continue;
 		for (const auto& [__, rule] : cfg.get_child("rules"))
 		{
+			if (rule.get<std::string>("Type") == counting::Type)
+			{
+				auto& counter = counters_.at({token, rule.get<std::string>("Name")});
+				if (counter.Sample(rule, objectId, {x, y}, clock_()))
+					result.push_back(CountNotification(token, rule, "Changed", counter.count));
+				continue;
+			}
 			if (rule.get<std::string>("Type") != line::Type || line::OnLine(rule, {x, y}))
 				continue;
 			auto key = std::make_tuple(token, rule.get<std::string>("Name"), objectId);
@@ -497,10 +534,61 @@ std::deque<AnalyticsRules::Message> AnalyticsRules::SampleObject(const std::stri
 void AnalyticsRules::ForgetObject(const std::string& videoSource, const std::string& objectId)
 {
 	std::lock_guard lock(mutex_);
+	for (auto& [key, counter] : counters_)
+		if (source(profiles_, key.first).get<std::string>("SourceToken") == videoSource)
+			counter.Forget(objectId);
 	std::erase_if(tracks_, [&](const auto& track) {
 		return std::get<2>(track.first) == objectId &&
 					 source(profiles_, std::get<0>(track.first)).template get<std::string>("SourceToken") == videoSource;
 	});
+}
+
+AnalyticsRules::Message AnalyticsRules::CountNotification(const std::string& token, const Tree& rule,
+																													const std::string& operation, int count) const
+{
+	Message msg;
+	msg.topic = counting::Topic;
+	msg.utc_time = datetime::system_utc_datetime();
+	msg.property_operation = operation;
+	msg.source_item_descriptions = {{"VideoSource", source(profiles_, token).get<std::string>("SourceToken")},
+																	{"AnalyticsConfiguration", token},
+																	{"Rule", rule.get<std::string>("Name")}};
+	msg.data_name = "Count";
+	msg.data_value = std::to_string(count);
+	return msg;
+}
+
+std::deque<AnalyticsRules::Message> AnalyticsRules::SynchronizeCounts() const
+{
+	std::lock_guard lock(mutex_);
+	std::deque<Message> result;
+	for (const auto& [_, cfg] : profiles_.get_child("Analytics"))
+		for (const auto& [__, rule] : cfg.get_child("rules"))
+			if (rule.get<std::string>("Type") == counting::Type)
+			{
+				auto token = cfg.get<std::string>("token");
+				result.push_back(
+						CountNotification(token, rule, "Initialized", counters_.at({token, rule.get<std::string>("Name")}).count));
+			}
+	return result;
+}
+
+std::deque<AnalyticsRules::Message> AnalyticsRules::TickCounting()
+{
+	std::lock_guard lock(mutex_);
+	std::deque<Message> result;
+	result.swap(pending_counts_);
+	auto now = clock_();
+	for (const auto& [_, cfg] : profiles_.get_child("Analytics"))
+		for (const auto& [__, rule] : cfg.get_child("rules"))
+			if (rule.get<std::string>("Type") == counting::Type)
+			{
+				auto token = cfg.get<std::string>("token");
+				auto& counter = counters_.at({token, rule.get<std::string>("Name")});
+				if (counter.Advance(rule, now))
+					result.push_back(CountNotification(token, rule, "Changed", counter.count));
+			}
+	return result;
 }
 
 std::vector<std::string> AnalyticsRules::VideoSources() const
