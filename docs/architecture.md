@@ -67,7 +67,7 @@ flowchart TD
     Main[main.cpp: configuration and logger] --> Server[osrv::Server]
     Server --> HTTP[Simple-Web-Server / HTTP]
     Server --> Context[IOnvifServer / service factory]
-    Context --> SOAP[Device, DeviceIO, Imaging, Media, Media2, PTZ, Search, Replay]
+    Context --> SOAP[Analytics, Device, DeviceIO, Imaging, Media, Media2, PTZ, Search, Replay]
     SOAP --> HTTP
     Context --> Profiles[MediaProfilesManager]
     Profiles --> JSON[media_profiles.config]
@@ -88,7 +88,7 @@ flowchart TD
    creates a digest session, and reads a separate media profile tree.
 4. Discovery is initialized and started before event generators: a bind or
    multicast interface join failure must abort startup at this stage.
-5. `Run()` is called on eight SOAP services. The Event service is then initialized
+5. `Run()` is called on nine SOAP services. The Event service is then initialized
    separately, the RTSP server is created, and the Asio context for response delays
    is started.
 6. `Server::run()` starts HTTP in a separate thread, starts RTSP, and waits for
@@ -140,7 +140,7 @@ shared hot-reload mechanism.
   logging, delay and channel simulation, and the RTSP input file.
 - `device.config`: device description, service list and XAddrs, and emulated digital
   inputs. `Enabled` in `GetServices` controls service advertisement;
-  `Server::init()` still calls `Run()` on all eight services.
+  `Server::init()` still calls `Run()` on all nine services.
 - `media_profiles.config`: profiles and associated source/encoder configurations.
   `ProfilesConfig()` and `MediaProfilesManager` hold separate views of this data;
   changing one tree does not automatically update the other.
@@ -198,10 +198,30 @@ guarantee a change to the actual stream.
 for Recording Search. Replay Control returns an RTSP URI. This emulates an archive;
 it does not record live video to disk.
 
+## Motion Region Analytics
+
+The Analytics service implements the complete Rules interface for
+`tt:MotionRegionDetector`. A shared `utility::MotionRegionDetector` validates and
+stores rule snapshots and alarm state under a mutex. SOAP mutations persist rules
+through the media manager; a synthetic event generator reads the detector snapshot
+without accessing the manager from the event thread. Media and Media2 serialize
+rules from the manager's current tree. Scene analytics modules and RTSP metadata
+are not advertised. See [Motion Region Detector](ANALYTICS.md) for the normative
+references, configuration, simulation deviations, and validation commands.
+
 ## Events and Lifecycle
 
-`NotificationsManager` connects generators to subscribers. Each `PullPoint` holds
-a notification queue and a wait timer. Digital input, motion, cell motion, and
+`NotificationsManager` connects generators to subscribers. `Server::init()` supplies
+registrations for additional `IEventGenerator` implementations, pairing a factory
+with its topic and Source/Data field descriptions for `GetEventProperties`.
+Event service invokes these factories with its
+configuration, the manager's Asio context and logger before starting the event
+loop, and the manager owns the resulting generators. Factories capture shared
+dependencies by value; each generator retains the dependencies needed by its
+callbacks. Concrete analytics detectors are assembled in `Server`, so another
+rule event generator can be registered without changing the Event service API.
+
+Each `PullPoint` holds a notification queue and a wait timer. Digital input, motion, cell motion, and
 audio generators deliver notifications through Boost.Signals2. Subscription paths
 have the form `/onvif/event_service/sN`; supported operations include PullMessages,
 Renew, SetSynchronizationPoint, and Unsubscribe.

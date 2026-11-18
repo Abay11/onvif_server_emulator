@@ -20,7 +20,7 @@ pt::ptree& AnalyticsConfigurationReaderByToken::Config()
 {
 	auto& analyticsNode = m_profilesCfgs.get_child("Analytics");
 	auto it = std::ranges::find_if(
-			analyticsNode, [this](const auto& pt) { return pt.second.get<std::string>("token") == m_configToken; });
+			analyticsNode, [this](const auto& pt) { return pt.second.template get<std::string>("token") == m_configToken; });
 	if (it == analyticsNode.end())
 		throw osrv::no_config{};
 
@@ -29,7 +29,7 @@ pt::ptree& AnalyticsConfigurationReaderByToken::Config()
 
 const pt::ptree& AnalyticsConfigurationReaderByToken::Config() const
 {
-	return Config();
+	return const_cast<AnalyticsConfigurationReaderByToken*>(this)->Config();
 }
 
 AnalyticsModulesReaderByConfigToken::AnalyticsModulesReaderByConfigToken(std::string_view configToken,
@@ -42,7 +42,7 @@ const pt::ptree& AnalyticsModulesReaderByConfigToken::Modules() const
 {
 	const auto& analytics = m_cfgs.get_child("Analytics");
 	const auto cfgIt = std::ranges::find_if(
-			analytics, [token = m_configToken](const auto& tree) { return tree.second.get<std::string>("token") == token; });
+			analytics, [token = m_configToken](const auto& tree) { return tree.second.template get<std::string>("token") == token; });
 
 	if (cfgIt == analytics.end())
 		throw osrv::no_config{};
@@ -59,7 +59,7 @@ const pt::ptree& AnalyticsModulesReaderByName::Module() const
 {
 	const auto& modulesCfg = m_cfgs.get_child("SupportedAnalyticsModules").get_child("modules");
 	auto it = std::ranges::find_if(modulesCfg, [this](const auto& it) {
-		return exns::get_element_without_ns(it.second.get<std::string>("Name")) ==
+		return exns::get_element_without_ns(it.second.template get<std::string>("Name")) ==
 					 exns::get_element_without_ns(m_name.data());
 	});
 
@@ -82,7 +82,7 @@ int AnalyticsModuleInstanceCount::count() const
 	std::ranges::for_each(analyticsNode, [&](const auto& n) {
 		for (const auto& [name, node] : n.second.get_child("analyticsModules"))
 		{
-			if (exns::get_element_without_ns(node.get<std::string>("Type")) == exns::get_element_without_ns(m_type.data()))
+			if (exns::get_element_without_ns(node.template get<std::string>("Type")) == exns::get_element_without_ns(m_type.data()))
 				++countRes;
 		}
 	});
@@ -122,7 +122,7 @@ void AnalyticsModuleCreator::create(std::string_view moduleName, std::string_vie
 
 	if (!std::ranges::any_of(analyticsConfigNode.get_child("compatibleModuleAnalytics"),
 													 [mt = exns::get_element_without_ns(moduleType)](const auto& t) {
-														 return exns::get_element_without_ns(t.second.get_value<std::string>()) == mt;
+														 return exns::get_element_without_ns(t.second.template get_value<std::string>()) == mt;
 													 }))
 	{
 		throw osrv::configuration_conflict{};
@@ -153,7 +153,7 @@ void AnalyticsModuleDeleter::doDelete(std::string_view configToken, std::string_
 	auto& analytConfig = utility::AnalyticsConfigurationReaderByToken(configToken, m_profileCfgs).Config();
 	auto& modules = analytConfig.get_child("analyticsModules");
 	auto it = std::ranges::find_if(
-			modules, [&moduleName](const auto& pt) { return pt.second.get<std::string>("Name") == moduleName; });
+			modules, [&moduleName](const auto& pt) { return pt.second.template get<std::string>("Name") == moduleName; });
 
 	if (it == modules.end())
 		throw osrv::invalid_module{};
@@ -175,7 +175,7 @@ const pt::ptree& AnalyticsModuleRelatedAnalytConfig::Module() const
 	const auto& modules = analytConfig.get_child("analyticsModules");
 
 	const auto it =
-			std::ranges::find_if(modules, [this](const auto& pt) { return pt.second.get<std::string>("Name") == m_name; });
+			std::ranges::find_if(modules, [this](const auto& pt) { return pt.second.template get<std::string>("Name") == m_name; });
 	if (it == modules.end())
 		throw osrv::invalid_module{};
 
@@ -211,7 +211,7 @@ void AnalyticsModuleSettingsApplier::Apply(std::string_view paramName, int value
 	const auto& options = moduleInfo.get_child("Options");
 
 	const auto optIt = std::ranges::find_if(
-			options, [&paramName](const auto& pt) { return pt.second.get<std::string>("Name") == paramName; });
+			options, [&paramName](const auto& pt) { return pt.second.template get<std::string>("Name") == paramName; });
 
 	if (value < optIt->second.get<int>("Min") || value > optIt->second.get<int>("Max"))
 		throw osrv::configuration_conflict{};
@@ -227,7 +227,7 @@ const pt::ptree& RuleReaderByName::Rule() const
 {
 	const auto& rulesCfg = m_cfgs.get_child("SupportedRules").get_child("rules");
 	auto it = std::ranges::find_if(rulesCfg, [this](const auto& it) {
-		return exns::get_element_without_ns(it.second.get<std::string>("Name")) ==
+		return exns::get_element_without_ns(it.second.template get<std::string>("Name")) ==
 					 exns::get_element_without_ns(m_name.data());
 	});
 

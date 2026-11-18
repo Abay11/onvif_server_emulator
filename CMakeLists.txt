@@ -97,6 +97,8 @@ FILE(GLOB SERVICES_SRC
 )
 
 FILE (GLOB UTILITY_SRC
+	"utility/MotionRegionDetector.cpp"
+	"utility/MotionRegionDetector.h"
 	"utility/AnalyticsReader.cpp"
 	"utility/AnalyticsReader.h"
 	"utility/AudioSourceReader.cpp"

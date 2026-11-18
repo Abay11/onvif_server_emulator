@@ -1,10 +1,48 @@
 #include <boost/test/unit_test.hpp>
 
 #include "../onvif_services/media2_service.h"
+#include "../onvif_services/analytics_service.h"
 #include "../utility/MediaProfilesManager.h"
 
 #include <boost/property_tree/json_parser.hpp>
 #include <boost/property_tree/ptree.hpp>
+#include <vector>
+
+BOOST_AUTO_TEST_CASE(analytics_configuration_uses_schema_field_order_and_reference_count)
+{
+	using boost::property_tree::ptree;
+	utility::media::MediaProfilesManager manager("../../server_configs/media_profiles.config");
+	auto& tree = manager.ReaderWriter()->ConfigsTree();
+	auto config = tree.get_child("Analytics").front().second;
+	const auto token = config.get<std::string>("token");
+	// Exercise both unused and shared configurations without writing fixture files.
+	for (int references : {0, 1, 3})
+	{
+		ptree profiles;
+		for (int i = 0; i < references; ++i)
+		{
+			ptree profile;
+			profile.put("Analytics", token);
+			profiles.push_back({"", profile});
+		}
+		ptree unrelated;
+		unrelated.put("Analytics", "OtherAnalyticsConfig");
+		profiles.push_back({"", unrelated});
+		tree.put_child("MediaProfiles", profiles);
+
+		ptree result;
+		osrv::analytics::fillConfiguration(config, result, manager);
+		BOOST_TEST(result.get<std::string>("<xmlattr>.token") == token);
+		BOOST_TEST(result.get<int>("tt:UseCount") == references);
+		const std::vector<std::string> expected{
+				"tt:Name", "tt:UseCount", "tt:AnalyticsEngineConfiguration", "tt:RuleEngineConfiguration"};
+		std::vector<std::string> actual;
+		for (const auto& [name, child] : result)
+			if (name != "<xmlattr>")
+				actual.push_back(name);
+		BOOST_TEST(actual == expected, boost::test_tools::per_element());
+	}
+}
 
 BOOST_AUTO_TEST_CASE(profiles_to_soap_func)
 {

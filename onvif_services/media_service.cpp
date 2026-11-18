@@ -1,3 +1,4 @@
+#include "analytics_service.h"
 #include "media_service.h"
 
 #include "../onvif/OnvifRequest.h"
@@ -422,16 +423,22 @@ private:
 struct GetVideoAnalyticsConfigurationsHandler : public OnvifRequestBase
 {
 	GetVideoAnalyticsConfigurationsHandler(const std::map<std::string, std::string>& xs,
-																				 const std::shared_ptr<pt::ptree>& configs)
-			: OnvifRequestBase(GetVideoAnalyticsConfigurations, auth::SECURITY_LEVELS::READ_MEDIA, xs, configs)
+																				 const std::shared_ptr<pt::ptree>& configs, const utility::media::MediaProfilesManager& mgr)
+			: OnvifRequestBase(GetVideoAnalyticsConfigurations, auth::SECURITY_LEVELS::READ_MEDIA, xs, configs), manager(mgr)
 	{
 	}
 
 	void operator()(std::shared_ptr<HttpServer::Response> response, std::shared_ptr<HttpServer::Request> request) override
 	{
-		pt::ptree analytics_configs;
+
 		auto envelope_tree = utility::soap::getEnvelopeTree(ns_);
-		envelope_tree.add_child("s:Body.trt:GetVideoAnalyticsConfigurationsResponse.trt:Configurations", analytics_configs);
+		envelope_tree.put("s:Body.trt:GetVideoAnalyticsConfigurationsResponse", "");
+		for (const auto& [_, cfg] : manager.ReaderWriter()->ConfigsTree().get_child("Analytics"))
+		{
+			pt::ptree out;
+			analytics::fillConfiguration(cfg, out, manager);
+			envelope_tree.add_child("s:Body.trt:GetVideoAnalyticsConfigurationsResponse.trt:Configurations", out);
+		}
 
 		pt::ptree root_tree;
 		root_tree.put_child("s:Envelope", envelope_tree);
@@ -441,6 +448,7 @@ struct GetVideoAnalyticsConfigurationsHandler : public OnvifRequestBase
 
 		utility::http::fillResponseWithHeaders(*response, os.str());
 	}
+	const utility::media::MediaProfilesManager& manager;
 };
 
 struct GetVideoSourceConfigurationHandler : public OnvifRequestBase
@@ -736,7 +744,7 @@ MediaService::MediaService(const std::string& service_uri, const std::string& se
 	requestHandlers_.push_back(std::make_shared<media::GetProfilesHandler>(xml_namespaces_, configs_ptree_,
 																																				 *srv->GetServerConfigs(), srv->ProfilesConfig()));
 	requestHandlers_.push_back(
-			std::make_shared<media::GetVideoAnalyticsConfigurationsHandler>(xml_namespaces_, configs_ptree_));
+			std::make_shared<media::GetVideoAnalyticsConfigurationsHandler>(xml_namespaces_, configs_ptree_, *srv->MediaProfilesManager()));
 	requestHandlers_.push_back(std::make_shared<media::GetVideoSourceConfigurationHandler>(
 			xml_namespaces_, configs_ptree_, srv->ProfilesConfig()));
 	requestHandlers_.push_back(std::make_shared<media::GetVideoSourceConfigurationsHandler>(

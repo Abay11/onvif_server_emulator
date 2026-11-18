@@ -13,6 +13,7 @@
 #include "../utility/VideoSourceReader.h"
 #include "../utility/XmlParser.h"
 #include "../utility/AnalyticsReader.h"
+#include "../utility/MotionRegionDetector.h"
 
 #include "../Simple-Web-Server/server_http.hpp"
 
@@ -52,21 +53,6 @@ namespace osrv
 {
 namespace media2
 {
-auto fillAnalyticsConfiguration = [](const pt::ptree& jsonConfigNode, pt::ptree& xmlConfigOut,
-																		 const utility::media::MediaProfilesManager& profilesMgr) {
-	auto cfgToken = jsonConfigNode.get<std::string>("token");
-	xmlConfigOut.add("<xmlattr>.token", cfgToken);
-	xmlConfigOut.add("tt:Name", jsonConfigNode.get<std::string>("Name"));
-	xmlConfigOut.add("tt:UseCount", profilesMgr.GetUseCount(
-																			cfgToken, osrv::CONFIGURATION_ENUMERATION[osrv::CONFIGURATION_TYPE::ANALYTICS]));
-
-	utility::AnalyticsModulesReaderByConfigToken reader{cfgToken, profilesMgr.ReaderWriter()->ConfigsTree()};
-	pt::ptree analyticsEngine;
-	analytics::fillModules(reader.Modules(), analyticsEngine, "tt");
-
-	xmlConfigOut.add_child("tt:AnalyticsEngineConfiguration", analyticsEngine);
-	xmlConfigOut.add("tt:RuleEngineConfiguration", "");
-};
 
 struct AddConfigurationHandler : public OnvifRequestBase
 {
@@ -224,7 +210,7 @@ public:
 			const auto& configJson =
 					m_profilesMgr.GetConfigByToken(requestedConfigToken, osrv::CONFIGURATION_ENUMERATION[osrv::ANALYTICS]);
 			pt::ptree xmlAnalyticsConfig;
-			fillAnalyticsConfiguration(configJson, xmlAnalyticsConfig, m_profilesMgr);
+			analytics::fillConfiguration(configJson, xmlAnalyticsConfig, m_profilesMgr);
 			envelope_tree.add_child("s:Body.tr2:GetAnalyticsConfigurationsResponse.tr2:Configurations", xmlAnalyticsConfig);
 		}
 		else if (!requestedProfileToken.empty()) // analytics configs should be compatible with this profile
@@ -236,7 +222,7 @@ public:
 			const auto& compatibleConfigs = vsConfigJson.get_child("CompatibleAnalyticsConfigurations");
 			std::vector<std::string> compatibleConfigsTokens;
 			std::ranges::transform(compatibleConfigs, std::back_inserter(compatibleConfigsTokens),
-														 [](auto t) { return t.second.get_value<std::string>(); });
+														 [](auto t) { return t.second.template get_value<std::string>(); });
 
 			const auto& allConfigs =
 					m_profilesMgr.ReaderWriter()->ConfigsTree().get_child(osrv::CONFIGURATION_ENUMERATION[osrv::ANALYTICS]);
@@ -248,7 +234,7 @@ public:
 					continue;
 
 				pt::ptree xmlAnalyticsConfig;
-				fillAnalyticsConfiguration(node, xmlAnalyticsConfig, m_profilesMgr);
+				analytics::fillConfiguration(node, xmlAnalyticsConfig, m_profilesMgr);
 				envelope_tree.add_child("s:Body.tr2:GetAnalyticsConfigurationsResponse.tr2:Configurations", xmlAnalyticsConfig);
 			}
 		}
@@ -259,7 +245,7 @@ public:
 			for (const auto& [key, node] : allConfigs)
 			{
 				pt::ptree xmlAnalyticsConfig;
-				fillAnalyticsConfiguration(node, xmlAnalyticsConfig, m_profilesMgr);
+				analytics::fillConfiguration(node, xmlAnalyticsConfig, m_profilesMgr);
 				envelope_tree.add_child("s:Body.tr2:GetAnalyticsConfigurationsResponse.tr2:Configurations", xmlAnalyticsConfig);
 			}
 		}
@@ -1213,7 +1199,7 @@ void profile_to_soap(const ptree& profile_config, const ptree& configs_file, ptr
 	{
 		pt::ptree analytics_node;
 		const auto& config = profilesMgr.GetConfigByToken(va_token, osrv::CONFIGURATION_ENUMERATION[osrv::ANALYTICS]);
-		fillAnalyticsConfiguration(config, analytics_node, profilesMgr);
+		analytics::fillConfiguration(config, analytics_node, profilesMgr);
 		result.put_child("tr2:Configurations.tr2:Analytics", analytics_node);
 	}
 

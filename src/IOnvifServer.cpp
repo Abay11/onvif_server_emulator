@@ -1,6 +1,8 @@
 #include "../include/IOnvifServer.h"
 
 #include "../utility/AuthHelper.h"
+#include "../utility/MotionRegionDetector.h"
+#include "../utility/AnalyticsReader.h"
 #include "../utility/MediaProfilesManager.h"
 
 #include "../Server.h"
@@ -32,7 +34,7 @@ std::shared_ptr<IOnvifService> OnvifServiceFactory::Create(const std::string& se
 {
 	if (SERVICE_URI::ANALYTICS == service_uri)
 	{
-		return std::make_shared<AnalyticsService>(service_uri, "Analytics", srv);
+		return std::make_shared<AnalyticsService>(service_uri, "analytics", srv);
 	}
 
 	if (SERVICE_URI::DEVICE == service_uri)
@@ -83,6 +85,31 @@ IOnvifServer::IOnvifServer(const std::string& configs_path, std::shared_ptr<ILog
 			media_profiles_manager_(std::make_shared<utility::media::MediaProfilesManager>(
 					ConfigPath(configs_path_, ConfigName(PROFILES_CONFIG_FILE))))
 {
+}
+
+std::shared_ptr<utility::MotionRegionDetector> IOnvifServer::MotionDetector()
+{
+	if (!motion_detector_)
+	{
+		auto manager = media_profiles_manager_;
+		motion_detector_ = std::make_shared<utility::MotionRegionDetector>(
+				manager->ReaderWriter()->ConfigsTree(), [manager](const std::string& token, const pt::ptree& rules) {
+					auto& cfg =
+							utility::AnalyticsConfigurationReaderByToken(token, manager->ReaderWriter()->ConfigsTree()).Config();
+					auto backup = cfg;
+					cfg.put_child("rules", rules);
+					try
+					{
+						manager->ReaderWriter()->Save();
+					}
+					catch (...)
+					{
+						cfg.swap(backup);
+						throw;
+					}
+				});
+	}
+	return motion_detector_;
 }
 
 const std::string& IOnvifServer::ConfigsPath() const

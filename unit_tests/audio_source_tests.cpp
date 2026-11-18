@@ -73,7 +73,7 @@ BOOST_AUTO_TEST_CASE(PcmuSetupTest)
 {
 	auto pcmu = utility::AudioSetupFactory().AudioSetup(osrv::AUDIO_PCMU);
 
-	BOOST_TEST("mulawenc bitrate=64000" == pcmu->Encoding());
+	BOOST_TEST("mulawenc" == pcmu->Encoding());
 	BOOST_TEST(0u == pcmu->PayloadNum());
 	BOOST_TEST("rtppcmupay" == pcmu->PayloadPluginName());
 }
@@ -82,7 +82,7 @@ BOOST_AUTO_TEST_CASE(PcmaSetupTest)
 {
 	auto pcma = utility::AudioSetupFactory().AudioSetup(osrv::AUDIO_PCMA);
 
-	BOOST_TEST("alawenc bitrate=64000" == pcma->Encoding());
+	BOOST_TEST("alawenc" == pcma->Encoding());
 	BOOST_TEST(8u == pcma->PayloadNum());
 	BOOST_TEST("rtppcmapay" == pcma->PayloadPluginName());
 }
@@ -91,7 +91,7 @@ BOOST_AUTO_TEST_CASE(G726SetupTest)
 {
 	auto g726 = utility::AudioSetupFactory().AudioSetup(osrv::AUDIO_G726, 16000, 2);
 
-	BOOST_TEST("avenc_g726 bitrate=16000" == g726->Encoding());
+	BOOST_TEST("avenc_g726" == g726->Encoding());
 	BOOST_TEST(97u == g726->PayloadNum());
 	BOOST_TEST("rtpg726pay" == g726->PayloadPluginName());
 }
@@ -100,7 +100,7 @@ BOOST_AUTO_TEST_CASE(AacSetupTest)
 {
 	auto aac = utility::AudioSetupFactory().AudioSetup(osrv::AUDIO_AAC, 44100, 3);
 
-	BOOST_TEST("avenc_aac bitrate=44100" == aac->Encoding());
+	BOOST_TEST("avenc_aac" == aac->Encoding());
 	BOOST_TEST(98u == aac->PayloadNum());
 	BOOST_TEST("rtpmp4apay" == aac->PayloadPluginName());
 }

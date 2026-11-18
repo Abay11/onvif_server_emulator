@@ -6,10 +6,13 @@
 BOOST_AUTO_TEST_CASE(AnalyticsModulesReaderByConfigToken_test0)
 {
 	using namespace utility::media;
-	ConfigsReaderWriter readerWriter{"../../server_configs/media_profiles.config"};
+	ConfigsReaderWriter readerWriter{"../../unit_tests/test_data/analytics_legacy/media_profiles.config"};
 	readerWriter.Read();
 
 	utility::AnalyticsModulesReaderByConfigToken reader("AnalyticsConfig_0", readerWriter.ConfigsTree());
+
+	const utility::AnalyticsConfigurationReaderByToken constReader("AnalyticsConfig_0", readerWriter.ConfigsTree());
+	BOOST_CHECK_EQUAL(constReader.Config().get<std::string>("token"), "AnalyticsConfig_0");
 
 	const auto& modules = reader.Modules();
 	BOOST_ASSERT(modules.size() == 1);
@@ -19,7 +22,7 @@ BOOST_AUTO_TEST_CASE(AnalyticsModulesReaderByConfigToken_test0)
 BOOST_AUTO_TEST_CASE(AnalyticsModulesReaderByName0)
 {
 	using namespace utility::media;
-	ConfigsReaderWriter readerWriter{"../../server_configs/analytics.config"};
+	ConfigsReaderWriter readerWriter{"../../unit_tests/test_data/analytics_legacy/analytics.config"};
 	readerWriter.Read();
 
 	auto name = "tt:MotionRegionDetector";
@@ -32,7 +35,7 @@ BOOST_AUTO_TEST_CASE(AnalyticsModulesReaderByName0)
 BOOST_AUTO_TEST_CASE(AnalyticsModulesReaderByName1)
 {
 	using namespace utility::media;
-	ConfigsReaderWriter readerWriter{"../../server_configs/analytics.config"};
+	ConfigsReaderWriter readerWriter{"../../unit_tests/test_data/analytics_legacy/analytics.config"};
 	readerWriter.Read();
 
 	BOOST_CHECK_THROW(utility::AnalyticsModulesReaderByName("InvalidDetectorName", readerWriter.ConfigsTree()).Module(),
@@ -42,7 +45,7 @@ BOOST_AUTO_TEST_CASE(AnalyticsModulesReaderByName1)
 BOOST_AUTO_TEST_CASE(AnalyticsModuleInstanceCountTest0)
 {
 	using namespace utility::media;
-	ConfigsReaderWriter readerWriter{"../../server_configs/media_profiles.config"};
+	ConfigsReaderWriter readerWriter{"../../unit_tests/test_data/analytics_legacy/media_profiles.config"};
 	readerWriter.Read();
 
 	BOOST_CHECK_EQUAL(
@@ -52,7 +55,7 @@ BOOST_AUTO_TEST_CASE(AnalyticsModuleInstanceCountTest0)
 BOOST_AUTO_TEST_CASE(AnalyticsModuleInstanceCountTest1)
 {
 	using namespace utility::media;
-	ConfigsReaderWriter readerWriter{"../../server_configs/media_profiles.config"};
+	ConfigsReaderWriter readerWriter{"../../unit_tests/test_data/analytics_legacy/media_profiles.config"};
 	readerWriter.Read();
 
 	BOOST_CHECK_EQUAL(utility::AnalyticsModuleInstanceCount(readerWriter.ConfigsTree(), "InvalidDetectorType").count(),
@@ -62,10 +65,10 @@ BOOST_AUTO_TEST_CASE(AnalyticsModuleInstanceCountTest1)
 BOOST_AUTO_TEST_CASE(CreateAnalyticsModuleTest0)
 {
 	using namespace utility::media;
-	ConfigsReaderWriter readerWriter{"../../server_configs/media_profiles.config"};
+	ConfigsReaderWriter readerWriter{"../../unit_tests/test_data/analytics_legacy/media_profiles.config"};
 	readerWriter.Read();
 
-	ConfigsReaderWriter analyticsConfigsReader{"../../server_configs/analytics.config"};
+	ConfigsReaderWriter analyticsConfigsReader{"../../unit_tests/test_data/analytics_legacy/analytics.config"};
 	analyticsConfigsReader.Read();
 
 	try
@@ -89,10 +92,10 @@ BOOST_AUTO_TEST_CASE(CreateAnalyticsModuleTest0)
 BOOST_AUTO_TEST_CASE(CreateAnalyticsModuleTest1)
 {
 	using namespace utility::media;
-	ConfigsReaderWriter readerWriter{"../../server_configs/media_profiles.config"};
+	ConfigsReaderWriter readerWriter{"../../unit_tests/test_data/analytics_legacy/media_profiles.config"};
 	readerWriter.Read();
 
-	ConfigsReaderWriter analyticsConfigsReader{"../../server_configs/analytics.config"};
+	ConfigsReaderWriter analyticsConfigsReader{"../../unit_tests/test_data/analytics_legacy/analytics.config"};
 	analyticsConfigsReader.Read();
 
 	try
@@ -116,10 +119,10 @@ BOOST_AUTO_TEST_CASE(CreateAnalyticsModuleTest1)
 BOOST_AUTO_TEST_CASE(CreateAnalyticsModuleTest2)
 {
 	using namespace utility::media;
-	ConfigsReaderWriter profilesReaderWriter{"../../server_configs/media_profiles.config"};
+	ConfigsReaderWriter profilesReaderWriter{"../../unit_tests/test_data/analytics_legacy/media_profiles.config"};
 	profilesReaderWriter.Read();
 
-	ConfigsReaderWriter analyticsConfigsReader{"../../server_configs/analytics.config"};
+	ConfigsReaderWriter analyticsConfigsReader{"../../unit_tests/test_data/analytics_legacy/analytics.config"};
 	analyticsConfigsReader.Read();
 
 	const auto* analytConfig = "AnalyticsConfig_0";
@@ -151,7 +154,7 @@ BOOST_AUTO_TEST_CASE(AnalyticsModuleSettingsApplierTest0)
 {
 	using namespace utility::media;
 
-	ConfigsReaderWriter analyticsConfigsReader{"../../server_configs/analytics.config"};
+	ConfigsReaderWriter analyticsConfigsReader{"../../unit_tests/test_data/analytics_legacy/analytics.config"};
 	analyticsConfigsReader.Read();
 
 	pt::ptree testModule;
@@ -167,7 +170,7 @@ BOOST_AUTO_TEST_CASE(AnalyticsModuleSettingsApplierTest1)
 {
 	using namespace utility::media;
 
-	ConfigsReaderWriter analyticsConfigsReader{"../../server_configs/analytics.config"};
+	ConfigsReaderWriter analyticsConfigsReader{"../../unit_tests/test_data/analytics_legacy/analytics.config"};
 	analyticsConfigsReader.Read();
 
 	pt::ptree testModule;
@@ -184,7 +187,7 @@ BOOST_AUTO_TEST_CASE(AnalyticsModuleSettingsApplierTest2)
 {
 	using namespace utility::media;
 
-	ConfigsReaderWriter analyticsConfigsReader{"../../server_configs/analytics.config"};
+	ConfigsReaderWriter analyticsConfigsReader{"../../unit_tests/test_data/analytics_legacy/analytics.config"};
 	analyticsConfigsReader.Read();
 
 	pt::ptree testModule;
@@ -200,10 +203,10 @@ BOOST_AUTO_TEST_CASE(AnalyticsModuleSettingsApplierTest2)
 BOOST_AUTO_TEST_CASE(AnalyticsModuleDeleterTest0)
 {
 	using namespace utility::media;
-	ConfigsReaderWriter profilesReaderWriter{"../../server_configs/media_profiles.config"};
+	ConfigsReaderWriter profilesReaderWriter{"../../unit_tests/test_data/analytics_legacy/media_profiles.config"};
 	profilesReaderWriter.Read();
 
-	ConfigsReaderWriter analyticsConfigsReader{"../../server_configs/analytics.config"};
+	ConfigsReaderWriter analyticsConfigsReader{"../../unit_tests/test_data/analytics_legacy/analytics.config"};
 	analyticsConfigsReader.Read();
 
 	const auto* analytConfigToken = "AnalyticsConfig_0";

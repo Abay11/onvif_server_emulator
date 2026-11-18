@@ -7,6 +7,7 @@
 #include "../onvif_services/device_service.h"
 #include "../utility/AnalyticsReader.h"
 #include "../utility/MediaProfilesManager.h"
+#include "../utility/MotionRegionDetector.h"
 
 #include "../utility/HttpHelper.h"
 #include "../utility/SoapHelper.h"
@@ -18,16 +19,7 @@
 
 namespace pt = boost::property_tree;
 
-// a list of implemented methods
-const std::string CreateAnalyticsModules = "CreateAnalyticsModules";
-const std::string DeleteAnalyticsModules = "DeleteAnalyticsModules";
-const std::string GetAnalyticsModuleOptions = "GetAnalyticsModuleOptions";
-const std::string GetAnalyticsModules = "GetAnalyticsModules";
-const std::string GetRuleOptions = "GetRuleOptions";
 const std::string GetServiceCapabilities = "GetServiceCapabilities";
-const std::string GetSupportedAnalyticsModules = "GetSupportedAnalyticsModules";
-const std::string GetSupportedMetadata = "GetSupportedMetadata";
-const std::string GetSupportedRules = "GetSupportedRules";
 
 namespace osrv
 {
@@ -56,308 +48,64 @@ void fillModules(const boost::property_tree::ptree& modules, boost::property_tre
 	}
 };
 
-void fillConfigDescr(const pt::ptree& tree, pt::ptree& moduleDescr)
+void fillConfiguration(const pt::ptree& jsonConfigNode, pt::ptree& xmlConfigOut,
+											 const utility::media::MediaProfilesManager& profilesMgr)
 {
-	moduleDescr.add("<xmlattr>.Name", tree.get<std::string>("Name"));
-	moduleDescr.add("<xmlattr>.fixed", tree.get<bool>("fixed"));
-	moduleDescr.add("<xmlattr>.maxInstances", tree.get<std::string>("maxInstances"));
-	for (const auto& [paramsKey, paramsNode] : tree.get_child("Parameters"))
-	{
-		const auto& itemType = paramsNode.get<std::string>("DescriptionType");
-		pt::ptree item;
-		item.add("<xmlattr>.Name", paramsNode.get<std::string>("Name"));
-		item.add("<xmlattr>.Type", paramsNode.get<std::string>("Type"));
-		moduleDescr.add_child("tt:Parameters.tt:" + itemType, item);
-	}
+	auto cfgToken = jsonConfigNode.get<std::string>("token");
+	xmlConfigOut.add("<xmlattr>.token", cfgToken);
+	xmlConfigOut.add("tt:Name", jsonConfigNode.get<std::string>("Name"));
+	xmlConfigOut.add("tt:UseCount", profilesMgr.GetUseCount(
+																			cfgToken, osrv::CONFIGURATION_ENUMERATION[osrv::CONFIGURATION_TYPE::ANALYTICS]));
 
-	for (const auto& [messKey, messNode] : tree.get_child("Messages"))
-	{
-		pt::ptree message;
-		message.add("<xmlattr>.IsProperty", messNode.get<bool>("IsProperty"));
-		for (const auto& [sourceKey, sourceNode] : messNode.get_child("Source"))
-		{
-			pt::ptree item;
-			item.add("<xmlattr>.Name", sourceNode.get<std::string>("Name"));
-			item.add("<xmlattr>.Type", sourceNode.get<std::string>("Type"));
-			const auto& itemType = sourceNode.get<std::string>("DescriptionType");
+	utility::AnalyticsModulesReaderByConfigToken reader{cfgToken, profilesMgr.ReaderWriter()->ConfigsTree()};
+	pt::ptree analyticsEngine;
+	analytics::fillModules(reader.Modules(), analyticsEngine, "tt");
 
-			message.add_child("tt:Source.tt:" + itemType, item);
-		}
-
-		for (const auto& [dataKey, dataNode] : messNode.get_child("Data"))
-		{
-			pt::ptree data;
-			data.add("<xmlattr>.Name", dataNode.get<std::string>("Name"));
-			data.add("<xmlattr>.Type", dataNode.get<std::string>("Type"));
-			const auto& itemType = dataNode.get<std::string>("DescriptionType");
-
-			message.add_child("tt:Data.tt:" + itemType, data);
-		}
-
-		message.add("tt:ParentTopic", messNode.get<std::string>("ParentTopic"));
-
-		moduleDescr.add_child("tt:Messages", message);
-	}
-};
-
-struct CreateAnalyticsModulesHandler : public OnvifRequestBase
+	xmlConfigOut.add_child("tt:AnalyticsEngineConfiguration", analyticsEngine);
+	pt::ptree rules;
+	if (auto configured = jsonConfigNode.get_child_optional("rules"))
+		for (const auto& [_, rule] : *configured)
+			rules.add_child("tt:Rule", utility::MotionRegionDetector::RuleXml(rule));
+	xmlConfigOut.add_child("tt:RuleEngineConfiguration", rules);
+}
+struct RulesHandler : public OnvifRequestBase
 {
-private:
-	utility::media::MediaProfilesManager& m_profilesMgr;
-
-public:
-	CreateAnalyticsModulesHandler(const std::map<std::string, std::string>& xs, const std::shared_ptr<pt::ptree>& configs,
-																utility::media::MediaProfilesManager& mgr)
-			: OnvifRequestBase(CreateAnalyticsModules, auth::SECURITY_LEVELS::ACTUATE, xs, configs), m_profilesMgr(mgr)
+	std::shared_ptr<utility::MotionRegionDetector> detector_;
+	RulesHandler(const std::string& operation, const std::map<std::string, std::string>& ns,
+							 const std::shared_ptr<pt::ptree>& configs, std::shared_ptr<utility::MotionRegionDetector> detector)
+			: OnvifRequestBase(operation,
+												 operation.starts_with("Get") ? auth::SECURITY_LEVELS::READ_MEDIA
+																											: auth::SECURITY_LEVELS::ACTUATE,
+												 ns, configs),
+				detector_(std::move(detector))
 	{
 	}
 
 	void operator()(std::shared_ptr<HttpServer::Response> response, std::shared_ptr<HttpServer::Request> request) override
 	{
-		auto request_str = request->content.string();
-		std::istringstream is(request_str);
-		pt::ptree xml_tree;
-		pt::xml_parser::read_xml(is, xml_tree);
-		const auto& configToken = exns::find_hierarchy("Envelope.Body.CreateAnalyticsModules.ConfigurationToken", xml_tree);
-		const auto& analyticsModule =
-				exns::find_hierarchy_elements("Envelope.Body.CreateAnalyticsModules.AnalyticsModule", xml_tree);
-
-		utility::AnalyticsModuleCreator moduleCreator{configToken, m_profilesMgr.ReaderWriter()->ConfigsTree(),
-																									*service_configs_};
-		for (const auto& moduleNode : analyticsModule)
+		auto envelope = utility::soap::getEnvelopeTree(ns_);
+		bool fault = false;
+		try
 		{
-			const auto& name = moduleNode->second.get<std::string>("<xmlattr>.Name");
-			const auto& type = moduleNode->second.get<std::string>("<xmlattr>.Type");
-			moduleCreator.create(name, type, {});
+			envelope.add_child("s:Body.tan:" + name() + "Response", detector_->Execute(name(), request->content.string()));
 		}
-
-		m_profilesMgr.ReaderWriter()->Save();
-
-		auto envelope_tree = utility::soap::getEnvelopeTree(ns_);
-		envelope_tree.add("s:Body.tan:CreateAnalyticsModulesResponse", "");
-
-		pt::ptree root_tree;
-		root_tree.put_child("s:Envelope", envelope_tree);
-
-		std::ostringstream os;
-		pt::write_xml(os, root_tree);
-
-		utility::http::fillResponseWithHeaders(*response, os.str());
-	}
-};
-
-struct DeleteAnalyticsModulesHandler : public OnvifRequestBase
-{
-private:
-	utility::media::MediaProfilesManager& m_profilesMgr;
-
-public:
-	DeleteAnalyticsModulesHandler(const std::map<std::string, std::string>& xs, const std::shared_ptr<pt::ptree>& configs,
-																utility::media::MediaProfilesManager& mgr)
-			: OnvifRequestBase(DeleteAnalyticsModules, auth::SECURITY_LEVELS::ACTUATE, xs, configs), m_profilesMgr(mgr)
-	{
-	}
-
-	void operator()(std::shared_ptr<HttpServer::Response> response, std::shared_ptr<HttpServer::Request> request) override
-	{
-		std::string analytConfig;
-		std::string moduleName;
+		catch (const utility::RuleFault& error)
 		{
-			auto request_str = request->content.string();
-			std::istringstream is(request_str);
-			pt::ptree xml_tree;
-			pt::xml_parser::read_xml(is, xml_tree);
-			analytConfig = exns::find_hierarchy("Envelope.Body.DeleteAnalyticsModules.ConfigurationToken", xml_tree);
-			moduleName = exns::find_hierarchy("Envelope.Body.DeleteAnalyticsModules.AnalyticsModuleName", xml_tree);
+			fault = true;
+			envelope.put("s:Body.s:Fault.s:Code.s:Value", error.receiver ? "s:Receiver" : "s:Sender");
+			envelope.put("s:Body.s:Fault.s:Code.s:Subcode.s:Value", error.receiver ? "ter:Action" : "ter:InvalidArgVal");
+			envelope.put("s:Body.s:Fault.s:Code.s:Subcode.s:Subcode.s:Value", "ter:" + error.detail);
+			envelope.put("s:Body.s:Fault.s:Reason.s:Text", error.what());
+			envelope.put("s:Body.s:Fault.s:Reason.s:Text.<xmlattr>.xml:lang", "en");
 		}
-
-		utility::AnalyticsModuleDeleter{m_profilesMgr.ReaderWriter()->ConfigsTree()}.doDelete(analytConfig, moduleName);
-
-		m_profilesMgr.ReaderWriter()->Save();
-
-		auto envelope_tree = utility::soap::getEnvelopeTree(ns_);
-		envelope_tree.add("s:Body.tan:DeleteAnalyticsModulesResponse", "");
-		pt::ptree root_tree;
-		root_tree.put_child("s:Envelope", envelope_tree);
-		std::ostringstream os;
-		pt::write_xml(os, root_tree);
-		utility::http::fillResponseWithHeaders(*response, os.str());
-	}
-};
-
-struct GetAnalyticsModuleOptionsHandler : public OnvifRequestBase
-{
-public:
-	GetAnalyticsModuleOptionsHandler(const std::map<std::string, std::string>& xs,
-																	 const std::shared_ptr<pt::ptree>& configs, const pt::ptree& device_service_configs)
-			: OnvifRequestBase(GetAnalyticsModuleOptions, auth::SECURITY_LEVELS::READ_MEDIA, xs, configs)
-	{
-	}
-
-	void operator()(std::shared_ptr<HttpServer::Response> response, std::shared_ptr<HttpServer::Request> request) override
-	{
-		// TODO: type and name from the request is ignored for now
-
-		auto fillOptions = [](const pt::ptree& modules, pt::ptree& optionsResponse) {
-			for (const auto& [moduleKey, moduleNode] : modules)
-				for (const auto& [key, node] : moduleNode.get_child("Options"))
-				{
-					pt::ptree option;
-
-					if (const auto& ruleType = node.get<std::string>("RuleType"); !ruleType.empty())
-					{
-						option.add("<xmlattr>.RuleType", ruleType);
-					}
-					option.add("<xmlattr>.Name", node.get<std::string>("Name"));
-					const auto& type = node.get<std::string>("Type");
-					option.add("<xmlattr>.Type", type);
-					if (const auto& analyticsModule = node.get<std::string>("AnalyticsModule"); !analyticsModule.empty())
-					{
-						option.add("<xmlattr>.AnalyticsModule", analyticsModule);
-					}
-					option.add("<xmlattr>.minOccurs", node.get<int>("minOccurs"));
-					option.add("<xmlattr>.maxOccurs", node.get<int>("maxOccurs"));
-
-					if (type == "tt:IntRange") // TODO: need to support other types too
-					{
-						option.add("tt:IntRange.tt:Min", node.get<int>("Min"));
-						option.add("tt:IntRange.tt:Max", node.get<int>("Max"));
-					}
-
-					optionsResponse.add_child("tan:Options", option);
-				}
-		};
-
-		const auto& modules = service_configs_->get_child("SupportedAnalyticsModules.modules");
-		pt::ptree options;
-		fillOptions(modules, options);
-
-		auto envelope_tree = utility::soap::getEnvelopeTree(ns_);
-		envelope_tree.add_child("s:Body.tan:GetAnalyticsModuleOptionsResponse", options);
-
-		pt::ptree root_tree;
-		root_tree.put_child("s:Envelope", envelope_tree);
-
-		std::ostringstream os;
-		pt::write_xml(os, root_tree);
-
-		utility::http::fillResponseWithHeaders(*response, os.str());
-	}
-};
-
-struct GetAnalyticsModulesHandler : public OnvifRequestBase
-{
-private:
-	const utility::media::MediaProfilesManager& m_profilesMgr;
-
-public:
-	GetAnalyticsModulesHandler(const std::map<std::string, std::string>& xs, const std::shared_ptr<pt::ptree>& configs,
-														 const utility::media::MediaProfilesManager& mgr)
-			: OnvifRequestBase(GetAnalyticsModules, auth::SECURITY_LEVELS::READ_MEDIA, xs, configs), m_profilesMgr(mgr)
-	{
-	}
-
-	void operator()(std::shared_ptr<HttpServer::Response> response, std::shared_ptr<HttpServer::Request> request) override
-	{
-		std::string analytConfigsToken;
-		{
-			auto request_str = request->content.string();
-			std::istringstream is(request_str);
-			pt::ptree xml_tree;
-			pt::xml_parser::read_xml(is, xml_tree);
-			analytConfigsToken = exns::find_hierarchy("Envelope.Body.GetAnalyticsModules.ConfigurationToken", xml_tree);
-		}
-
-		utility::AnalyticsModulesReaderByConfigToken reader{analytConfigsToken,
-																												m_profilesMgr.ReaderWriter()->ConfigsTree()};
-
-		pt::ptree modules;
-		fillModules(reader.Modules(), modules, "tan");
-
-		auto envelope_tree = utility::soap::getEnvelopeTree(ns_);
-		envelope_tree.add_child("s:Body.tan:GetAnalyticsModulesResponse", modules);
-
-		pt::ptree root_tree;
-		root_tree.put_child("s:Envelope", envelope_tree);
-
-		std::ostringstream os;
-		pt::write_xml(os, root_tree);
-
-		utility::http::fillResponseWithHeaders(*response, os.str());
-	}
-};
-
-struct GetRuleOptionsHandler : public OnvifRequestBase
-{
-public:
-	GetRuleOptionsHandler(const std::map<std::string, std::string>& xs, const std::shared_ptr<pt::ptree>& configs)
-			: OnvifRequestBase(GetRuleOptions, auth::SECURITY_LEVELS::READ_MEDIA, xs, configs)
-	{
-	}
-
-	void operator()(std::shared_ptr<HttpServer::Response> response, std::shared_ptr<HttpServer::Request> request) override
-	{
-		auto fillRegionMotionRuleOptions = [](const pt::ptree& ruleConfigJson, pt::ptree& motionRegRuleOptOut) {
-			const auto& options = ruleConfigJson.get_child("Options").front().second;
-			motionRegRuleOptOut.add("<xmlattr>.Name", "MotionRegion");
-			motionRegRuleOptOut.add("<xmlattr>.Type", "axt:MotionRegionConfigOptions");
-			motionRegRuleOptOut.add("axt:MotionRegionConfigOptions.MaxRegions", options.get<int>("MaxRegions"));
-			motionRegRuleOptOut.add("axt:MotionRegionConfigOptions.DisarmSupport",
-															options.get<bool>("DisarmSupport"));
-			motionRegRuleOptOut.add("axt:MotionRegionConfigOptions.PolygonSupport",
-															options.get<bool>("PolygonSupport"));
-			motionRegRuleOptOut.add("axt:MotionRegionConfigOptions.PolygonLimits.tt:Min",
-															options.get<int>("PolygonLimitsMin"));
-			motionRegRuleOptOut.add("axt:MotionRegionConfigOptions.PolygonLimits.tt:Max",
-															options.get<int>("PolygonLimitsMax"));
-			motionRegRuleOptOut.add("axt:MotionRegionConfigOptions.RuleNotification",
-															options.get<bool>("RuleNotification"));
-			motionRegRuleOptOut.add("axt:MotionRegionConfigOptions.SingleSensitivitySupport",
-															options.get<bool>("SingleSensitivitySupport"));
-			motionRegRuleOptOut.add("axt:MotionRegionConfigOptions.PTZPresetMotionSupport",
-															options.get<bool>("PTZPresetMotionSupport"));
-		};
-
-		std::string ruleType;
-		std::string analytConfigsToken; // TODO: use
-		{
-			auto request_str = request->content.string();
-			std::istringstream is(request_str);
-			pt::ptree xml_tree;
-			pt::xml_parser::read_xml(is, xml_tree);
-			analytConfigsToken = exns::find_hierarchy("Envelope.Body.GetRuleOptions.RuleType", xml_tree);
-			analytConfigsToken = exns::find_hierarchy("Envelope.Body.GetRuleOptions.ConfigurationToken", xml_tree);
-		}
-
-		pt::ptree getRuleOptionsResponse;
-		if (ruleType.empty())
-		{
-			pt::ptree regionMotionRuleOptsOut;
-			fillRegionMotionRuleOptions(utility::RuleReaderByName("MotionRegionDetector", *service_configs_).Rule(),
-																	regionMotionRuleOptsOut);
-			getRuleOptionsResponse.add_child("tan:RuleOptions", regionMotionRuleOptsOut);
-		}
+		pt::ptree document;
+		document.add_child("s:Envelope", envelope);
+		std::ostringstream out;
+		pt::write_xml(out, document);
+		if (fault)
+			utility::http::fillResponseWithHeaders(*response, out.str(), utility::http::ClientErrorDefaultWriter);
 		else
-		{
-			if (exns::get_element_without_ns(ruleType) == "MotionRegionDetector")
-			{
-				pt::ptree regionMotionRuleOptsOut;
-				fillRegionMotionRuleOptions(utility::RuleReaderByName("MotionRegionDetector", *service_configs_).Rule(),
-																		regionMotionRuleOptsOut);
-				getRuleOptionsResponse.add_child("tan:RuleOptions", regionMotionRuleOptsOut);
-			}
-		}
-
-		auto envelope_tree = utility::soap::getEnvelopeTree(ns_);
-		envelope_tree.add_child("s:Body.tan:GetRuleOptionsResponse", getRuleOptionsResponse);
-
-		pt::ptree root_tree;
-		root_tree.put_child("s:Envelope", envelope_tree);
-
-		std::ostringstream os;
-		pt::write_xml(os, root_tree);
-
-		utility::http::fillResponseWithHeaders(*response, os.str());
+			utility::http::fillResponseWithHeaders(*response, out.str());
 	}
 };
 
@@ -378,7 +126,7 @@ public:
 	{
 		const auto& services = m_device_service_configs.find("GetServices");
 		const auto& analytics_services_info = std::ranges::find_if(services->second, [](const auto& pt) {
-			return pt.second.get<std::string>("namespace") == "http://www.onvif.org/ver20/analytics/wsdl";
+			return pt.second.template get<std::string>("namespace") == "http://www.onvif.org/ver20/analytics/wsdl";
 		});
 		auto& caps = analytics_services_info->second.get_child("Capabilities");
 
@@ -401,188 +149,18 @@ public:
 	}
 };
 
-struct GetSupportedAnalyticsModulesHandler : public OnvifRequestBase
-{
-private:
-public:
-	GetSupportedAnalyticsModulesHandler(const std::map<std::string, std::string>& xs,
-																			const std::shared_ptr<pt::ptree>& configs)
-			: OnvifRequestBase(GetSupportedAnalyticsModules, auth::SECURITY_LEVELS::READ_MEDIA, xs, configs)
-	{
-	}
-
-	void operator()(std::shared_ptr<HttpServer::Response> response, std::shared_ptr<HttpServer::Request> request) override
-	{
-		// TODO: configuration token in the request is ignored for now
-		const auto& supportedModulesJson = service_configs_->get_child("SupportedAnalyticsModules");
-		pt::ptree getSupportedAnalyticsModulesResponse;
-		for (const auto& [key, schema] : supportedModulesJson.get_child("AnalyticsModuleContentSchemaLocation"))
-		{
-			getSupportedAnalyticsModulesResponse.add("tan:SupportedAnalyticsModules.tt:AnalyticsModuleContentSchemaLocation",
-																							 schema.get_value<std::string>());
-		}
-
-		for (const auto& [moduleConfigKey, moduleConfigTree] : supportedModulesJson.get_child("modules"))
-		{
-			pt::ptree moduleDescrOut;
-			fillConfigDescr(moduleConfigTree, moduleDescrOut);
-			getSupportedAnalyticsModulesResponse.add_child("tan:SupportedAnalyticsModules.tt:AnalyticsModuleDescription",
-																										 moduleDescrOut);
-		}
-
-		auto envelope_tree = utility::soap::getEnvelopeTree(ns_);
-		envelope_tree.add_child("s:Body.tan:GetSupportedAnalyticsModulesResponse", getSupportedAnalyticsModulesResponse);
-
-		pt::ptree root_tree;
-		root_tree.put_child("s:Envelope", envelope_tree);
-
-		std::ostringstream os;
-		pt::write_xml(os, root_tree);
-
-		utility::http::fillResponseWithHeaders(*response, os.str());
-	}
-};
-
-struct GetSupportedMetadataHandler : public OnvifRequestBase
-{
-public:
-	GetSupportedMetadataHandler(const std::map<std::string, std::string>& xs, const std::shared_ptr<pt::ptree>& configs)
-			: OnvifRequestBase(GetSupportedMetadata, auth::SECURITY_LEVELS::READ_MEDIA, xs, configs)
-	{
-	}
-
-	void operator()(std::shared_ptr<HttpServer::Response> response, std::shared_ptr<HttpServer::Request> request) override
-	{
-		auto request_str = request->content.string();
-		std::istringstream is(request_str);
-
-		std::string moduleType;
-		{
-			auto request_str = request->content.string();
-			std::istringstream is(request_str);
-			pt::ptree xml_tree;
-			pt::xml_parser::read_xml(is, xml_tree);
-			moduleType = exns::find_hierarchy("Envelope.Body.GetSupportedMetadata.Type", xml_tree);
-		}
-
-		auto motionRegionSample = []() {
-			pt::ptree object;
-			object.add("<xmlattr>.ObjectId", "1");
-			object.add("tt:Appearance.tt:VehicleInfo.tt:Type.<xmlattr>.Likelihood", "0.6");
-			object.add("tt:Appearance.tt:VehicleInfo.tt:Type", "Car");
-			object.add("tt:Appearance.tt:VehicleInfo.tt:Brand.<xmlattr>.Likelihood", "0.5");
-			object.add("tt:Appearance.tt:VehicleInfo.tt:Brand", "Tayota");
-			object.add("tt:Appearance.tt:VehicleInfo.tt:Model.<xmlattr>.Likelihood", "0.2");
-			object.add("tt:Appearance.tt:VehicleInfo.tt:Model", "Camry");
-
-			pt::ptree sampleFrame;
-			sampleFrame.add("<xmlattr>.UtcTime", utility::datetime::system_utc_datetime());
-			sampleFrame.add_child("tt:Object", object);
-
-			pt::ptree analyticsModule;
-			analyticsModule.add("<xmlattr>.Type", "tt:MotionRegionDetector");
-			analyticsModule.add_child("tan:SampleFrame", sampleFrame);
-
-			return analyticsModule;
-		};
-
-		pt::ptree supportedMetadata;
-		if (moduleType.empty())
-		{
-			supportedMetadata.add_child("tan:AnalyticsModule", motionRegionSample());
-		}
-		else
-		{
-			if (exns::get_element_without_ns(moduleType) == "MotionRegionDetector")
-			{
-				supportedMetadata.add_child("tan:AnalyticsModule", motionRegionSample());
-			}
-		}
-
-		auto envelope_tree = utility::soap::getEnvelopeTree(ns_);
-		envelope_tree.add_child("s:Body.tan:GetSupportedMetadataResponse", supportedMetadata);
-
-		pt::ptree root_tree;
-		root_tree.put_child("s:Envelope", envelope_tree);
-
-		std::ostringstream os;
-		pt::write_xml(os, root_tree);
-
-		utility::http::fillResponseWithHeaders(*response, os.str());
-	}
-};
-
-struct GetSupportedRulesHandler : public OnvifRequestBase
-{
-public:
-	GetSupportedRulesHandler(const std::map<std::string, std::string>& xs, const std::shared_ptr<pt::ptree>& configs)
-			: OnvifRequestBase(GetSupportedRules, auth::SECURITY_LEVELS::READ_MEDIA, xs, configs)
-	{
-	}
-
-	void operator()(std::shared_ptr<HttpServer::Response> response, std::shared_ptr<HttpServer::Request> request) override
-	{
-		auto request_str = request->content.string();
-		std::istringstream is(request_str);
-
-		std::string analytConfigToken;
-		{
-			auto request_str = request->content.string();
-			std::istringstream is(request_str);
-			pt::ptree xml_tree;
-			pt::xml_parser::read_xml(is, xml_tree);
-			analytConfigToken = exns::find_hierarchy("Envelope.Body.GetSupportedRules.ConfigurationToken", xml_tree);
-		}
-
-		pt::ptree getSupportedRulesResponse;
-		const auto& supportedRulesJson = service_configs_->get_child("SupportedRules");
-
-		for (const auto& [key, schema] : supportedRulesJson.get_child("RuleContentSchemaLocation"))
-		{
-			getSupportedRulesResponse.add("tan:SupportedRules.tt:RuleContentSchemaLocation", schema.get_value<std::string>());
-		}
-
-		for (const auto& [ruleConfigKey, ruleConfigTree] : supportedRulesJson.get_child("rules"))
-		{
-			pt::ptree ruleDescrOut;
-			fillConfigDescr(ruleConfigTree, ruleDescrOut);
-			getSupportedRulesResponse.add_child("tan:SupportedRules.tt:RuleDescription", ruleDescrOut);
-		}
-
-		auto envelope_tree = utility::soap::getEnvelopeTree(ns_);
-		envelope_tree.add_child("s:Body.tan:GetSupportedRulesResponse", getSupportedRulesResponse);
-
-		pt::ptree root_tree;
-		root_tree.put_child("s:Envelope", envelope_tree);
-
-		std::ostringstream os;
-		pt::write_xml(os, root_tree);
-
-		utility::http::fillResponseWithHeaders(*response, os.str());
-	}
-};
-
 } // namespace analytics
 
 AnalyticsService::AnalyticsService(const std::string& service_uri, const std::string& service_name,
 																	 std::shared_ptr<IOnvifServer> srv)
 		: IOnvifService(service_uri, service_name, srv)
 {
-	requestHandlers_.push_back(std::make_shared<analytics::CreateAnalyticsModulesHandler>(xml_namespaces_, configs_ptree_,
-																																												*srv->MediaProfilesManager()));
-	requestHandlers_.push_back(std::make_shared<analytics::DeleteAnalyticsModulesHandler>(xml_namespaces_, configs_ptree_,
-																																												*srv->MediaProfilesManager()));
-	requestHandlers_.push_back(std::make_shared<analytics::GetAnalyticsModuleOptionsHandler>(
-			xml_namespaces_, configs_ptree_, *srv->DeviceService()->Configs()));
-	requestHandlers_.push_back(std::make_shared<analytics::GetAnalyticsModulesHandler>(xml_namespaces_, configs_ptree_,
-																																										 *srv->MediaProfilesManager()));
-	requestHandlers_.push_back(std::make_shared<analytics::GetRuleOptionsHandler>(xml_namespaces_, configs_ptree_));
 	requestHandlers_.push_back(std::make_shared<analytics::GetServiceCapabilitiesHandler>(
 			xml_namespaces_, configs_ptree_, *srv->DeviceService()->Configs()));
-	requestHandlers_.push_back(
-			std::make_shared<analytics::GetSupportedAnalyticsModulesHandler>(xml_namespaces_, configs_ptree_));
-	requestHandlers_.push_back(std::make_shared<analytics::GetSupportedMetadataHandler>(xml_namespaces_, configs_ptree_));
-	requestHandlers_.push_back(std::make_shared<analytics::GetSupportedRulesHandler>(xml_namespaces_, configs_ptree_));
+	for (const auto* operation :
+			 {"GetSupportedRules", "GetRuleOptions", "GetRules", "CreateRules", "ModifyRules", "DeleteRules"})
+		requestHandlers_.push_back(
+				std::make_shared<analytics::RulesHandler>(operation, xml_namespaces_, configs_ptree_, srv->MotionDetector()));
 }
 
 } // namespace osrv

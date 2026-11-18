@@ -303,3 +303,11 @@ Both date keys must be present, even when their values are empty. Nonempty value
 use the basic ISO date-time format, for example, `20210523T000000`, and represent
 UTC times. These settings describe a simulated archive; the emulator does not
 record live video to disk.
+
+## Motion Region Detector
+
+The Analytics Rules interface supports configurable polygon regions, arming,
+independent sensitivity and PullPoint motion events using deterministic synthetic
+motion. See [Motion Region Detector](docs/ANALYTICS.md) for SOAP operations,
+configuration, examples and limitations. This feature does not claim Profile M
+certification or analyze live video.

@@ -1,5 +1,6 @@
 #include "event_generators.h"
 #include "pull_point.h"
+#include "../../utility/MotionRegionDetector.h"
 
 #include "../utility/DateTime.hpp"
 
@@ -9,10 +10,32 @@ namespace osrv
 	namespace event
 	{
 
-		DInputEventGenerator::DInputEventGenerator(int interval, const std::string& topic, boost::asio::io_context& io_context, const ILogger& logger_)
+	MotionRegionEventGenerator::MotionRegionEventGenerator(std::shared_ptr<utility::MotionRegionDetector> detector,
+																												 int interval, boost::asio::io_context& io,
+																												 const ILogger& logger)
+			: IEventGenerator(interval, utility::MotionRegionDetector::Topic, io, logger), detector_(std::move(detector))
+	{
+	}
+
+	std::deque<NotificationMessage> MotionRegionEventGenerator::GenerateSynchronizationEvent() const
+	{
+		return detector_->Synchronize();
+	}
+
+	void MotionRegionEventGenerator::generate_event()
+	{
+		// A reproducible synthetic point traverses the default source in pixel coordinates.
+		++step_;
+		auto events = detector_->Sample((step_ % 8) * 160.0 + 80.0, 360.0, step_ % 2 ? 0.75 : 0.0);
+		for (auto& event : events)
+			event_signal_(event);
+	}
+
+	DInputEventGenerator::DInputEventGenerator(int interval, const std::string& topic,
+																						 boost::asio::io_context& io_context, const ILogger& logger_)
 			: IEventGenerator(interval, topic, io_context, logger_)
-		{
-		}
+	{
+	}
 
 		void DInputEventGenerator::SetDigitalInputsList(const DigitalInputsList& di_list)
 		{

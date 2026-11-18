@@ -1,0 +1,160 @@
+#!/usr/bin/env python3
+"""Rules and PullPoint checks. Run against a disposable configuration with auth disabled.
+
+Creates two rules and removes them on completion. Requires Python 3 only.
+"""
+import argparse
+import http.client
+import time
+import uuid
+import xml.etree.ElementTree as ET
+from pathlib import Path
+from urllib.parse import urlsplit
+from xml.sax.saxutils import escape
+
+NS = {
+    "s": "http://www.w3.org/2003/05/soap-envelope",
+    "tan": "http://www.onvif.org/ver20/analytics/wsdl",
+    "tt": "http://www.onvif.org/ver10/schema",
+    "axt": "http://www.onvif.org/ver20/analytics",
+    "tet": "http://www.onvif.org/ver10/events/wsdl",
+    "wsnt": "http://docs.oasis-open.org/wsn/b-2",
+    "trt": "http://www.onvif.org/ver10/media/wsdl",
+    "tr2": "http://www.onvif.org/ver20/media/wsdl",
+    "wsa": "http://www.w3.org/2005/08/addressing",
+}
+
+
+def run(args):
+    captured = 0
+
+    def soap(op, body="", service="analytics", prefix="tan", fault=None, url=None):
+        nonlocal captured
+        action = NS[prefix] + "/" + op
+        if url:
+            if op in {"Unsubscribe", "Renew"}:
+                action = "http://docs.oasis-open.org/wsn/bw-2/SubscriptionManager/" + op + "Request"
+            else:
+                action = "http://www.onvif.org/ver10/events/wsdl/PullPointSubscription/" + op + "Request"
+        header = (f"<s:Header><wsa:Action>{action}</wsa:Action><wsa:To>{escape(url or '')}</wsa:To>"
+                  f"<wsa:MessageID>urn:uuid:{uuid.uuid4()}</wsa:MessageID></s:Header>")
+        envelope = ('<s:Envelope ' + " ".join(f'xmlns:{p}="{uri}"' for p, uri in NS.items()) +
+                    f'>{header}<s:Body><{prefix}:{op}>{body}</{prefix}:{op}></s:Body></s:Envelope>')
+        target = urlsplit(url) if url else None
+        connection = http.client.HTTPConnection(target.hostname if target else args.host,
+                                                target.port if target else args.port, timeout=15)
+        try:
+            connection.request("POST", target.path if target else f"/onvif/{service}_service", envelope,
+                               {"Content-Type": f'application/soap+xml; action="{action}"'})
+            response = connection.getresponse()
+            data = response.read()
+            if args.capture:
+                directory = Path(args.capture)
+                directory.mkdir(parents=True, exist_ok=True)
+                (directory / f"{captured:03d}-{op}.xml").write_bytes(data)
+                captured += 1
+            tree = ET.fromstring(data)
+            if fault:
+                assert response.status >= 400, (op, response.status, data)
+                assert tree.find(".//s:Fault", NS) is not None, data
+                assert tree.find(".//s:Subcode/s:Subcode/s:Value", NS).text == "ter:" + fault, data
+            else:
+                assert response.status == 200, (op, response.status, data)
+                assert tree.find(".//s:Fault", NS) is None, data
+            return tree
+        finally:
+            connection.close()
+
+    token = f"<tan:ConfigurationToken>{escape(args.token)}</tan:ConfigurationToken>"
+    name = "smoke_" + uuid.uuid4().hex[:12]
+    second = name + "_disarmed"
+    subscription = None
+
+    def rule(rule_name, armed=True):
+        return (f'<tan:Rule Name="{rule_name}" Type="tt:MotionRegionDetector"><tt:Parameters>'
+                '<tt:ElementItem Name="MotionRegion">'
+                f'<axt:MotionRegionConfig Armed="{str(armed).lower()}" Sensitivity="1"/>'
+                '</tt:ElementItem></tt:Parameters></tan:Rule>')
+
+    try:
+
+        caps = soap("GetServiceCapabilities").find(".//tan:Capabilities", NS)
+        assert caps.attrib["RuleSupport"] == "true" and caps.attrib["AnalyticsModuleSupport"] == "false"
+        properties = soap("GetEventProperties", service="event", prefix="tet")
+        descriptions = properties.findall(".//tt:MessageDescription", NS)
+        assert any({n.attrib["Name"] for n in d.findall("tt:Source/tt:SimpleItemDescription", NS)} ==
+                   {"VideoSource", "RuleName"} for d in descriptions)
+        supported = soap("GetSupportedRules", token)
+        desc = supported.find(".//tt:RuleDescription", NS)
+        assert desc.attrib["Name"] == "tt:MotionRegionDetector" and desc.attrib["maxInstances"] == "4"
+        options = soap("GetRuleOptions", token)
+        option = options.find(".//tan:RuleOptions", NS)
+        assert option.attrib["RuleType"] == "tt:MotionRegionDetector"
+        region_options = option.find("axt:MotionRegionConfigOptions", NS)
+        assert region_options.attrib["PTZPresetMotionSupport"] == "false"
+        assert region_options.find("axt:PolygonLimits/tt:Min", NS).text == "3"
+        soap("GetRules", "<tan:ConfigurationToken>missing</tan:ConfigurationToken>", fault="NoConfig")
+        soap("GetRuleOptions", "<tan:RuleType>tt:Unknown</tan:RuleType>" + token, fault="RuleNotExistent")
+        soap("CreateRules", token + rule(name) + rule(second, False))
+        soap("CreateRules", token + rule(name + "_rollback") + rule(name), fault="RuleAlreadyExistent")
+        rules = soap("GetRules", token).findall(".//tan:Rule", NS)
+        names = {r.attrib["Name"] for r in rules}
+        assert name in names and second in names and name + "_rollback" not in names
+        for service, prefix, operation in [("media", "trt", "GetVideoAnalyticsConfigurations"),
+                                            ("media2", "tr2", "GetAnalyticsConfigurations")]:
+            media = soap(operation, service=service, prefix=prefix)
+            configs = media.findall(f".//{prefix}:Configurations", NS)
+            cfg = next(c for c in configs if c.attrib["token"] == args.token)
+            assert [child.tag for child in cfg][:4] == [
+                f"{{{NS['tt']}}}{field}" for field in
+                ("Name", "UseCount", "AnalyticsEngineConfiguration", "RuleEngineConfiguration")]
+            assert cfg.find("tt:Count", NS) is None
+            assert int(cfg.find("tt:UseCount", NS).text) >= 0
+            assert {r.attrib["Name"] for r in cfg.findall("tt:RuleEngineConfiguration/tt:Rule", NS)} == names
+        created = soap("CreatePullPointSubscription", service="event", prefix="tet")
+        subscription = next(n.text for n in created.iter() if n.tag.endswith("}Address"))
+        soap("SetSynchronizationPoint", prefix="tet", url=subscription)
+        seen_on = seen_off = seen_initialized = False
+        deadline = time.monotonic() + 16
+        while time.monotonic() < deadline and not (seen_on and seen_off and seen_initialized):
+            events = soap("PullMessages", "<tet:Timeout>PT2S</tet:Timeout><tet:MessageLimit>100</tet:MessageLimit>",
+                          prefix="tet", url=subscription)
+            for notification in events.findall(".//wsnt:NotificationMessage", NS):
+                topic = notification.find("wsnt:Topic", NS).text or ""
+                if not topic.endswith("RuleEngine/MotionRegionDetector/Motion"):
+                    continue
+                message = notification.find("wsnt:Message/tt:Message", NS)
+                source = {n.attrib["Name"]: n.attrib["Value"] for n in message.findall("tt:Source/tt:SimpleItem", NS)}
+                assert "VideoSource" in source and "RuleName" in source
+                value = message.find("tt:Data/tt:SimpleItem", NS)
+                assert value.attrib["Name"] == "State"
+                if source["RuleName"] == second:
+                    assert value.attrib["Value"] == "false", ET.tostring(message)
+                if source["RuleName"] == name:
+                    if message.attrib["PropertyOperation"] == "Initialized":
+                        seen_initialized = True
+                    elif message.attrib["PropertyOperation"] == "Changed":
+                        seen_on |= value.attrib["Value"] == "true"
+                        seen_off |= value.attrib["Value"] == "false"
+        assert seen_on and seen_off and seen_initialized, (seen_on, seen_off, seen_initialized)
+        soap("ModifyRules", token + rule(name, False))
+        result = soap("GetRules", token)
+        modified = next(r for r in result.findall(".//tan:Rule", NS) if r.attrib["Name"] == name)
+        assert modified.find("tt:Parameters/tt:ElementItem/axt:MotionRegionConfig", NS).attrib["Armed"] == "false"
+        print("PASS Rules discovery, options, CRUD, atomic faults, Media/Media2 and PullPoint motion states")
+    finally:
+        if subscription:
+            soap("Unsubscribe", prefix="wsnt", url=subscription)
+        existing = soap("GetRules", token).findall(".//tan:Rule", NS)
+        cleanup = [r.attrib["Name"] for r in existing if r.attrib["Name"] in {name, second, name + "_rollback"}]
+        if cleanup:
+            soap("DeleteRules", token + "".join(f"<tan:RuleName>{n}</tan:RuleName>" for n in cleanup))
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--host", default="127.0.0.1")
+    parser.add_argument("--port", type=int, default=8080)
+    parser.add_argument("--token", default="AnalyticsConfig_0")
+    parser.add_argument("--capture", help="Save SOAP responses for optional XSD validation")
+    run(parser.parse_args())

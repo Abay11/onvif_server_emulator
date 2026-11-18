@@ -48,6 +48,7 @@ namespace osrv
 namespace event
 {
 static std::vector<utility::http::HandlerSP> handlers;
+static std::vector<EventTopicDescription> additional_event_topics;
 
 void do_handler_request(std::shared_ptr<HttpServer::Response> response, std::shared_ptr<HttpServer::Request> request);
 
@@ -240,6 +241,13 @@ struct GetEventPropertiesHandler : public utility::http::RequestHandlerBase
 				// response_tree.add("wstop:TopicSet.tns1:Device.<xmlattr>.wstop:topic", "true");
 			}
 
+			for (const auto& description : additional_event_topics)
+			{
+				EventPropertiesSerializer serializer(
+						description.topic, description.source_properties, description.data_properties);
+				response_tree.put_child("wstop:TopicSet." + serializer.Path(), serializer.Ptree());
+			}
+
 			{ // Motion alarm
 				StringPairsList_t source_props = {{"Source", "tt:ReferenceToken"}};
 				StringPairsList_t data_props = {{"State", "xsd:boolean"}};
@@ -417,7 +425,7 @@ void do_handler_request(std::shared_ptr<HttpServer::Response> response, std::sha
 };
 
 void init_service(HttpServer& srv, const osrv::ServerConfigs& server_configs_instance, const std::string& configs_path,
-									ILogger& logger)
+									ILogger& logger, const std::vector<EventGeneratorRegistration>& generators)
 {
 	if (log_ != nullptr)
 		return log_->Error("EventService is already inited!");
@@ -451,6 +459,15 @@ void init_service(HttpServer& srv, const osrv::ServerConfigs& server_configs_ins
 			EVENT_CONFIGS_TREE.get<std::string>("DigitalInputsAlarm.Topic"), notifications_manager->GetIoContext(), *log_));
 	di_event_generator->SetDigitalInputsList(server_configs->digital_inputs_);
 	notifications_manager->AddGenerator(di_event_generator);
+
+	for (const auto& registration : generators)
+	{
+		auto generator = registration.create(EVENT_CONFIGS_TREE, notifications_manager->GetIoContext(), *log_);
+		if (!generator)
+			throw std::invalid_argument("Event generator factory returned null for topic: " + registration.description.topic);
+		notifications_manager->AddGenerator(std::move(generator));
+		additional_event_topics.push_back(registration.description);
+	}
 
 	// add motion alarms generator
 	if (EVENT_CONFIGS_TREE.get<bool>("MotionAlarm.GenerateEvents"))

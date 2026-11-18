@@ -2,6 +2,7 @@
 #include "../onvif_services/device_service.h"
 #include "../onvif_services/discovery_service.h"
 #include "../onvif_services/event_service.h"
+#include "../onvif_services/pullpoint/pull_point.h"
 #include "../onvif_services/imaging_service.h"
 #include "../onvif_services/media2_service.h"
 #include "../onvif_services/media_service.h"
@@ -12,6 +13,7 @@
 
 #include "utility/AuthHelper.h"
 #include "utility/MediaProfilesManager.h"
+#include "utility/MotionRegionDetector.h"
 #include "utility/XmlParser.h"
 
 #include "MediaFormats.h"
@@ -110,7 +112,16 @@ void Server::init()
 	RecordingSearchService()->Run();
 	ReplayControlService()->Run();
 
-	event::init_service(*http_server_, *server_configs_, configs_dir, *logger_);
+	const std::vector<event::EventGeneratorRegistration> event_generators{
+			{[detector = MotionDetector()](const boost::property_tree::ptree& configs, boost::asio::io_context& io,
+																		 const ILogger& logger) {
+				 return std::make_shared<event::MotionRegionEventGenerator>(
+						 detector, configs.get<int>("MotionRegion.EventGenerationTimeout", 2), io, logger);
+			 },
+			 {utility::MotionRegionDetector::Topic,
+				{{"VideoSource", "tt:ReferenceToken"}, {"RuleName", "xsd:string"}},
+				{{"State", "xsd:boolean"}}}}};
+	event::init_service(*http_server_, *server_configs_, configs_dir, *logger_, event_generators);
 
 	// TODO: impl. logic for multichannel cannel
 	auto audio_node = profiles_config_->get_child(CONFIGURATION_ENUMERATION[CONFIGURATION_TYPE::AUDIOENCODER]).front();
