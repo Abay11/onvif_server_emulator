@@ -13,7 +13,7 @@ namespace pt = boost::property_tree;
 
 class ILogger;
 
-namespace utility { class MotionRegionDetector; }
+namespace utility { class AnalyticsRules; }
 
 namespace utility::media
 {
@@ -75,7 +75,7 @@ public:
 		return media_profiles_manager_.get();
 	};
 
-	std::shared_ptr<utility::MotionRegionDetector> MotionDetector();
+	std::shared_ptr<utility::AnalyticsRules> Rules();
 
 protected:
 	const std::string& configs_path_;
@@ -88,7 +88,7 @@ protected:
 	std::shared_ptr<osrv::HttpServer> http_server_;
 
 private:
-	std::shared_ptr<utility::MotionRegionDetector> motion_detector_;
+	std::shared_ptr<utility::AnalyticsRules> analytics_rules_;
 	std::shared_ptr<IOnvifService> analytics_service_;
 	std::shared_ptr<IOnvifService> device_service_;
 	std::shared_ptr<IOnvifService> deviceio_service_;

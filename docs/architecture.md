@@ -198,15 +198,17 @@ guarantee a change to the actual stream.
 for Recording Search. Replay Control returns an RTSP URI. This emulates an archive;
 it does not record live video to disk.
 
-## Motion Region Analytics
+## Analytics Rules
 
-The Analytics service implements the complete Rules interface for
-`tt:MotionRegionDetector`. A shared `utility::MotionRegionDetector` validates and
-stores rule snapshots and alarm state under a mutex. SOAP mutations persist rules
-through the media manager; a synthetic event generator reads the detector snapshot
+The Analytics service implements the Rules interface for
+`tt:MotionRegionDetector` and `tt:LineDetector`. A shared `utility::AnalyticsRules`
+validates and stores rule snapshots, alarm state and object history under a mutex.
+`utility::line` handles Line Detector parameters and geometry. SOAP mutations persist rules
+through the media manager; synthetic event generators read the shared snapshot
 without accessing the manager from the event thread. Media and Media2 serialize
 rules from the manager's current tree. Scene analytics modules and RTSP metadata
-are not advertised. See [Motion Region Detector](ANALYTICS.md) for the normative
+are not advertised. Line crossing notifications are non-property events and have no
+synchronization state. See [Analytics Rules](ANALYTICS.md) for the normative
 references, configuration, simulation deviations, and validation commands.
 
 ## Events and Lifecycle

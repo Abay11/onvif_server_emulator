@@ -1,6 +1,7 @@
 #include "event_generators.h"
 #include "pull_point.h"
-#include "../../utility/MotionRegionDetector.h"
+#include "../../utility/AnalyticsRules.h"
+#include "../../utility/LineDetector.h"
 
 #include "../utility/DateTime.hpp"
 
@@ -10,10 +11,10 @@ namespace osrv
 	namespace event
 	{
 
-	MotionRegionEventGenerator::MotionRegionEventGenerator(std::shared_ptr<utility::MotionRegionDetector> detector,
+	MotionRegionEventGenerator::MotionRegionEventGenerator(std::shared_ptr<utility::AnalyticsRules> detector,
 																												 int interval, boost::asio::io_context& io,
 																												 const ILogger& logger)
-			: IEventGenerator(interval, utility::MotionRegionDetector::Topic, io, logger), detector_(std::move(detector))
+			: IEventGenerator(interval, utility::AnalyticsRules::Topic, io, logger), detector_(std::move(detector))
 	{
 	}
 
@@ -29,6 +30,29 @@ namespace osrv
 		auto events = detector_->Sample((step_ % 8) * 160.0 + 80.0, 360.0, step_ % 2 ? 0.75 : 0.0);
 		for (auto& event : events)
 			event_signal_(event);
+	}
+
+	LineDetectorEventGenerator::LineDetectorEventGenerator(std::shared_ptr<utility::AnalyticsRules> detector,
+			int interval, boost::asio::io_context& io, const ILogger& logger)
+			: IEventGenerator(interval, utility::line::Topic, io, logger), detector_(std::move(detector))
+	{
+		if (interval <= 0)
+			throw std::invalid_argument("LineDetector.EventGenerationTimeout must be positive");
+	}
+
+	std::deque<NotificationMessage> LineDetectorEventGenerator::GenerateSynchronizationEvent() const
+	{
+		return {};
+	}
+
+	void LineDetectorEventGenerator::generate_event()
+	{
+		// A persistent synthetic object moves back and forth; reversal never teleports it.
+		constexpr double positions[] = {-0.75, -0.25, 0.25, 0.75, 0.75, 0.25, -0.25, -0.75};
+		auto x = positions[step_++ % 8];
+		for (const auto& source : detector_->VideoSources())
+			for (const auto& event : detector_->SampleObject(source, "1", x, 0.0))
+				event_signal_(event);
 	}
 
 	DInputEventGenerator::DInputEventGenerator(int interval, const std::string& topic,

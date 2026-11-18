@@ -13,7 +13,8 @@
 
 #include "utility/AuthHelper.h"
 #include "utility/MediaProfilesManager.h"
-#include "utility/MotionRegionDetector.h"
+#include "utility/AnalyticsRules.h"
+#include "utility/LineDetector.h"
 #include "utility/XmlParser.h"
 
 #include "MediaFormats.h"
@@ -113,14 +114,22 @@ void Server::init()
 	ReplayControlService()->Run();
 
 	const std::vector<event::EventGeneratorRegistration> event_generators{
-			{[detector = MotionDetector()](const boost::property_tree::ptree& configs, boost::asio::io_context& io,
+			{[detector = Rules()](const boost::property_tree::ptree& configs, boost::asio::io_context& io,
 																		 const ILogger& logger) {
 				 return std::make_shared<event::MotionRegionEventGenerator>(
 						 detector, configs.get<int>("MotionRegion.EventGenerationTimeout", 2), io, logger);
 			 },
-			 {utility::MotionRegionDetector::Topic,
+			 {utility::AnalyticsRules::Topic,
 				{{"VideoSource", "tt:ReferenceToken"}, {"RuleName", "xsd:string"}},
-				{{"State", "xsd:boolean"}}}}};
+				{{"State", "xsd:boolean"}}}},
+			{[detector = Rules()](const boost::property_tree::ptree& configs, boost::asio::io_context& io,
+													 const ILogger& logger) {
+				 return std::make_shared<event::LineDetectorEventGenerator>(
+						 detector, configs.get<int>("LineDetector.EventGenerationTimeout", 2), io, logger);
+			 },
+			 {utility::line::Topic,
+				{{"VideoSource", "tt:ReferenceToken"}, {"AnalyticsConfiguration", "tt:ReferenceToken"}, {"Rule", "xsd:string"}},
+				{{"ObjectId", "tt:StringList"}}, false}}};
 	event::init_service(*http_server_, *server_configs_, configs_dir, *logger_, event_generators);
 
 	// TODO: impl. logic for multichannel cannel

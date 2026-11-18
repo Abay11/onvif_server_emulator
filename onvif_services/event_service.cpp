@@ -244,8 +244,9 @@ struct GetEventPropertiesHandler : public utility::http::RequestHandlerBase
 			for (const auto& description : additional_event_topics)
 			{
 				EventPropertiesSerializer serializer(
-						description.topic, description.source_properties, description.data_properties);
-				response_tree.put_child("wstop:TopicSet." + serializer.Path(), serializer.Ptree());
+						description.topic, description.source_properties, description.data_properties, description.is_property);
+				response_tree.put_child("wstop:TopicSet." + serializer.Path() + "." + serializer.Name(),
+						serializer.Ptree().get_child(serializer.Name()));
 			}
 
 			{ // Motion alarm

@@ -10,8 +10,8 @@ namespace osrv::event
 {
 EventPropertiesSerializer::EventPropertiesSerializer(const std::string& topic,
 																										 const StringPairsList_t& source_properties,
-																										 const StringPairsList_t& data_properties)
-		: topic_(topic), source_properties_(source_properties), data_properties_(data_properties)
+																										 const StringPairsList_t& data_properties, bool is_property)
+		: topic_(topic), source_properties_(source_properties), data_properties_(data_properties), is_property_(is_property)
 {
 	if (topic_.empty())
 		throw std::runtime_error("Topic is empty");
@@ -62,7 +62,7 @@ boost::property_tree::ptree EventPropertiesSerializer::Ptree() const
 	if (source_properties_.size() < 1)
 		throw std::runtime_error("source properties is empty");
 
-	p.add(node_name + ".tt:MessageDescription.<xmlattr>.IsProperty", "true");
+	p.add(node_name + ".tt:MessageDescription.<xmlattr>.IsProperty", is_property_);
 	for (auto [prop_name, prop_type] : source_properties_)
 	{
 		pt::ptree item_props;

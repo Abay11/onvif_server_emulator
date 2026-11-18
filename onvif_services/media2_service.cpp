@@ -13,7 +13,6 @@
 #include "../utility/VideoSourceReader.h"
 #include "../utility/XmlParser.h"
 #include "../utility/AnalyticsReader.h"
-#include "../utility/MotionRegionDetector.h"
 
 #include "../Simple-Web-Server/server_http.hpp"
 

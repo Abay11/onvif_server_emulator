@@ -7,7 +7,7 @@
 #include "../onvif_services/device_service.h"
 #include "../utility/AnalyticsReader.h"
 #include "../utility/MediaProfilesManager.h"
-#include "../utility/MotionRegionDetector.h"
+#include "../utility/AnalyticsRules.h"
 
 #include "../utility/HttpHelper.h"
 #include "../utility/SoapHelper.h"
@@ -65,14 +65,14 @@ void fillConfiguration(const pt::ptree& jsonConfigNode, pt::ptree& xmlConfigOut,
 	pt::ptree rules;
 	if (auto configured = jsonConfigNode.get_child_optional("rules"))
 		for (const auto& [_, rule] : *configured)
-			rules.add_child("tt:Rule", utility::MotionRegionDetector::RuleXml(rule));
+			rules.add_child("tt:Rule", utility::AnalyticsRules::RuleXml(rule));
 	xmlConfigOut.add_child("tt:RuleEngineConfiguration", rules);
 }
 struct RulesHandler : public OnvifRequestBase
 {
-	std::shared_ptr<utility::MotionRegionDetector> detector_;
+	std::shared_ptr<utility::AnalyticsRules> detector_;
 	RulesHandler(const std::string& operation, const std::map<std::string, std::string>& ns,
-							 const std::shared_ptr<pt::ptree>& configs, std::shared_ptr<utility::MotionRegionDetector> detector)
+							 const std::shared_ptr<pt::ptree>& configs, std::shared_ptr<utility::AnalyticsRules> detector)
 			: OnvifRequestBase(operation,
 												 operation.starts_with("Get") ? auth::SECURITY_LEVELS::READ_MEDIA
 																											: auth::SECURITY_LEVELS::ACTUATE,
@@ -160,7 +160,7 @@ AnalyticsService::AnalyticsService(const std::string& service_uri, const std::st
 	for (const auto* operation :
 			 {"GetSupportedRules", "GetRuleOptions", "GetRules", "CreateRules", "ModifyRules", "DeleteRules"})
 		requestHandlers_.push_back(
-				std::make_shared<analytics::RulesHandler>(operation, xml_namespaces_, configs_ptree_, srv->MotionDetector()));
+				std::make_shared<analytics::RulesHandler>(operation, xml_namespaces_, configs_ptree_, srv->Rules()));
 }
 
 } // namespace osrv

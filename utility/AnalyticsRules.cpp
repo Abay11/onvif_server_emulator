@@ -1,5 +1,6 @@
-#include "MotionRegionDetector.h"
+#include "AnalyticsRules.h"
 #include "DateTime.hpp"
+#include "LineDetector.h"
 #include "XmlParser.h"
 #include <boost/algorithm/string/trim.hpp>
 #include <boost/geometry.hpp>
@@ -122,6 +123,8 @@ Tree defaults(const Tree& src)
 
 Tree readRule(const Tree& xml, const Tree& src, const Tree* previous)
 {
+	if (xml.get<std::string>("<xmlattr>.Type") == line::Type)
+		return line::ReadRule(xml, previous);
 	if (xml.get<std::string>("<xmlattr>.Type") != "tt:MotionRegionDetector")
 		throw RuleFault("InvalidRule");
 	if (xml.count("tt:Parameters") != 1 || xml.size() != 2)
@@ -194,8 +197,7 @@ Tree readRule(const Tree& xml, const Tree& src, const Tree* previous)
 }
 } // namespace
 
-MotionRegionDetector::MotionRegionDetector(const Tree& profiles, SaveRules save)
-		: profiles_(profiles), save_(std::move(save))
+AnalyticsRules::AnalyticsRules(const Tree& profiles, SaveRules save) : profiles_(profiles), save_(std::move(save))
 {
 	size_t count = 0;
 	for (auto& [_, cfg] : profiles_.get_child("Analytics"))
@@ -215,8 +217,10 @@ MotionRegionDetector::MotionRegionDetector(const Tree& profiles, SaveRules save)
 		throw RuleFault("TooManyRules", true);
 }
 
-MotionRegionDetector::Tree MotionRegionDetector::RuleXml(const Tree& rule)
+AnalyticsRules::Tree AnalyticsRules::RuleXml(const Tree& rule)
 {
+	if (rule.get<std::string>("Type") == line::Type)
+		return line::RuleXml(rule);
 	Tree result, points;
 	result.put("<xmlattr>.Name", rule.get<std::string>("Name"));
 	result.put("<xmlattr>.Type", rule.get<std::string>("Type"));
@@ -237,7 +241,7 @@ MotionRegionDetector::Tree MotionRegionDetector::RuleXml(const Tree& rule)
 	return result;
 }
 
-MotionRegionDetector::Tree MotionRegionDetector::Execute(const std::string& operation, const std::string& xml)
+AnalyticsRules::Tree AnalyticsRules::Execute(const std::string& operation, const std::string& xml)
 {
 	std::lock_guard lock(mutex_);
 	try
@@ -301,12 +305,16 @@ MotionRegionDetector::Tree MotionRegionDetector::Execute(const std::string& oper
 			desc.put("tt:Messages.tt:ParentTopic", Topic);
 			response.put("tan:SupportedRules.tt:RuleContentSchemaLocation", "http://www.onvif.org/ver20/analytics/rules.xsd");
 			response.add_child("tan:SupportedRules.tt:RuleDescription", desc);
+			response.add_child("tan:SupportedRules.tt:RuleDescription", line::Description());
 			return response;
 		}
 		if (operation == "GetRuleOptions")
 		{
-			if (request.get<std::string>("tan:RuleType", "tt:MotionRegionDetector") != "tt:MotionRegionDetector")
+			auto type = request.get<std::string>("tan:RuleType", "");
+			if (!type.empty() && type != "tt:MotionRegionDetector" && type != line::Type)
 				throw RuleFault("RuleNotExistent");
+			if (type == line::Type)
+				return line::Options();
 			Tree options;
 			options.put("<xmlattr>.Name", "MotionRegion");
 			options.put("<xmlattr>.RuleType", "tt:MotionRegionDetector");
@@ -320,6 +328,9 @@ MotionRegionDetector::Tree MotionRegionDetector::Execute(const std::string& oper
 			options.put(path + "axt:SingleSensitivitySupport", false);
 			options.put(path + "axt:RuleNotification", true);
 			response.add_child("tan:RuleOptions", options);
+			if (type.empty())
+				for (const auto& option : line::Options())
+					response.push_back(option);
 			return response;
 		}
 		auto candidate = current;
@@ -344,17 +355,21 @@ MotionRegionDetector::Tree MotionRegionDetector::Execute(const std::string& oper
 				throw RuleFault("RuleNotExistent");
 			if (deleting)
 			{
-				events.push_back(Notification(token, it->second, "Deleted", false));
+				if (it->second.get<std::string>("Type") == "tt:MotionRegionDetector")
+					events.push_back(Notification(token, it->second, "Deleted", false));
 				candidate.erase(it);
 			}
 			else
 			{
+				if (exists && it->second.get<std::string>("Type") != item.get<std::string>("<xmlattr>.Type"))
+					throw RuleFault("TypeChangeProhibited", true);
 				auto rule = readRule(item, source(profiles_, token), exists ? &it->second : nullptr);
 				if (exists)
 					it->second = rule;
 				else
 					candidate.push_back({"", rule});
-				events.push_back(Notification(token, rule, exists ? "Changed" : "Initialized", false));
+				if (rule.get<std::string>("Type") == "tt:MotionRegionDetector")
+					events.push_back(Notification(token, rule, exists ? "Changed" : "Initialized", false));
 			}
 		}
 		if (names.empty())
@@ -376,7 +391,12 @@ MotionRegionDetector::Tree MotionRegionDetector::Execute(const std::string& oper
 		}
 		current.swap(candidate);
 		for (const auto& name : names)
+		{
 			states_.erase({token, name});
+			std::erase_if(tracks_, [&](const auto& track) {
+				return std::get<0>(track.first) == token && std::get<1>(track.first) == name;
+			});
+		}
 		pending_.insert(pending_.end(), events.begin(), events.end());
 		return response;
 	}
@@ -386,8 +406,8 @@ MotionRegionDetector::Tree MotionRegionDetector::Execute(const std::string& oper
 	}
 }
 
-MotionRegionDetector::Message MotionRegionDetector::Notification(const std::string& token, const Tree& rule,
-																																 const std::string& operation, bool state) const
+AnalyticsRules::Message AnalyticsRules::Notification(const std::string& token, const Tree& rule,
+																										 const std::string& operation, bool state) const
 {
 	Message msg;
 	msg.topic = Topic;
@@ -400,13 +420,15 @@ MotionRegionDetector::Message MotionRegionDetector::Notification(const std::stri
 	return msg;
 }
 
-std::deque<MotionRegionDetector::Message> MotionRegionDetector::Synchronize() const
+std::deque<AnalyticsRules::Message> AnalyticsRules::Synchronize() const
 {
 	std::lock_guard lock(mutex_);
 	std::deque<Message> result;
 	for (const auto& [_, cfg] : profiles_.get_child("Analytics"))
 		for (const auto& [__, rule] : cfg.get_child("rules"))
 		{
+			if (rule.get<std::string>("Type") != "tt:MotionRegionDetector")
+				continue;
 			auto token = cfg.get<std::string>("token");
 			auto it = states_.find({token, rule.get<std::string>("Name")});
 			result.push_back(Notification(token, rule, "Initialized", it != states_.end() && it->second));
@@ -414,7 +436,7 @@ std::deque<MotionRegionDetector::Message> MotionRegionDetector::Synchronize() co
 	return result;
 }
 
-std::deque<MotionRegionDetector::Message> MotionRegionDetector::Sample(double x, double y, double strength)
+std::deque<AnalyticsRules::Message> AnalyticsRules::Sample(double x, double y, double strength)
 {
 	std::lock_guard lock(mutex_);
 	std::deque<Message> result;
@@ -422,6 +444,8 @@ std::deque<MotionRegionDetector::Message> MotionRegionDetector::Sample(double x,
 	for (const auto& [_, cfg] : profiles_.get_child("Analytics"))
 		for (const auto& [__, rule] : cfg.get_child("rules"))
 		{
+			if (rule.get<std::string>("Type") != "tt:MotionRegionDetector")
+				continue;
 			auto token = cfg.get<std::string>("token");
 			const auto& region = rule.get_child("MotionRegion");
 			bool next = region.get<bool>("Armed") && strength > 0 && strength >= 1 - region.get<double>("Sensitivity") &&
@@ -432,5 +456,59 @@ std::deque<MotionRegionDetector::Message> MotionRegionDetector::Sample(double x,
 			state = next;
 		}
 	return result;
+}
+
+std::deque<AnalyticsRules::Message> AnalyticsRules::SampleObject(const std::string& videoSource,
+																																 const std::string& objectId, double x, double y)
+{
+	std::lock_guard lock(mutex_);
+	std::deque<Message> result;
+	if (objectId.empty() || objectId.find_first_of(" \t\r\n") != std::string::npos || !std::isfinite(x) ||
+			!std::isfinite(y) || x < -1 || x > 1 || y < -1 || y > 1)
+		return result;
+	for (const auto& [_, cfg] : profiles_.get_child("Analytics"))
+	{
+		auto token = cfg.get<std::string>("token");
+		if (source(profiles_, token).get<std::string>("SourceToken") != videoSource)
+			continue;
+		for (const auto& [__, rule] : cfg.get_child("rules"))
+		{
+			if (rule.get<std::string>("Type") != line::Type || line::OnLine(rule, {x, y}))
+				continue;
+			auto key = std::make_tuple(token, rule.get<std::string>("Name"), objectId);
+			auto it = tracks_.find(key);
+			if (it != tracks_.end() && line::Crossed(rule, it->second, {x, y}))
+			{
+				Message msg;
+				msg.topic = line::Topic;
+				msg.utc_time = datetime::system_utc_datetime();
+				msg.source_item_descriptions = {
+						{"VideoSource", videoSource}, {"AnalyticsConfiguration", token}, {"Rule", rule.get<std::string>("Name")}};
+				msg.data_name = "ObjectId";
+				msg.data_value = objectId;
+				result.push_back(std::move(msg));
+			}
+			tracks_[key] = {x, y};
+		}
+	}
+	return result;
+}
+
+void AnalyticsRules::ForgetObject(const std::string& videoSource, const std::string& objectId)
+{
+	std::lock_guard lock(mutex_);
+	std::erase_if(tracks_, [&](const auto& track) {
+		return std::get<2>(track.first) == objectId &&
+					 source(profiles_, std::get<0>(track.first)).template get<std::string>("SourceToken") == videoSource;
+	});
+}
+
+std::vector<std::string> AnalyticsRules::VideoSources() const
+{
+	std::lock_guard lock(mutex_);
+	std::set<std::string> tokens;
+	for (const auto& [_, cfg] : profiles_.get_child("Analytics"))
+		tokens.insert(source(profiles_, cfg.get<std::string>("token")).get<std::string>("SourceToken"));
+	return {tokens.begin(), tokens.end()};
 }
 } // namespace utility

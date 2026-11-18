@@ -278,7 +278,8 @@ namespace osrv
 				msg_node.add("wsnt:Topic", msg.topic);
 				msg_node.add("wsnt:Topic.<xmlattr>.Dialect", "http://www.onvif.org/ver10/tev/topicExpression/ConcreteSet");
 				
-				msg_node.add("wsnt:Message.tt:Message.<xmlattr>.PropertyOperation", msg.property_operation);
+				if (!msg.property_operation.empty())
+					msg_node.add("wsnt:Message.tt:Message.<xmlattr>.PropertyOperation", msg.property_operation);
 				msg_node.add("wsnt:Message.tt:Message.<xmlattr>.UtcTime", msg.utc_time);
 
 				for (const auto& [name, value] : msg.source_item_descriptions)

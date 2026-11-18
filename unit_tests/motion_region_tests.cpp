@@ -1,11 +1,11 @@
-#include "../utility/MotionRegionDetector.h"
+#include "../utility/AnalyticsRules.h"
 #include <boost/property_tree/json_parser.hpp>
 #include <boost/test/unit_test.hpp>
 
 namespace
 {
 using Tree = boost::property_tree::ptree;
-using Detector = utility::MotionRegionDetector;
+using Detector = utility::AnalyticsRules;
 std::string request(const std::string& operation, const std::string& payload = "",
 										const std::string& token = "AnalyticsConfig_0")
 {

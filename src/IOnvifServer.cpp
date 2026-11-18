@@ -1,7 +1,7 @@
 #include "../include/IOnvifServer.h"
 
 #include "../utility/AuthHelper.h"
-#include "../utility/MotionRegionDetector.h"
+#include "../utility/AnalyticsRules.h"
 #include "../utility/AnalyticsReader.h"
 #include "../utility/MediaProfilesManager.h"
 
@@ -87,12 +87,12 @@ IOnvifServer::IOnvifServer(const std::string& configs_path, std::shared_ptr<ILog
 {
 }
 
-std::shared_ptr<utility::MotionRegionDetector> IOnvifServer::MotionDetector()
+std::shared_ptr<utility::AnalyticsRules> IOnvifServer::Rules()
 {
-	if (!motion_detector_)
+	if (!analytics_rules_)
 	{
 		auto manager = media_profiles_manager_;
-		motion_detector_ = std::make_shared<utility::MotionRegionDetector>(
+		analytics_rules_ = std::make_shared<utility::AnalyticsRules>(
 				manager->ReaderWriter()->ConfigsTree(), [manager](const std::string& token, const pt::ptree& rules) {
 					auto& cfg =
 							utility::AnalyticsConfigurationReaderByToken(token, manager->ReaderWriter()->ConfigsTree()).Config();
@@ -109,7 +109,7 @@ std::shared_ptr<utility::MotionRegionDetector> IOnvifServer::MotionDetector()
 					}
 				});
 	}
-	return motion_detector_;
+	return analytics_rules_;
 }
 
 const std::string& IOnvifServer::ConfigsPath() const

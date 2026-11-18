@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Rules and PullPoint checks. Run against a disposable configuration with auth disabled.
 
-Creates two rules and removes them on completion. Requires Python 3 only.
+Creates three rules and removes them on completion. Requires Python 3 only.
 """
 import argparse
 import http.client
@@ -68,12 +68,19 @@ def run(args):
     token = f"<tan:ConfigurationToken>{escape(args.token)}</tan:ConfigurationToken>"
     name = "smoke_" + uuid.uuid4().hex[:12]
     second = name + "_disarmed"
+    line_name = name + "_line"
     subscription = None
 
     def rule(rule_name, armed=True):
         return (f'<tan:Rule Name="{rule_name}" Type="tt:MotionRegionDetector"><tt:Parameters>'
                 '<tt:ElementItem Name="MotionRegion">'
                 f'<axt:MotionRegionConfig Armed="{str(armed).lower()}" Sensitivity="1"/>'
+                '</tt:ElementItem></tt:Parameters></tan:Rule>')
+
+    def line_rule(direction="Any", points="<tt:Point x='0' y='-1'/><tt:Point x='0' y='1'/>"):
+        return (f'<tan:Rule Name="{line_name}" Type="tt:LineDetector"><tt:Parameters>'
+                f'<tt:SimpleItem Name="Direction" Value="{direction}"/>'
+                f'<tt:ElementItem Name="Segments"><tt:Polyline>{points}</tt:Polyline>'
                 '</tt:ElementItem></tt:Parameters></tan:Rule>')
 
     try:
@@ -84,22 +91,41 @@ def run(args):
         descriptions = properties.findall(".//tt:MessageDescription", NS)
         assert any({n.attrib["Name"] for n in d.findall("tt:Source/tt:SimpleItemDescription", NS)} ==
                    {"VideoSource", "RuleName"} for d in descriptions)
+        line_desc = properties.find(".//LineDetector/Crossed/tt:MessageDescription", NS)
+        assert line_desc is not None and line_desc.attrib["IsProperty"] == "false"
+        assert {n.attrib["Name"] for n in line_desc.findall("tt:Source/tt:SimpleItemDescription", NS)} == {
+            "VideoSource", "AnalyticsConfiguration", "Rule"}
+        assert line_desc.find("tt:Data/tt:SimpleItemDescription", NS).attrib == {
+            "Name": "ObjectId", "Type": "tt:StringList"}
         supported = soap("GetSupportedRules", token)
         desc = supported.find(".//tt:RuleDescription", NS)
         assert desc.attrib["Name"] == "tt:MotionRegionDetector" and desc.attrib["maxInstances"] == "4"
+        line_desc = next(d for d in supported.findall(".//tt:RuleDescription", NS)
+                         if d.attrib["Name"] == "tt:LineDetector")
+        assert line_desc.find("tt:Messages", NS).attrib["IsProperty"] == "false"
         options = soap("GetRuleOptions", token)
         option = options.find(".//tan:RuleOptions", NS)
         assert option.attrib["RuleType"] == "tt:MotionRegionDetector"
         region_options = option.find("axt:MotionRegionConfigOptions", NS)
         assert region_options.attrib["PTZPresetMotionSupport"] == "false"
         assert region_options.find("axt:PolygonLimits/tt:Min", NS).text == "3"
+        line_options = soap("GetRuleOptions", "<tan:RuleType>tt:LineDetector</tan:RuleType>" + token)
+        line_options = {o.attrib["Name"]: o for o in line_options.findall(".//tan:RuleOptions", NS)}
+        assert line_options["Direction"].find("tt:StringList", NS).text.split() == ["Left", "Right", "Any"]
+        assert line_options["Segments"].find("tt:IntRange/tt:Min", NS).text == "2"
+        assert line_options["Segments"].find("tt:IntRange/tt:Max", NS).text == "8"
         soap("GetRules", "<tan:ConfigurationToken>missing</tan:ConfigurationToken>", fault="NoConfig")
         soap("GetRuleOptions", "<tan:RuleType>tt:Unknown</tan:RuleType>" + token, fault="RuleNotExistent")
-        soap("CreateRules", token + rule(name) + rule(second, False))
+        soap("CreateRules", token + line_rule("Entering"), fault="InvalidRule")
+        soap("CreateRules", token + line_rule(points="<tt:Point x='0' y='0'/><tt:Point x='0' y='0'/>"),
+             fault="InvalidRule")
+        soap("CreateRules", token + rule(name) + rule(second, False) + line_rule())
         soap("CreateRules", token + rule(name + "_rollback") + rule(name), fault="RuleAlreadyExistent")
         rules = soap("GetRules", token).findall(".//tan:Rule", NS)
         names = {r.attrib["Name"] for r in rules}
         assert name in names and second in names and name + "_rollback" not in names
+        assert line_name in names
+        soap("ModifyRules", token + rule(line_name), fault="TypeChangeProhibited")
         for service, prefix, operation in [("media", "trt", "GetVideoAnalyticsConfigurations"),
                                             ("media2", "tr2", "GetAnalyticsConfigurations")]:
             media = soap(operation, service=service, prefix=prefix)
@@ -111,16 +137,31 @@ def run(args):
             assert cfg.find("tt:Count", NS) is None
             assert int(cfg.find("tt:UseCount", NS).text) >= 0
             assert {r.attrib["Name"] for r in cfg.findall("tt:RuleEngineConfiguration/tt:Rule", NS)} == names
+            line = next(r for r in cfg.findall("tt:RuleEngineConfiguration/tt:Rule", NS)
+                        if r.attrib["Name"] == line_name)
+            assert line.attrib["Type"] == "tt:LineDetector"
+            assert len(line.findall("tt:Parameters/tt:ElementItem/tt:Polyline/tt:Point", NS)) == 2
         created = soap("CreatePullPointSubscription", service="event", prefix="tet")
         subscription = next(n.text for n in created.iter() if n.tag.endswith("}Address"))
         soap("SetSynchronizationPoint", prefix="tet", url=subscription)
-        seen_on = seen_off = seen_initialized = False
-        deadline = time.monotonic() + 16
-        while time.monotonic() < deadline and not (seen_on and seen_off and seen_initialized):
+        seen_on = seen_off = seen_initialized = seen_crossed = False
+        deadline = time.monotonic() + 20
+        while time.monotonic() < deadline and not (seen_on and seen_off and seen_initialized and seen_crossed):
             events = soap("PullMessages", "<tet:Timeout>PT2S</tet:Timeout><tet:MessageLimit>100</tet:MessageLimit>",
                           prefix="tet", url=subscription)
             for notification in events.findall(".//wsnt:NotificationMessage", NS):
                 topic = notification.find("wsnt:Topic", NS).text or ""
+                if topic.endswith("RuleEngine/LineDetector/Crossed"):
+                    message = notification.find("wsnt:Message/tt:Message", NS)
+                    assert "PropertyOperation" not in message.attrib
+                    source = {n.attrib["Name"]: n.attrib["Value"]
+                              for n in message.findall("tt:Source/tt:SimpleItem", NS)}
+                    if source["Rule"] == line_name:
+                        assert source["AnalyticsConfiguration"] == args.token and source["VideoSource"]
+                        value = message.find("tt:Data/tt:SimpleItem", NS)
+                        assert value.attrib == {"Name": "ObjectId", "Value": "1"}
+                        seen_crossed = True
+                    continue
                 if not topic.endswith("RuleEngine/MotionRegionDetector/Motion"):
                     continue
                 message = notification.find("wsnt:Message/tt:Message", NS)
@@ -136,17 +177,23 @@ def run(args):
                     elif message.attrib["PropertyOperation"] == "Changed":
                         seen_on |= value.attrib["Value"] == "true"
                         seen_off |= value.attrib["Value"] == "false"
-        assert seen_on and seen_off and seen_initialized, (seen_on, seen_off, seen_initialized)
+        assert seen_on and seen_off and seen_initialized and seen_crossed, (
+            seen_on, seen_off, seen_initialized, seen_crossed)
         soap("ModifyRules", token + rule(name, False))
         result = soap("GetRules", token)
         modified = next(r for r in result.findall(".//tan:Rule", NS) if r.attrib["Name"] == name)
         assert modified.find("tt:Parameters/tt:ElementItem/axt:MotionRegionConfig", NS).attrib["Armed"] == "false"
-        print("PASS Rules discovery, options, CRUD, atomic faults, Media/Media2 and PullPoint motion states")
+        soap("ModifyRules", token + line_rule("Left"))
+        modified = next(r for r in soap("GetRules", token).findall(".//tan:Rule", NS)
+                        if r.attrib["Name"] == line_name)
+        assert modified.find("tt:Parameters/tt:SimpleItem", NS).attrib["Value"] == "Left"
+        print("PASS Motion Region and Line Detector: discovery, options, CRUD, faults, Media/Media2 and PullPoint")
     finally:
         if subscription:
             soap("Unsubscribe", prefix="wsnt", url=subscription)
         existing = soap("GetRules", token).findall(".//tan:Rule", NS)
-        cleanup = [r.attrib["Name"] for r in existing if r.attrib["Name"] in {name, second, name + "_rollback"}]
+        cleanup = [r.attrib["Name"] for r in existing
+                   if r.attrib["Name"] in {name, second, line_name, name + "_rollback"}]
         if cleanup:
             soap("DeleteRules", token + "".join(f"<tan:RuleName>{n}</tan:RuleName>" for n in cleanup))
 

@@ -10,7 +10,7 @@
 #include <boost/asio/io_context.hpp>
 #include <boost/asio/steady_timer.hpp>
 
-namespace utility { class MotionRegionDetector; }
+namespace utility { class AnalyticsRules; }
 
 namespace osrv
 {
@@ -93,13 +93,26 @@ namespace osrv
 		class MotionRegionEventGenerator : public IEventGenerator
 		{
 		public:
-			MotionRegionEventGenerator(std::shared_ptr<utility::MotionRegionDetector> detector, int interval,
+			MotionRegionEventGenerator(std::shared_ptr<utility::AnalyticsRules> detector, int interval,
 				boost::asio::io_context& io, const ILogger& logger);
 			std::deque<NotificationMessage> GenerateSynchronizationEvent() const override;
 		protected:
 			void generate_event() override;
 		private:
-			std::shared_ptr<utility::MotionRegionDetector> detector_;
+			std::shared_ptr<utility::AnalyticsRules> detector_;
+			unsigned step_ = 0;
+		};
+
+		class LineDetectorEventGenerator : public IEventGenerator
+		{
+		public:
+			LineDetectorEventGenerator(std::shared_ptr<utility::AnalyticsRules> detector, int interval,
+				boost::asio::io_context& io, const ILogger& logger);
+			std::deque<NotificationMessage> GenerateSynchronizationEvent() const override;
+		protected:
+			void generate_event() override;
+		private:
+			std::shared_ptr<utility::AnalyticsRules> detector_;
 			unsigned step_ = 0;
 		};
 
