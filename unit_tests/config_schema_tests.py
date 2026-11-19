@@ -83,6 +83,18 @@ class ConfigSchemaTests(unittest.TestCase):
         config["VideoSource"][0]["Bounds"]["width"] = 1280
         self.check("media_profiles.config", config, True)
 
+    def test_field_detector_persistence(self):
+        config = deepcopy(self.configs["media_profiles.config"])
+        rule = {"Name": "zone", "Type": "tt:FieldDetector", "Field": [
+            {"x": "-0.5", "y": "-0.5"}, {"x": "0.5", "y": "-0.5"}, {"x": "0", "y": "0.5"}]}
+        config["Analytics"][0]["rules"] = [rule]
+        self.check("media_profiles.config", config, True)
+        rule["Field"].pop()
+        self.check("media_profiles.config", config, False)
+        rule["Field"].append({"x": 0, "y": 0.5})
+        rule["Segments"] = []
+        self.check("media_profiles.config", config, False)
+
     def test_empty_recording_dates_and_required_keys(self):
         config = deepcopy(self.configs["recording_search.config"])
         config["Recordings"][0].update(DateFrom="", DateUntil="")

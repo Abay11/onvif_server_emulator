@@ -139,6 +139,12 @@
             "items": {
               "$ref": "types.schema.json#/$defs/token"
             }
+          },
+          "CompatibleAnalyticsConfigurations": {
+            "type": "array",
+            "items": {
+              "$ref": "types.schema.json#/$defs/token"
+            }
           }
         },
         "required": [
@@ -682,6 +688,66 @@
         "required": [
           "token",
           "PTZTimeout"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "Analytics": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "$ref": "types.schema.json#/$defs/token"
+          },
+          "Name": {
+            "type": "string"
+          },
+          "compatibleModuleAnalytics": {
+            "oneOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              {
+                "const": ""
+              }
+            ]
+          },
+          "analyticsModules": {
+            "oneOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "object"
+                }
+              },
+              {
+                "const": ""
+              }
+            ]
+          },
+          "rules": {
+            "oneOf": [
+              {
+                "type": "array",
+                "maxItems": 4,
+                "items": {
+                  "$ref": "analytics-rule.schema.json"
+                }
+              },
+              {
+                "const": ""
+              }
+            ]
+          }
+        },
+        "required": [
+          "token",
+          "Name",
+          "rules"
         ],
         "additionalProperties": false
       }

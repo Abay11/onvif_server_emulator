@@ -175,6 +175,30 @@
         "DataItemName"
       ],
       "additionalProperties": false
+    },
+    "MotionRegion": {
+      "type": "object",
+      "properties": {
+        "EventGenerationTimeout": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        }
+      },
+      "required": [],
+      "additionalProperties": false
+    },
+    "LineDetector": {
+      "type": "object",
+      "properties": {
+        "EventGenerationTimeout": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        }
+      },
+      "required": [],
+      "additionalProperties": false
     }
   },
   "required": [

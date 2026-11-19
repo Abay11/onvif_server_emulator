@@ -6,6 +6,7 @@
 #include <functional>
 #include <map>
 #include <mutex>
+#include <set>
 #include <stdexcept>
 #include <tuple>
 
@@ -37,6 +38,8 @@ public:
 	std::deque<Message> SampleObject(const std::string& videoSource, const std::string& objectId, double x, double y);
 	std::deque<Message> TickCounting();
 	std::deque<Message> SynchronizeCounts() const;
+	std::deque<Message> SynchronizeFields() const;
+	std::deque<Message> TickFields();
 	void ForgetObject(const std::string& videoSource, const std::string& objectId);
 	std::vector<std::string> VideoSources() const;
 	static Tree RuleXml(const Tree& rule);
@@ -45,6 +48,8 @@ public:
 private:
 	Message Notification(const std::string& token, const Tree& rule, const std::string& operation, bool state) const;
 	Message CountNotification(const std::string& token, const Tree& rule, const std::string& operation, int count) const;
+	Message FieldNotification(const std::string& token, const Tree& rule, const std::string& operation,
+														bool inside) const;
 	Tree profiles_;
 	SaveRules save_;
 	Clock clock_;
@@ -54,5 +59,7 @@ private:
 	std::deque<Message> pending_;
 	std::map<std::pair<std::string, std::string>, counting::State> counters_;
 	std::deque<Message> pending_counts_;
+	std::map<std::pair<std::string, std::string>, std::set<std::string>> inside_;
+	std::deque<Message> pending_fields_;
 };
 } // namespace utility

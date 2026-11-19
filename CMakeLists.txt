@@ -99,6 +99,8 @@ FILE(GLOB SERVICES_SRC
 FILE (GLOB UTILITY_SRC
 	"utility/LineCounting.cpp"
 	"utility/LineCounting.h"
+	"utility/FieldDetector.cpp"
+	"utility/FieldDetector.h"
 	"utility/LineDetector.cpp"
 	"utility/LineDetector.h"
 	"utility/AnalyticsRules.cpp"

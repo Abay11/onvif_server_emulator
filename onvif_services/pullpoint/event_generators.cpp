@@ -1,7 +1,8 @@
 #include "event_generators.h"
-#include "pull_point.h"
 #include "../../utility/AnalyticsRules.h"
+#include "../../utility/FieldDetector.h"
 #include "../../utility/LineDetector.h"
+#include "pull_point.h"
 
 #include "../utility/DateTime.hpp"
 
@@ -69,6 +70,22 @@ namespace osrv
 	void LineCountingEventGenerator::generate_event()
 	{
 		for (const auto& event : detector_->TickCounting())
+			event_signal_(event);
+	}
+	FieldDetectorEventGenerator::FieldDetectorEventGenerator(std::shared_ptr<utility::AnalyticsRules> detector,
+																													 boost::asio::io_context& io, const ILogger& logger)
+			: IEventGenerator(1, utility::field::Topic, io, logger), detector_(std::move(detector))
+	{
+	}
+
+	std::deque<NotificationMessage> FieldDetectorEventGenerator::GenerateSynchronizationEvent() const
+	{
+		return detector_->SynchronizeFields();
+	}
+
+	void FieldDetectorEventGenerator::generate_event()
+	{
+		for (const auto& event : detector_->TickFields())
 			event_signal_(event);
 	}
 

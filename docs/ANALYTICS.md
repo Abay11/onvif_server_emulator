@@ -1,12 +1,12 @@
-# Analytics Rules: Motion Region, Line Detector and LineCounting
+# Analytics Rules: Motion Region, Line Detector, LineCounting and Field Detector
 
 The Analytics endpoint `/onvif/analytics_service` implements the Rules interface
-for `tt:MotionRegionDetector`, `tt:LineDetector` and `tt:LineCounting`. This is an emulator with
-deterministic synthetic input. It does not inspect the RTSP stream or claim Profile M certification.
+for `tt:MotionRegionDetector`, `tt:LineDetector`, `tt:LineCounting` and `tt:FieldDetector`.
+This is an emulator with deterministic synthetic input. It does not inspect the RTSP stream or claim Profile M certification.
 
 ## Contract and references
 
-The implementation targets sections 5.2.2, 6.1, 6.2, Annex A.1/A.2/A.5 and Annex C.1 of the
+The implementation targets sections 5.2.2, 6.1, 6.2, Annex A.1/A.2/A.3/A.5 and Annex C.1 of the
 [Analytics Service Specification 26.06](https://www.onvif.org/specs/srv/analytics/ONVIF-Analytics-Service-Spec.pdf).
 The wire format uses the published
 [Analytics WSDL 20.12](https://www.onvif.org/ver20/analytics/wsdl/analytics.wsdl),
@@ -50,7 +50,7 @@ and `DeleteRules` use a VideoAnalyticsConfiguration token, by default
 `GetAnalyticsConfigurations` return the same persisted rules. Read operations use
 READ_MEDIA access; mutations use ACTUATE under the existing digest authorization.
 
-The device supports up to four rules in total across all three types and all analytics
+The device supports up to four rules in total across all four types and all analytics
 configurations.
 
 ## Motion Region Detector (Annex C.1)
@@ -141,11 +141,69 @@ sample-driven Changed notifications occur only when the state changes. A rule
 modification resets its evaluated state to false before the next sample.
 The topic is also described by `GetEventProperties`.
 
+## Field Detector (Annex A.3)
+
+`tt:FieldDetector` uses the same six Rules operations, access levels, atomic
+persistence and shared four-rule limit. Its `Field` ElementItem contains a
+`tt:Polygon` of 3–8 distinct vertices in normalized `[-1, 1]` coordinates on
+both axes, with positive y upward. A simple concave polygon and either winding
+are supported. Self-intersections, duplicate vertices (including a repeated
+closing vertex), zero-area shapes, non-finite/out-of-range coordinates, extra
+parameters and malformed payloads produce `InvalidRule`. Empty Parameters on
+creation selects the full normalized frame. Omitted Field on modification retains
+the polygon. `GetRuleOptions` returns `tt:PolygonOptions` with `RectangleOnly=false`
+and `VertexLimits` 3–8, using ONVIF schema 25.12. The A.3 contract and the linked
+WSDL/XSD definitions were inspected on 2026-11-19.
+
+An independently written rule body for CreateRules, after ConfigurationToken:
+
+```xml
+<tan:Rule Name="EntranceZone" Type="tt:FieldDetector">
+  <tt:Parameters>
+    <tt:ElementItem Name="Field">
+      <tt:Polygon>
+        <tt:Point x="-0.5" y="-0.5"/>
+        <tt:Point x="0.5" y="-0.5"/>
+        <tt:Point x="0.5" y="0.5"/>
+        <tt:Point x="-0.5" y="0.5"/>
+      </tt:Polygon>
+    </tt:ElementItem>
+  </tt:Parameters>
+</tan:Rule>
+```
+
+The persisted rule in `Analytics[].rules` has `Name`, `Type: "tt:FieldDetector"`
+and `Field: [{"x": -0.5, "y": -0.5}, ...]`. Media and Media2 return this same
+polygon. The JSON schema describes the stored shape; runtime validation also
+checks geometry. Restart restores rules and starts with no tracked objects.
+
+Notifications on `tns1:RuleEngine/FieldDetector/ObjectsInside` are properties,
+with Source items `VideoSource`, `AnalyticsConfiguration` and `Rule`, and one
+boolean Data item `IsInside`. It is true while at least one tracked object is
+inside the polygon. Moving another object in or out leaves the property unchanged
+unless the zone becomes empty or occupied. The optional ObjectId list is neither
+advertised nor emitted. Synchronization returns the current property as Initialized.
+Creation queues Initialized(false), modification clears that rule's tracked objects
+and queues Changed(false), and deletion queues Deleted with the last value.
+Failed batches and failed saves preserve both rule configuration and occupancy.
+A one-second event timer drains lifecycle/disappearance notifications even when
+no object samples arrive. The shared object sampler can drain them sooner.
+
+Field Detector uses the existing Line Detector synthetic object trajectory and
+`LineDetector.EventGenerationTimeout`; no separate trajectory or timeout is
+introduced. Objects are represented as points, and boundary points count as inside.
+The object remains present until its next sample or an explicit ForgetObject call;
+there is no automatic expiry. This deterministic point model is an intentional
+simulation deviation, independent of video content or object bounding boxes.
+PTZ remapping, preset association and class filtering are unsupported and are not
+advertised. The supplied central square alternates between occupied and empty;
+the default full-frame polygon stays occupied after the first sample.
+
 ## Line Detector (Annex A.2)
 
 Line Detector uses the same six Rules operations, access levels, configuration
 token and persistence transaction as Motion Region. `GetSupportedRules` describes
-all three rule types. `GetRuleOptions` without a type returns their options; with
+all four rule types. `GetRuleOptions` without a type returns their options; with
 `tt:LineDetector` it returns `Direction` (`tt:StringList`: `Left Right Any`) and
 `Segments` (`tt:IntRange`: 2–8 points). The optional RuleType precedes
 ConfigurationToken in the request, as required by Analytics WSDL 20.12.
@@ -325,7 +383,8 @@ python3 unit_tests/network_smoke.py --host 127.0.0.1 --advertised-ip 127.0.0.1 -
 ```
 
 The Analytics smoke test creates two Motion Region rules, one Line Detector and
-one LineCounting rule, checks SOAP faults, Media/Media2, PullPoint motion/crossing
+one LineCounting rule, then replaces one Motion Region rule with a Field Detector.
+It checks SOAP faults, Media/Media2, PullPoint motion/crossing and zone occupancy
 events, aggregated counts and a scheduled reset, and deletes its rules.
 It needs four free rule slots
 and the default synthetic tick interval. Optional response capture supports
@@ -345,6 +404,18 @@ reload, lifecycle notifications and integer saturation. Its Docker Debug build
 and all 119 Boost test cases passed through CTest. The combined Analytics smoke
 test and the complete network smoke test passed against a configuration copy in
 an isolated Docker network, including unicast/multicast discovery and RTP/TCP/UDP.
+
+Field Detector validation on 2026-11-19 used the documented `osrv-dev:latest`
+container and `osrv-analytics-build` volume: CMake Debug with unit tests enabled,
+`cmake --build build --parallel 2`, and `ctest --test-dir build --output-on-failure`
+passed. The extended Analytics smoke test and network smoke test passed against
+that build with a disposable configuration in the container network namespace,
+including multicast discovery and RTP over TCP/UDP. JSON Schema regression tests
+passed (10 cases). With `xmlschema` 4.3.2 in XSD 1.1 mode and the linked official
+imports, 64 captured Analytics responses, SOAP faults, Media/Media2 analytics
+configuration payloads and notification messages passed schema validation.
+These checks do not validate a Windows/VMS deployment or constitute certification.
+
 For LineCounting, 71 captured response, fault and payload documents passed XSD 1.1
 validation with the same WSDL/XSD imports and `xmlschema` 4.3.2, including
 DurationRange options, Media/Media2 analytics configurations and PullPoint messages.

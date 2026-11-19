@@ -11,10 +11,11 @@
 #include "../onvif_services/recording_search_service.h"
 #include "include/onvif_services/service_configs.h"
 
-#include "utility/AuthHelper.h"
-#include "utility/MediaProfilesManager.h"
 #include "utility/AnalyticsRules.h"
+#include "utility/AuthHelper.h"
+#include "utility/FieldDetector.h"
 #include "utility/LineDetector.h"
+#include "utility/MediaProfilesManager.h"
 #include "utility/XmlParser.h"
 
 #include "MediaFormats.h"
@@ -115,7 +116,7 @@ void Server::init()
 
 	const std::vector<event::EventGeneratorRegistration> event_generators{
 			{[detector = Rules()](const boost::property_tree::ptree& configs, boost::asio::io_context& io,
-																		 const ILogger& logger) {
+														const ILogger& logger) {
 				 return std::make_shared<event::MotionRegionEventGenerator>(
 						 detector, configs.get<int>("MotionRegion.EventGenerationTimeout", 2), io, logger);
 			 },
@@ -123,19 +124,26 @@ void Server::init()
 				{{"VideoSource", "tt:ReferenceToken"}, {"RuleName", "xsd:string"}},
 				{{"State", "xsd:boolean"}}}},
 			{[detector = Rules()](const boost::property_tree::ptree& configs, boost::asio::io_context& io,
-													 const ILogger& logger) {
+														const ILogger& logger) {
 				 return std::make_shared<event::LineDetectorEventGenerator>(
 						 detector, configs.get<int>("LineDetector.EventGenerationTimeout", 2), io, logger);
 			 },
 			 {utility::line::Topic,
 				{{"VideoSource", "tt:ReferenceToken"}, {"AnalyticsConfiguration", "tt:ReferenceToken"}, {"Rule", "xsd:string"}},
-				{{"ObjectId", "tt:StringList"}}, false}},
+				{{"ObjectId", "tt:StringList"}},
+				false}},
 			{[detector = Rules()](const boost::property_tree::ptree&, boost::asio::io_context& io, const ILogger& logger) {
 				 return std::make_shared<event::LineCountingEventGenerator>(detector, io, logger);
 			 },
 			 {utility::counting::Topic,
 				{{"VideoSource", "tt:ReferenceToken"}, {"AnalyticsConfiguration", "tt:ReferenceToken"}, {"Rule", "xsd:string"}},
-				{{"Count", "xsd:int"}}}}};
+				{{"Count", "xsd:int"}}}},
+			{[detector = Rules()](const boost::property_tree::ptree&, boost::asio::io_context& io, const ILogger& logger) {
+				 return std::make_shared<event::FieldDetectorEventGenerator>(detector, io, logger);
+			 },
+			 {utility::field::Topic,
+				{{"VideoSource", "tt:ReferenceToken"}, {"AnalyticsConfiguration", "tt:ReferenceToken"}, {"Rule", "xsd:string"}},
+				{{"IsInside", "xsd:boolean"}}}}};
 	event::init_service(*http_server_, *server_configs_, configs_dir, *logger_, event_generators);
 
 	// TODO: impl. logic for multichannel cannel

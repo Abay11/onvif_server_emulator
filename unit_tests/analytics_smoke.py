@@ -71,6 +71,7 @@ def run(args):
     second = name + "_disarmed"
     line_name = name + "_line"
     count_name = name + "_count"
+    field_name = name + "_field"
     subscription = None
 
     def rule(rule_name, armed=True):
@@ -96,6 +97,11 @@ def run(args):
         return (f'<tan:Rule Name="{count_name}" Type="tt:LineCounting"><tt:Parameters>'
                 + params + '</tt:Parameters></tan:Rule>')
 
+    def field_rule(points="<tt:Point x='-0.5' y='-0.5'/><tt:Point x='0.5' y='-0.5'/><tt:Point x='0.5' y='0.5'/><tt:Point x='-0.5' y='0.5'/>"):
+        return (f'<tan:Rule Name="{field_name}" Type="tt:FieldDetector"><tt:Parameters>'
+                f'<tt:ElementItem Name="Field"><tt:Polygon>{points}</tt:Polygon>'
+                '</tt:ElementItem></tt:Parameters></tan:Rule>')
+
     try:
 
         caps = soap("GetServiceCapabilities").find(".//tan:Capabilities", NS)
@@ -114,6 +120,10 @@ def run(args):
         assert count_desc is not None and count_desc.attrib["IsProperty"] == "true"
         assert count_desc.find("tt:Data/tt:SimpleItemDescription", NS).attrib == {
             "Name": "Count", "Type": "xsd:int"}
+        field_desc = properties.find(".//FieldDetector/ObjectsInside/tt:MessageDescription", NS)
+        assert field_desc is not None and field_desc.attrib["IsProperty"] == "true"
+        assert field_desc.find("tt:Data/tt:SimpleItemDescription", NS).attrib == {
+            "Name": "IsInside", "Type": "xsd:boolean"}
         supported = soap("GetSupportedRules", token)
         desc = supported.find(".//tt:RuleDescription", NS)
         assert desc.attrib["Name"] == "tt:MotionRegionDetector" and desc.attrib["maxInstances"] == "4"
@@ -123,6 +133,13 @@ def run(args):
         count_desc = next(d for d in supported.findall(".//tt:RuleDescription", NS)
                           if d.attrib["Name"] == "tt:LineCounting")
         assert count_desc.find("tt:Messages", NS).attrib["IsProperty"] == "true"
+        field_desc = next(d for d in supported.findall(".//tt:RuleDescription", NS)
+                          if d.attrib["Name"] == "tt:FieldDetector")
+        assert field_desc.find("tt:Parameters/tt:ElementItemDescription", NS).attrib == {
+            "Name": "Field", "Type": "tt:Polygon"}
+        field_options = soap("GetRuleOptions", "<tan:RuleType>tt:FieldDetector</tan:RuleType>" + token)
+        assert field_options.find(".//tt:PolygonOptions/tt:VertexLimits/tt:Min", NS).text == "3"
+        assert field_options.find(".//tt:PolygonOptions/tt:VertexLimits/tt:Max", NS).text == "8"
         options = soap("GetRuleOptions", token)
         option = options.find(".//tan:RuleOptions", NS)
         assert option.attrib["RuleType"] == "tt:MotionRegionDetector"
@@ -255,14 +272,57 @@ def run(args):
                 seen_reset |= (source["Rule"] == count_name and message.attrib["PropertyOperation"] == "Changed"
                                and value.attrib["Name"] == "Count" and value.attrib["Value"] == "0")
         assert seen_reset, "LineCounting did not report its scheduled reset"
-        print("PASS Motion Region, Line Detector and LineCounting: CRUD, options, faults, Media/Media2, "
-              "PullPoint, aggregated counts and scheduled reset")
+        # Release one slot, then check A.3 using the same active subscription.
+        soap("DeleteRules", token + f"<tan:RuleName>{second}</tan:RuleName>")
+        soap("CreateRules", token + field_rule("<tt:Point x='0' y='0'/><tt:Point x='0' y='0'/><tt:Point x='1' y='1'/>"),
+             fault="InvalidRule")
+        soap("CreateRules", token + field_rule())
+        soap("CreateRules", token + field_rule(), fault="RuleAlreadyExistent")
+        for service, prefix, operation in [("media", "trt", "GetVideoAnalyticsConfigurations"),
+                                           ("media2", "tr2", "GetAnalyticsConfigurations")]:
+            media = soap(operation, service=service, prefix=prefix)
+            field = next(r for r in media.findall(".//tt:Rule", NS) if r.attrib["Name"] == field_name)
+            assert field.attrib["Type"] == "tt:FieldDetector"
+            assert len(field.findall("tt:Parameters/tt:ElementItem/tt:Polygon/tt:Point", NS)) == 4
+        soap("ModifyRules", token + field_rule())
+        soap("SetSynchronizationPoint", prefix="tet", url=subscription)
+        field_on = field_off = field_init = False
+        deadline = time.monotonic() + 20
+        while time.monotonic() < deadline and not (field_on and field_off and field_init):
+            events = soap("PullMessages", "<tet:Timeout>PT2S</tet:Timeout><tet:MessageLimit>100</tet:MessageLimit>",
+                          prefix="tet", url=subscription)
+            for notification in events.findall(".//wsnt:NotificationMessage", NS):
+                if not (notification.find("wsnt:Topic", NS).text or "").endswith("FieldDetector/ObjectsInside"):
+                    continue
+                message = notification.find("wsnt:Message/tt:Message", NS)
+                source = {n.attrib["Name"]: n.attrib["Value"] for n in message.findall("tt:Source/tt:SimpleItem", NS)}
+                assert source == {"VideoSource": "VideoSource0", "AnalyticsConfiguration": args.token, "Rule": field_name}
+                value = message.find("tt:Data/tt:SimpleItem", NS)
+                assert value.attrib["Name"] == "IsInside" and value.attrib["Value"] in {"true", "false"}
+                field_init |= message.attrib["PropertyOperation"] == "Initialized"
+                if message.attrib["PropertyOperation"] == "Changed":
+                    field_on |= value.attrib["Value"] == "true"
+                    field_off |= value.attrib["Value"] == "false"
+        assert field_on and field_off and field_init, "FieldDetector property transitions missing"
+        soap("DeleteRules", token + f"<tan:RuleName>{field_name}</tan:RuleName>")
+        deleted = False
+        deadline = time.monotonic() + 5
+        while time.monotonic() < deadline and not deleted:
+            events = soap("PullMessages", "<tet:Timeout>PT1S</tet:Timeout><tet:MessageLimit>100</tet:MessageLimit>",
+                          prefix="tet", url=subscription)
+            for notification in events.findall(".//wsnt:NotificationMessage", NS):
+                if (notification.find("wsnt:Topic", NS).text or "").endswith("FieldDetector/ObjectsInside"):
+                    message = notification.find("wsnt:Message/tt:Message", NS)
+                    deleted |= message.attrib["PropertyOperation"] == "Deleted"
+        assert deleted, "FieldDetector Deleted event missing"
+        print("PASS Motion Region, Line Detector, LineCounting and Field Detector: CRUD, options, faults, "
+              "Media/Media2, PullPoint, property transitions, aggregated counts and scheduled reset")
     finally:
         if subscription:
             soap("Unsubscribe", prefix="wsnt", url=subscription)
         existing = soap("GetRules", token).findall(".//tan:Rule", NS)
         cleanup = [r.attrib["Name"] for r in existing
-                   if r.attrib["Name"] in {name, second, line_name, count_name, name + "_rollback", name + "_overflow"}]
+                   if r.attrib["Name"] in {name, second, line_name, count_name, field_name, name + "_rollback", name + "_overflow"}]
         if cleanup:
             soap("DeleteRules", token + "".join(f"<tan:RuleName>{n}</tan:RuleName>" for n in cleanup))
 
