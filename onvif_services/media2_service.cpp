@@ -1,5 +1,6 @@
 #include "media2_service.h"
 #include "media_service.h" // to use some util functions
+#include "analytics_service.h" // to use some util functions
 
 #include "../onvif/OnvifRequest.h"
 
@@ -11,6 +12,7 @@
 #include "../utility/SoapHelper.h"
 #include "../utility/VideoSourceReader.h"
 #include "../utility/XmlParser.h"
+#include "../utility/AnalyticsReader.h"
 
 #include "../Simple-Web-Server/server_http.hpp"
 
@@ -50,6 +52,7 @@ namespace osrv
 {
 namespace media2
 {
+
 struct AddConfigurationHandler : public OnvifRequestBase
 {
 	AddConfigurationHandler(const std::map<std::string, std::string>& xs, const std::shared_ptr<pt::ptree>& configs,
@@ -178,25 +181,73 @@ private:
 
 struct GetAnalyticsConfigurationsHandler : public OnvifRequestBase
 {
+private:
+	const utility::media::MediaProfilesManager& m_profilesMgr;
+
+public:
 	GetAnalyticsConfigurationsHandler(const std::map<std::string, std::string>& xs,
-																		const std::shared_ptr<pt::ptree>& configs)
-			: OnvifRequestBase(GetAnalyticsConfigurations, auth::SECURITY_LEVELS::READ_MEDIA, xs, configs)
+																		const std::shared_ptr<pt::ptree>& configs,
+																		const utility::media::MediaProfilesManager& profilesMgr)
+			: OnvifRequestBase(GetAnalyticsConfigurations, auth::SECURITY_LEVELS::READ_MEDIA, xs, configs),
+				m_profilesMgr(profilesMgr)
 	{
 	}
 
 	void operator()(std::shared_ptr<HttpServer::Response> response, std::shared_ptr<HttpServer::Request> request) override
 	{
-		// TODO: the implementation below is hardcoded. fix
+		pt::ptree request_xml_tree;
+		pt::xml_parser::read_xml(request->content, request_xml_tree);
+		const auto& requestedConfigToken =
+				exns::find_hierarchy("Envelope.Body.GetAnalyticsConfigurations.ConfigurationToken", request_xml_tree);
+		const auto& requestedProfileToken =
+				exns::find_hierarchy("Envelope.Body.GetAnalyticsConfigurations.ProfileToken", request_xml_tree);
 
 		auto envelope_tree = utility::soap::getEnvelopeTree(ns_);
 
-		pt::ptree configurations_tree;
-		configurations_tree.add("<xmlattr>.token", "VideoAnalyticsConfigToken0");
-		configurations_tree.add("tt:Name", "VideoAnalyticsConfig0");
-		configurations_tree.add("tt:Count", "2");
-		configurations_tree.add("tt:AnalyticsEngineConfiguration", "");
-		configurations_tree.add("tt:RuleEngineConfiguration", "");
-		envelope_tree.add_child("s:Body.tr2:GetAnalyticsConfigurationsResponse.tr2:Configurations", configurations_tree);
+		if (!requestedConfigToken.empty())
+		{
+			const auto& configJson =
+					m_profilesMgr.GetConfigByToken(requestedConfigToken, osrv::CONFIGURATION_ENUMERATION[osrv::ANALYTICS]);
+			pt::ptree xmlAnalyticsConfig;
+			analytics::fillConfiguration(configJson, xmlAnalyticsConfig, m_profilesMgr);
+			envelope_tree.add_child("s:Body.tr2:GetAnalyticsConfigurationsResponse.tr2:Configurations", xmlAnalyticsConfig);
+		}
+		else if (!requestedProfileToken.empty()) // analytics configs should be compatible with this profile
+		{
+			const auto& profileConfig = m_profilesMgr.GetProfileByToken(requestedProfileToken);
+			auto vsToken = profileConfig.get<std::string>("VideoSource");
+			const auto& vsConfigJson =
+					m_profilesMgr.GetConfigByToken(vsToken, osrv::CONFIGURATION_ENUMERATION[osrv::VIDEOSOURCE]);
+			const auto& compatibleConfigs = vsConfigJson.get_child("CompatibleAnalyticsConfigurations");
+			std::vector<std::string> compatibleConfigsTokens;
+			std::ranges::transform(compatibleConfigs, std::back_inserter(compatibleConfigsTokens),
+														 [](auto t) { return t.second.template get_value<std::string>(); });
+
+			const auto& allConfigs =
+					m_profilesMgr.ReaderWriter()->ConfigsTree().get_child(osrv::CONFIGURATION_ENUMERATION[osrv::ANALYTICS]);
+			for (const auto& [key, node] : allConfigs)
+			{
+				if (std::ranges::find_if(compatibleConfigsTokens, [&node](const auto& token) {
+							return node.get<std::string>("token") == token;
+						}) == compatibleConfigsTokens.end())
+					continue;
+
+				pt::ptree xmlAnalyticsConfig;
+				analytics::fillConfiguration(node, xmlAnalyticsConfig, m_profilesMgr);
+				envelope_tree.add_child("s:Body.tr2:GetAnalyticsConfigurationsResponse.tr2:Configurations", xmlAnalyticsConfig);
+			}
+		}
+		else
+		{
+			const auto& allConfigs =
+					m_profilesMgr.ReaderWriter()->ConfigsTree().get_child(osrv::CONFIGURATION_ENUMERATION[osrv::ANALYTICS]);
+			for (const auto& [key, node] : allConfigs)
+			{
+				pt::ptree xmlAnalyticsConfig;
+				analytics::fillConfiguration(node, xmlAnalyticsConfig, m_profilesMgr);
+				envelope_tree.add_child("s:Body.tr2:GetAnalyticsConfigurationsResponse.tr2:Configurations", xmlAnalyticsConfig);
+			}
+		}
 
 		pt::ptree root_tree;
 		root_tree.put_child("s:Envelope", envelope_tree);
@@ -453,7 +504,8 @@ public:
 								 }) != profiles_configs_list.end())
 					{
 						pt::ptree profile_node;
-						media2::util::profile_to_soap(it->second, profiles_mgr_->ReaderWriter()->ConfigsTree(), profile_node);
+						media2::util::profile_to_soap(it->second, profiles_mgr_->ReaderWriter()->ConfigsTree(), profile_node,
+																					*profiles_mgr_);
 
 						std::string profileToken = std::to_string(i) + "_" + it->second.get<std::string>(CONFIG_PROP_TOKEN);
 						profile_node.put("<xmlattr>.token", profileToken);
@@ -474,7 +526,7 @@ public:
 					pt::ptree profile_node;
 					media2::util::profile_to_soap(
 							profiles_mgr_->GetProfileByToken(tree.get<std::string>("token"), configTypesStr),
-							profiles_mgr_->ReaderWriter()->ConfigsTree(), profile_node);
+							profiles_mgr_->ReaderWriter()->ConfigsTree(), profile_node, *profiles_mgr_);
 					response_node.add_child("tr2:Profiles", profile_node);
 				}
 			}
@@ -488,7 +540,8 @@ public:
 			const auto& profile_config = profiles_mgr_->GetProfileByToken(cleanedName);
 
 			pt::ptree profile_node;
-			media2::util::profile_to_soap(profile_config, profiles_mgr_->ReaderWriter()->ConfigsTree(), profile_node);
+			media2::util::profile_to_soap(profile_config, profiles_mgr_->ReaderWriter()->ConfigsTree(), profile_node,
+																		*profiles_mgr_);
 
 			if (server_cfg_.multichannel_enabled_)
 				profile_node.put("<xmlattr>.token", profile_token);
@@ -1093,7 +1146,8 @@ std::string generate_snapshot_url(const ServerConfigs& server_configs)
 }
 
 using ptree = boost::property_tree::ptree;
-void profile_to_soap(const ptree& profile_config, const ptree& configs_file, ptree& result)
+void profile_to_soap(const ptree& profile_config, const ptree& configs_file, ptree& result,
+										 const utility::media::MediaProfilesManager& profilesMgr)
 {
 	result.add("<xmlattr>.token", profile_config.get<std::string>(CONFIG_PROP_TOKEN));
 	result.add("<xmlattr>.fixed", profile_config.get<std::string>("fixed"));
@@ -1102,15 +1156,14 @@ void profile_to_soap(const ptree& profile_config, const ptree& configs_file, ptr
 	static const std::string DEFAULT_EMPTY_STRING;
 
 	// Videosource
-	const std::string vs_token =
-			profile_config.get<std::string>(CONFIGURATION_ENUMERATION[CONFIGURATION_TYPE::VIDEOSOURCE], DEFAULT_EMPTY_STRING);
-	if (!vs_token.empty())
+	if (const std::string vs_token = profile_config.get<std::string>(
+					CONFIGURATION_ENUMERATION[CONFIGURATION_TYPE::VIDEOSOURCE], DEFAULT_EMPTY_STRING);
+			!vs_token.empty())
 	{
 		auto vs_configs_list = configs_file.get_child(CONFIGURATION_ENUMERATION[CONFIGURATION_TYPE::VIDEOSOURCE]);
-		auto vs_config =
-				std::find_if(vs_configs_list.begin(), vs_configs_list.end(), [vs_token](pt::ptree::value_type vs_obj) {
-					return vs_obj.second.get<std::string>(CONFIG_PROP_TOKEN) == vs_token;
-				});
+		auto vs_config = std::ranges::find_if(vs_configs_list, [&vs_token](const pt::ptree::value_type& vs_obj) {
+			return vs_obj.second.get<std::string>(CONFIG_PROP_TOKEN) == vs_token;
+		});
 
 		if (vs_config == vs_configs_list.end())
 			throw std::runtime_error("Can't find VideoSourceConfiguration with token '" + vs_token + "'");
@@ -1121,16 +1174,15 @@ void profile_to_soap(const ptree& profile_config, const ptree& configs_file, ptr
 	}
 
 	// videoencoder
-	const std::string ve_token = profile_config.get<std::string>(
-			CONFIGURATION_ENUMERATION[CONFIGURATION_TYPE::VIDEOENCODER], DEFAULT_EMPTY_STRING);
-	if (!ve_token.empty())
+	if (const std::string ve_token = profile_config.get<std::string>(
+					CONFIGURATION_ENUMERATION[CONFIGURATION_TYPE::VIDEOENCODER], DEFAULT_EMPTY_STRING);
+			!ve_token.empty())
 	{
 		// TODO: use the same configuartion structure with Media1  --->get_child("VideoEncoderConfigurations2")
 		auto vs_configs_list = configs_file.get_child(CONFIGURATION_ENUMERATION[CONFIGURATION_TYPE::VIDEOENCODER]);
-		auto vs_config =
-				std::find_if(vs_configs_list.begin(), vs_configs_list.end(), [&ve_token](const pt::ptree::value_type& vs_obj) {
-					return vs_obj.second.get<std::string>(CONFIG_PROP_TOKEN) == ve_token;
-				});
+		auto vs_config = std::ranges::find_if(vs_configs_list, [&ve_token](const pt::ptree::value_type& vs_obj) {
+			return vs_obj.second.get<std::string>(CONFIG_PROP_TOKEN) == ve_token;
+		});
 
 		if (vs_config == vs_configs_list.end())
 			throw std::runtime_error("Can't find VideoEncoderConfiguration with token '" + ve_token + "'");
@@ -1140,20 +1192,20 @@ void profile_to_soap(const ptree& profile_config, const ptree& configs_file, ptr
 	}
 
 	// Videoanalytics
-	const std::string va_token =
-			profile_config.get<std::string>(CONFIGURATION_ENUMERATION[CONFIGURATION_TYPE::ANALYTICS], DEFAULT_EMPTY_STRING);
-	if (!va_token.empty())
+	if (const std::string va_token = profile_config.get<std::string>(
+					CONFIGURATION_ENUMERATION[CONFIGURATION_TYPE::ANALYTICS], DEFAULT_EMPTY_STRING);
+			!va_token.empty())
 	{
-		// just fill dummy configs
 		pt::ptree analytics_node;
-		osrv::media::util::fill_analytics_configuration(analytics_node);
+		const auto& config = profilesMgr.GetConfigByToken(va_token, osrv::CONFIGURATION_ENUMERATION[osrv::ANALYTICS]);
+		analytics::fillConfiguration(config, analytics_node, profilesMgr);
 		result.put_child("tr2:Configurations.tr2:Analytics", analytics_node);
 	}
 
 	// PTZ
-	const std::string ptz_token =
-			profile_config.get<std::string>(CONFIGURATION_ENUMERATION[CONFIGURATION_TYPE::PTZ], DEFAULT_EMPTY_STRING);
-	if (!ptz_token.empty())
+	if (const std::string ptz_token =
+					profile_config.get<std::string>(CONFIGURATION_ENUMERATION[CONFIGURATION_TYPE::PTZ], DEFAULT_EMPTY_STRING);
+			!ptz_token.empty())
 	{
 		// TODO: make reading from a profile
 		pt::ptree ptz_node;
@@ -1169,9 +1221,9 @@ void profile_to_soap(const ptree& profile_config, const ptree& configs_file, ptr
 	}
 
 	// Audio source
-	auto as_token =
-			profile_config.get<std::string>(CONFIGURATION_ENUMERATION[CONFIGURATION_TYPE::AUDIOSOURCE], DEFAULT_EMPTY_STRING);
-	if (!as_token.empty())
+	if (auto as_token = profile_config.get<std::string>(CONFIGURATION_ENUMERATION[CONFIGURATION_TYPE::AUDIOSOURCE],
+																											DEFAULT_EMPTY_STRING);
+			!as_token.empty())
 	{
 		pt::ptree as_node;
 		auto as_config = utility::AudioSourceConfigsReaderByToken(as_token, configs_file).AudioSource();
@@ -1184,9 +1236,9 @@ void profile_to_soap(const ptree& profile_config, const ptree& configs_file, ptr
 	}
 
 	// Audio encoder
-	auto ae_token = profile_config.get<std::string>(CONFIGURATION_ENUMERATION[CONFIGURATION_TYPE::AUDIOENCODER],
-																									DEFAULT_EMPTY_STRING);
-	if (!ae_token.empty())
+	if (auto ae_token = profile_config.get<std::string>(CONFIGURATION_ENUMERATION[CONFIGURATION_TYPE::AUDIOENCODER],
+																											DEFAULT_EMPTY_STRING);
+			!ae_token.empty())
 	{
 		pt::ptree ae_node;
 		auto ae_config = utility::AudioEncoderReaderByToken(ae_token, configs_file).AudioEncoder();
@@ -1279,14 +1331,15 @@ Media2Service::Media2Service(const std::string& service_uri, const std::string& 
 				}
 			};
 
-	requestHandlers_.push_back(
-			std::make_shared<media2::AddConfigurationHandler>(xml_namespaces_, configs_ptree_, srv->MediaProfilesManager()));
+	requestHandlers_.push_back(std::make_shared<media2::AddConfigurationHandler>(
+			xml_namespaces_, configs_ptree_,
+			srv->MediaProfilesManager())); // TODO: make passing via reference instead of shared_pointer
 	requestHandlers_.push_back(
 			std::make_shared<media2::CreateProfileHandler>(xml_namespaces_, configs_ptree_, srv->MediaProfilesManager()));
 	requestHandlers_.push_back(
 			std::make_shared<media2::DeleteProfileHandler>(xml_namespaces_, configs_ptree_, srv->MediaProfilesManager()));
-	requestHandlers_.push_back(
-			std::make_shared<media2::GetAnalyticsConfigurationsHandler>(xml_namespaces_, configs_ptree_));
+	requestHandlers_.push_back(std::make_shared<media2::GetAnalyticsConfigurationsHandler>(
+			xml_namespaces_, configs_ptree_, *srv->MediaProfilesManager()));
 	requestHandlers_.push_back(std::make_shared<media2::GetAudioEncoderConfigurationOptionsHandler>(
 			xml_namespaces_, configs_ptree_, srv->ProfilesConfig()));
 	requestHandlers_.push_back(std::make_shared<media2::GetAudioEncoderConfigurationsHandler>(

@@ -67,7 +67,7 @@ flowchart TD
     Main[main.cpp: configuration and logger] --> Server[osrv::Server]
     Server --> HTTP[Simple-Web-Server / HTTP]
     Server --> Context[IOnvifServer / service factory]
-    Context --> SOAP[Device, DeviceIO, Imaging, Media, Media2, PTZ, Search, Replay]
+    Context --> SOAP[Analytics, Device, DeviceIO, Imaging, Media, Media2, PTZ, Search, Replay]
     SOAP --> HTTP
     Context --> Profiles[MediaProfilesManager]
     Profiles --> JSON[media_profiles.config]
@@ -88,7 +88,7 @@ flowchart TD
    creates a digest session, and reads a separate media profile tree.
 4. Discovery is initialized and started before event generators: a bind or
    multicast interface join failure must abort startup at this stage.
-5. `Run()` is called on eight SOAP services. The Event service is then initialized
+5. `Run()` is called on nine SOAP services. The Event service is then initialized
    separately, the RTSP server is created, and the Asio context for response delays
    is started.
 6. `Server::run()` starts HTTP in a separate thread, starts RTSP, and waits for
@@ -140,7 +140,7 @@ shared hot-reload mechanism.
   logging, delay and channel simulation, and the RTSP input file.
 - `device.config`: device description, service list and XAddrs, and emulated digital
   inputs. `Enabled` in `GetServices` controls service advertisement;
-  `Server::init()` still calls `Run()` on all eight services.
+  `Server::init()` still calls `Run()` on all nine services.
 - `media_profiles.config`: profiles and associated source/encoder configurations.
   `ProfilesConfig()` and `MediaProfilesManager` hold separate views of this data;
   changing one tree does not automatically update the other.
@@ -198,10 +198,51 @@ guarantee a change to the actual stream.
 for Recording Search. Replay Control returns an RTSP URI. This emulates an archive;
 it does not record live video to disk.
 
+## Analytics Rules
+
+The Analytics service implements the Rules interface for
+`tt:MotionRegionDetector`, `tt:LineDetector`, `tt:LineCounting`, `tt:FieldDetector`, `tt:LicensePlateRecognition` and `tt:FaceRecognition`. A shared `utility::AnalyticsRules`
+validates and stores rule snapshots, alarm state and object history under a mutex.
+`utility::line` handles Line Detector parameters and geometry. SOAP mutations persist rules
+through the media manager; synthetic event generators read the shared snapshot
+without accessing the manager from the event thread. Media and Media2 serialize
+rules from the manager's current tree. Scene analytics modules and RTSP metadata
+are not advertised. Line crossing notifications are non-property events and have no
+synchronization state. `utility::counting::State` tracks counts, per-object passages,
+report deadlines and daily resets; only its rule configuration is persisted.
+Counting reuses the Line Detector synthetic object samples. A separate one-second
+event timer flushes aggregated counts and evaluates reset schedules even without
+object motion. Counting is a property and participates in synchronization through
+its own generator. The injected clock in `AnalyticsRules` makes deadlines testable
+without sleeping. Field Detector uses the same object samples and tracks zone occupancy
+across objects, with its own synchronization and lifecycle event generator.
+`utility::field` validates normalized polygons and evaluates point membership.
+`utility::lpr` validates License Plate Recognition parameters; a dedicated synthetic
+sampler emits non-property recognition events with a structured LicensePlateInfo
+ElementItem, vehicle information, speed/direction, a bounding box and optional
+base64 images and image URLs. The sampler cycles five vehicle datasets with independent per-plate trajectories.
+The shared context loads their ten plate-only and vehicle test PNGs once
+and registers separate static image GET routes using their corresponding bytes. Rule-local plate
+history enforces the repeat interval and snap line. A separate Face Recognition
+sampler cycles three synthetic identities and test portraits, sharing rule persistence
+and emitting non-property recognition notifications with reference/image URLs,
+base64 images, normalized rectangles and face/person IDs.
+See [Analytics Rules](ANALYTICS.md) for the normative
+references, configuration, simulation deviations, and validation commands.
+
 ## Events and Lifecycle
 
-`NotificationsManager` connects generators to subscribers. Each `PullPoint` holds
-a notification queue and a wait timer. Digital input, motion, cell motion, and
+`NotificationsManager` connects generators to subscribers. `Server::init()` supplies
+registrations for additional `IEventGenerator` implementations, pairing a factory
+with its topic and Source/Data field descriptions for `GetEventProperties`.
+Event service invokes these factories with its
+configuration, the manager's Asio context and logger before starting the event
+loop, and the manager owns the resulting generators. Factories capture shared
+dependencies by value; each generator retains the dependencies needed by its
+callbacks. Concrete analytics detectors are assembled in `Server`, so another
+rule event generator can be registered without changing the Event service API.
+
+Each `PullPoint` holds a notification queue and a wait timer. Digital input, motion, cell motion, and
 audio generators deliver notifications through Boost.Signals2. Subscription paths
 have the form `/onvif/event_service/sN`; supported operations include PullMessages,
 Renew, SetSynchronizationPoint, and Unsubscribe.

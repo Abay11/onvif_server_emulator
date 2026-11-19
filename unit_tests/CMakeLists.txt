@@ -10,6 +10,7 @@ find_package(Boost REQUIRED
 )
 
 add_executable(test_executable
+	analytics_configuration_reader_test.cpp
 	audio_source_tests.cpp
 	auth_tests.cpp	
 	date_time_tests.cpp
@@ -17,6 +18,12 @@ add_executable(test_executable
 	discovery_tests.cpp
 	event_service_tests.cpp	
 	http_da_tests.cpp
+	face_recognition_tests.cpp
+	license_plate_tests.cpp
+	field_detector_tests.cpp
+	line_detector_tests.cpp
+	line_counting_tests.cpp
+	motion_region_tests.cpp
 	media2_tests.cpp
 	mediaprofiles_manager_tests.cpp
 	pull_point_tests.cpp

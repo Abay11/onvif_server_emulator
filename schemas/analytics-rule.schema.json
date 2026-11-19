@@ -1,0 +1,350 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Persisted analytics rule",
+  "oneOf": [
+    {
+      "type": "object",
+      "properties": {
+        "Name": {
+          "$ref": "types.schema.json#/$defs/token"
+        },
+        "Type": {
+          "const": "tt:MotionRegionDetector"
+        },
+        "MotionRegion": {
+          "type": "object",
+          "properties": {
+            "Armed": {
+              "$ref": "types.schema.json#/$defs/boolean"
+            },
+            "Sensitivity": {
+              "$ref": "types.schema.json#/$defs/number"
+            },
+            "Polygon": {
+              "type": "array",
+              "minItems": 3,
+              "maxItems": 8,
+              "items": {
+                "type": "object",
+                "properties": {
+                  "x": {
+                    "$ref": "types.schema.json#/$defs/number"
+                  },
+                  "y": {
+                    "$ref": "types.schema.json#/$defs/number"
+                  }
+                },
+                "required": [
+                  "x",
+                  "y"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "Armed",
+            "Sensitivity",
+            "Polygon"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "Name",
+        "Type",
+        "MotionRegion"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "Name": {
+          "$ref": "types.schema.json#/$defs/token"
+        },
+        "Type": {
+          "const": "tt:LineDetector"
+        },
+        "Direction": {
+          "enum": [
+            "Left",
+            "Right",
+            "Any"
+          ]
+        },
+        "Segments": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 8,
+          "items": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "$ref": "types.schema.json#/$defs/number"
+              },
+              "y": {
+                "$ref": "types.schema.json#/$defs/number"
+              }
+            },
+            "required": [
+              "x",
+              "y"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "Name",
+        "Type",
+        "Direction",
+        "Segments"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "Name": {
+          "$ref": "types.schema.json#/$defs/token"
+        },
+        "Type": {
+          "const": "tt:LineCounting"
+        },
+        "Direction": {
+          "enum": [
+            "Left",
+            "Right",
+            "Any"
+          ]
+        },
+        "Segments": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 4,
+          "items": {
+            "type": "array",
+            "minItems": 2,
+            "maxItems": 8,
+            "items": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "$ref": "types.schema.json#/$defs/number"
+                },
+                "y": {
+                  "$ref": "types.schema.json#/$defs/number"
+                }
+              },
+              "required": [
+                "x",
+                "y"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "PassAllPolylines": {
+          "$ref": "types.schema.json#/$defs/boolean"
+        },
+        "ReportTimeInterval": {
+          "$ref": "types.schema.json#/$defs/duration"
+        },
+        "ResetTime": {
+          "oneOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            {
+              "const": ""
+            }
+          ]
+        }
+      },
+      "required": [
+        "Name",
+        "Type",
+        "Direction",
+        "Segments",
+        "PassAllPolylines",
+        "ReportTimeInterval",
+        "ResetTime"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "Name": {
+          "$ref": "types.schema.json#/$defs/token"
+        },
+        "Type": {
+          "const": "tt:FieldDetector"
+        },
+        "Field": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 8,
+          "items": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "$ref": "types.schema.json#/$defs/number"
+              },
+              "y": {
+                "$ref": "types.schema.json#/$defs/number"
+              }
+            },
+            "required": [
+              "x",
+              "y"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "Name",
+        "Type",
+        "Field"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "Name": {
+          "$ref": "types.schema.json#/$defs/token"
+        },
+        "Type": {
+          "const": "tt:LicensePlateRecognition"
+        },
+        "IncludeImage": {
+          "enum": ["", "Embedded", "LocalStorage"]
+        },
+        "PlateLocation": {
+          "enum": [
+            "",
+            "Front",
+            "Rear"
+          ]
+        },
+        "Country": {
+          "type": "string"
+        },
+        "Sensitivity": {
+          "$ref": "types.schema.json#/$defs/number"
+        },
+        "Threshold": {
+          "$ref": "types.schema.json#/$defs/number"
+        },
+        "PlateMinWidth": {
+          "$ref": "types.schema.json#/$defs/number"
+        },
+        "PlateMaxWidth": {
+          "$ref": "types.schema.json#/$defs/number"
+        },
+        "EventInterval": {
+          "oneOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 2147483647
+            },
+            {
+              "type": "string",
+              "pattern": "^[+]?[0-9]+$"
+            }
+          ]
+        },
+        "Region": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 8,
+          "items": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "$ref": "types.schema.json#/$defs/number"
+              },
+              "y": {
+                "$ref": "types.schema.json#/$defs/number"
+              }
+            },
+            "required": [
+              "x",
+              "y"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "SnapLine": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 8,
+          "items": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "$ref": "types.schema.json#/$defs/number"
+              },
+              "y": {
+                "$ref": "types.schema.json#/$defs/number"
+              }
+            },
+            "required": [
+              "x",
+              "y"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "Name",
+        "Type",
+        "IncludeImage",
+        "PlateLocation",
+        "Country",
+        "Sensitivity",
+        "Threshold",
+        "PlateMinWidth",
+        "PlateMaxWidth",
+        "EventInterval"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "Name": {
+          "$ref": "types.schema.json#/$defs/token"
+        },
+        "Type": {
+          "const": "tt:FaceRecognition"
+        },
+        "IncludeImage": {
+          "enum": [
+            "",
+            "Embedded",
+            "LocalStorage"
+          ]
+        },
+        "Threshold": {
+          "$ref": "types.schema.json#/$defs/number"
+        }
+      },
+      "required": [
+        "Name",
+        "Type",
+        "IncludeImage",
+        "Threshold"
+      ],
+      "additionalProperties": false
+    }
+  ]
+}

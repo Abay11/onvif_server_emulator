@@ -1,6 +1,8 @@
 #include "../include/IOnvifServer.h"
 
 #include "../utility/AuthHelper.h"
+#include "../utility/AnalyticsRules.h"
+#include "../utility/AnalyticsReader.h"
 #include "../utility/MediaProfilesManager.h"
 
 #include "../Server.h"
@@ -11,6 +13,7 @@
 
 #include "onvif_services/service_configs.h"
 
+#include "../onvif_services/analytics_service.h"
 #include "../onvif_services/device_service.h"
 #include "../onvif_services/deviceio_service.h"
 #include "../onvif_services/imaging_service.h"
@@ -29,6 +32,11 @@ namespace osrv
 std::shared_ptr<IOnvifService> OnvifServiceFactory::Create(const std::string& service_uri,
 																													 std::shared_ptr<IOnvifServer> srv)
 {
+	if (SERVICE_URI::ANALYTICS == service_uri)
+	{
+		return std::make_shared<AnalyticsService>(service_uri, "analytics", srv);
+	}
+
 	if (SERVICE_URI::DEVICE == service_uri)
 	{
 		return std::make_shared<DeviceService>(service_uri, "device", srv);
@@ -79,9 +87,73 @@ IOnvifServer::IOnvifServer(const std::string& configs_path, std::shared_ptr<ILog
 {
 }
 
+std::shared_ptr<utility::AnalyticsRules> IOnvifServer::Rules()
+{
+	if (!analytics_rules_)
+	{
+		auto manager = media_profiles_manager_;
+		auto images = utility::lpr::LoadImages(configs_path_, server_configs_->HttpAddress());
+		auto faces = utility::face::LoadImages(configs_path_, server_configs_->HttpAddress());
+		auto serve = [&](const std::string& path, const std::string& content) {
+			auto bytes = std::make_shared<const std::string>(content);
+			http_server_->resource[path]["GET"] = [bytes](std::shared_ptr<HttpServer::Response> response,
+																										std::shared_ptr<HttpServer::Request>) {
+				SimpleWeb::CaseInsensitiveMultimap headers;
+				headers.emplace("Content-Type", "image/png");
+				response->write(SimpleWeb::StatusCode::success_ok, *bytes, headers);
+			};
+		};
+		for (size_t index = 0; index < images.size(); ++index)
+		{
+			auto route = [&](bool plate) {
+				auto path = utility::lpr::ImagePath(index, plate);
+				path.insert(path.size() - 4, "\\"); // Match the filename dot literally.
+				return "^" + path + "$";
+			};
+			serve(route(true), images[index].plate.bytes);
+			serve(route(false), images[index].vehicle.bytes);
+		}
+		for (size_t index = 0; index < faces.size(); ++index)
+		{
+			auto path = utility::face::ImagePath(index);
+			path.insert(path.size() - 4, "\\");
+			serve("^" + path + "$", faces[index].image.bytes);
+		}
+		analytics_rules_ = std::make_shared<utility::AnalyticsRules>(
+				manager->ReaderWriter()->ConfigsTree(),
+				[manager](const std::string& token, const pt::ptree& rules) {
+					auto& cfg =
+							utility::AnalyticsConfigurationReaderByToken(token, manager->ReaderWriter()->ConfigsTree()).Config();
+					auto backup = cfg;
+					cfg.put_child("rules", rules);
+					try
+					{
+						manager->ReaderWriter()->Save();
+					}
+					catch (...)
+					{
+						cfg.swap(backup);
+						throw;
+					}
+				},
+				std::chrono::system_clock::now, std::move(images), std::move(faces));
+	}
+	return analytics_rules_;
+}
+
 const std::string& IOnvifServer::ConfigsPath() const
 {
 	return configs_path_;
+}
+
+std::shared_ptr<IOnvifService> IOnvifServer::AnalyticsService()
+{
+	if (!analytics_service_)
+	{
+		analytics_service_ = OnvifServiceFactory().Create(SERVICE_URI::ANALYTICS, shared_from_this());
+	}
+
+	return analytics_service_;
 }
 
 std::shared_ptr<IOnvifService> IOnvifServer::DeviceService()

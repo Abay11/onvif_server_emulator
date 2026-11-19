@@ -189,6 +189,13 @@ struct GetServicesHandler : public OnvifRequestBase
 
 	void operator()(std::shared_ptr<HttpServer::Response> response, std::shared_ptr<HttpServer::Request> request) override
 	{
+		pt::ptree xml_tree;
+		auto request_str = request->content.string();
+		std::istringstream is(request_str);
+		pt::xml_parser::read_xml(is, xml_tree);
+
+		auto isNeedIncludeCaps = exns::find_hierarchy("Envelope.Body.GetServices.IncludeCapability", xml_tree) == "true";
+
 		auto envelope_tree = utility::soap::getEnvelopeTree(ns_);
 
 		auto ipv4_bind = ipv4_address_;
@@ -197,20 +204,32 @@ struct GetServicesHandler : public OnvifRequestBase
 		pt::ptree services_node;
 
 		// here's Services are enumerates as array, so handle them manualy
-		for (auto elements : services_config)
+		for (const auto& [key, node] : services_config)
 		{
-			if (!elements.second.get<bool>("Enabled", true))
+			if (!node.get<bool>("Enabled", true))
 				continue;
 
 			pt::ptree xml_service_node;
-			xml_service_node.put("tds:Namespace", elements.second.get<std::string>("namespace"));
-			xml_service_node.put("tds:XAddr", ipv4_bind + elements.second.get<std::string>("XAddr"));
-			if (elements.second.get<std::string>("namespace") == "http://www.onvif.org/ver20/ptz/wsdl")
+			const auto& ns = node.get<std::string>("namespace");
+			xml_service_node.put("tds:Namespace", ns);
+			xml_service_node.put("tds:XAddr", ipv4_address_ + node.get<std::string>("XAddr"));
+
+			static const std::unordered_map<std::string, std::string> maps = {
+					{"http://www.onvif.org/ver20/analytics/wsdl", "tan"},
+					{"http://www.onvif.org/ver20/ptz/wsdl", "tptz"}
+			};
+
+			pt::ptree def;
+			if (const auto& caps = node.get_child("Capabilities", def); isNeedIncludeCaps && !caps.empty())
 			{
-				xml_service_node.put("tds:Capabilities.tptz:Capabilities", "");
+				const auto& ns_tag = maps.at(ns);
+				for (const auto& [caps_key, caps_value] : caps)
+					xml_service_node.add(std::format("tds:Capabilities.{}:Capabilities.<xmlattr>.{}", ns_tag, caps_key),
+															 caps_value.get_value<std::string>());
 			}
-			xml_service_node.put("tds:Version.tt:Major", elements.second.get<std::string>("Version.Major"));
-			xml_service_node.put("tds:Version.tt:Minor", elements.second.get<std::string>("Version.Minor"));
+
+			xml_service_node.put("tds:Version.tt:Major", node.get<std::string>("Version.Major"));
+			xml_service_node.put("tds:Version.tt:Minor", node.get<std::string>("Version.Minor"));
 
 			services_node.add_child("tds:Service", xml_service_node);
 		}

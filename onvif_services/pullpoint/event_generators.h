@@ -10,6 +10,8 @@
 #include <boost/asio/io_context.hpp>
 #include <boost/asio/steady_timer.hpp>
 
+namespace utility { class AnalyticsRules; }
+
 namespace osrv
 {
 	namespace event
@@ -86,6 +88,83 @@ namespace osrv
 			boost::asio::steady_timer alarm_timer_;
 
 			const ILogger& logger_;
+		};
+
+		class FaceRecognitionEventGenerator : public IEventGenerator
+		{
+		public:
+			FaceRecognitionEventGenerator(std::shared_ptr<utility::AnalyticsRules> detector,
+				boost::asio::io_context& io, const ILogger& logger);
+			std::deque<NotificationMessage> GenerateSynchronizationEvent() const override;
+		protected:
+			void generate_event() override;
+		private:
+			std::shared_ptr<utility::AnalyticsRules> detector_;
+			size_t step_ = 0;
+		};
+
+		class LicensePlateEventGenerator : public IEventGenerator
+		{
+		public:
+			LicensePlateEventGenerator(std::shared_ptr<utility::AnalyticsRules> detector,
+				boost::asio::io_context& io, const ILogger& logger);
+			std::deque<NotificationMessage> GenerateSynchronizationEvent() const override;
+		protected:
+			void generate_event() override;
+		private:
+			std::shared_ptr<utility::AnalyticsRules> detector_;
+			size_t step_ = 0;
+		};
+
+		class MotionRegionEventGenerator : public IEventGenerator
+		{
+		public:
+			MotionRegionEventGenerator(std::shared_ptr<utility::AnalyticsRules> detector, int interval,
+				boost::asio::io_context& io, const ILogger& logger);
+			std::deque<NotificationMessage> GenerateSynchronizationEvent() const override;
+		protected:
+			void generate_event() override;
+		private:
+			std::shared_ptr<utility::AnalyticsRules> detector_;
+			unsigned step_ = 0;
+		};
+
+		class LineDetectorEventGenerator : public IEventGenerator
+		{
+		public:
+			LineDetectorEventGenerator(std::shared_ptr<utility::AnalyticsRules> detector, int interval,
+				boost::asio::io_context& io, const ILogger& logger);
+			std::deque<NotificationMessage> GenerateSynchronizationEvent() const override;
+		protected:
+			void generate_event() override;
+		private:
+			std::shared_ptr<utility::AnalyticsRules> detector_;
+			unsigned step_ = 0;
+		};
+
+		class LineCountingEventGenerator : public IEventGenerator
+		{
+		public:
+			LineCountingEventGenerator(std::shared_ptr<utility::AnalyticsRules> detector,
+				boost::asio::io_context& io, const ILogger& logger);
+			std::deque<NotificationMessage> GenerateSynchronizationEvent() const override;
+
+		protected:
+			void generate_event() override;
+
+		private:
+			std::shared_ptr<utility::AnalyticsRules> detector_;
+		};
+		class FieldDetectorEventGenerator : public IEventGenerator
+		{
+		public:
+			FieldDetectorEventGenerator(std::shared_ptr<utility::AnalyticsRules> detector, boost::asio::io_context& io,
+																	const ILogger& logger);
+			std::deque<NotificationMessage> GenerateSynchronizationEvent() const override;
+		protected:
+			void generate_event() override;
+		private:
+			std::shared_ptr<utility::AnalyticsRules> detector_;
 		};
 
 		class DInputEventGenerator : public IEventGenerator

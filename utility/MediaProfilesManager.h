@@ -103,6 +103,51 @@ public:
 	}
 };
 
+class invalid_module : public std::exception
+{
+public:
+	const char* what() const noexcept override
+	{
+		return "The suggested module configuration is not valid on the device.";
+	}
+};
+
+class name_already_existent : public std::exception
+{
+public:
+	const char* what() const noexcept override
+	{
+		return "The same analytics module name exists already in the configuration.";
+	}
+};
+
+class too_many_modules : public std::exception
+{
+public:
+	const char* what() const noexcept override
+	{
+		return "There are not enough resources in the device to add the analytics modules to the configuration.";
+	}
+};
+
+class configuration_conflict : public std::exception
+{
+public:
+	const char* what() const noexcept override
+	{
+		return "The device cannot create the analytics modules without creating a conflicting configuration.";
+	}
+};
+
+class rule_not_existent : public std::exception
+{
+public:
+	const char* what() const noexcept override
+	{
+		return "The rule option type does not exist.";
+	}
+};
+
 } // namespace osrv
 
 namespace utility::media

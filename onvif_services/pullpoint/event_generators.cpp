@@ -1,4 +1,7 @@
 #include "event_generators.h"
+#include "../../utility/AnalyticsRules.h"
+#include "../../utility/FieldDetector.h"
+#include "../../utility/LineDetector.h"
 #include "pull_point.h"
 
 #include "../utility/DateTime.hpp"
@@ -9,10 +12,126 @@ namespace osrv
 	namespace event
 	{
 
-		DInputEventGenerator::DInputEventGenerator(int interval, const std::string& topic, boost::asio::io_context& io_context, const ILogger& logger_)
+	FaceRecognitionEventGenerator::FaceRecognitionEventGenerator(std::shared_ptr<utility::AnalyticsRules> detector,
+			boost::asio::io_context& io, const ILogger& logger)
+			: IEventGenerator(1, utility::face::Topic, io, logger), detector_(std::move(detector))
+	{
+	}
+
+	std::deque<NotificationMessage> FaceRecognitionEventGenerator::GenerateSynchronizationEvent() const
+	{
+		return {};
+	}
+
+	void FaceRecognitionEventGenerator::generate_event()
+	{
+		utility::face::Sample sample{step_++ % 3};
+		for (const auto& source : detector_->VideoSources())
+			for (const auto& event : detector_->SampleFace(source, sample))
+				event_signal_(event);
+	}
+
+	LicensePlateEventGenerator::LicensePlateEventGenerator(std::shared_ptr<utility::AnalyticsRules> detector,
+			boost::asio::io_context& io, const ILogger& logger)
+			: IEventGenerator(1, utility::lpr::Topic, io, logger), detector_(std::move(detector))
+	{
+	}
+
+	std::deque<NotificationMessage> LicensePlateEventGenerator::GenerateSynchronizationEvent() const
+	{
+		return {};
+	}
+
+	void LicensePlateEventGenerator::generate_event()
+	{
+		auto sample = utility::lpr::SyntheticSample(step_++);
+		for (const auto& source : detector_->VideoSources())
+			for (const auto& event : detector_->SamplePlate(source, sample))
+				event_signal_(event);
+	}
+
+	MotionRegionEventGenerator::MotionRegionEventGenerator(std::shared_ptr<utility::AnalyticsRules> detector,
+																												 int interval, boost::asio::io_context& io,
+																												 const ILogger& logger)
+			: IEventGenerator(interval, utility::AnalyticsRules::Topic, io, logger), detector_(std::move(detector))
+	{
+	}
+
+	std::deque<NotificationMessage> MotionRegionEventGenerator::GenerateSynchronizationEvent() const
+	{
+		return detector_->Synchronize();
+	}
+
+	void MotionRegionEventGenerator::generate_event()
+	{
+		// A reproducible synthetic point traverses the default source in pixel coordinates.
+		++step_;
+		auto events = detector_->Sample((step_ % 8) * 160.0 + 80.0, 360.0, step_ % 2 ? 0.75 : 0.0);
+		for (auto& event : events)
+			event_signal_(event);
+	}
+
+	LineDetectorEventGenerator::LineDetectorEventGenerator(std::shared_ptr<utility::AnalyticsRules> detector,
+			int interval, boost::asio::io_context& io, const ILogger& logger)
+			: IEventGenerator(interval, utility::line::Topic, io, logger), detector_(std::move(detector))
+	{
+		if (interval <= 0)
+			throw std::invalid_argument("LineDetector.EventGenerationTimeout must be positive");
+	}
+
+	std::deque<NotificationMessage> LineDetectorEventGenerator::GenerateSynchronizationEvent() const
+	{
+		return {};
+	}
+
+	void LineDetectorEventGenerator::generate_event()
+	{
+		// A persistent synthetic object moves back and forth; reversal never teleports it.
+		constexpr double positions[] = {-0.75, -0.25, 0.25, 0.75, 0.75, 0.25, -0.25, -0.75};
+		auto x = positions[step_++ % 8];
+		for (const auto& source : detector_->VideoSources())
+			for (const auto& event : detector_->SampleObject(source, "1", x, 0.0))
+				event_signal_(event);
+	}
+
+	LineCountingEventGenerator::LineCountingEventGenerator(std::shared_ptr<utility::AnalyticsRules> detector,
+			boost::asio::io_context& io, const ILogger& logger)
+			: IEventGenerator(1, utility::counting::Topic, io, logger), detector_(std::move(detector))
+	{
+	}
+
+	std::deque<NotificationMessage> LineCountingEventGenerator::GenerateSynchronizationEvent() const
+	{
+		return detector_->SynchronizeCounts();
+	}
+
+	void LineCountingEventGenerator::generate_event()
+	{
+		for (const auto& event : detector_->TickCounting())
+			event_signal_(event);
+	}
+	FieldDetectorEventGenerator::FieldDetectorEventGenerator(std::shared_ptr<utility::AnalyticsRules> detector,
+																													 boost::asio::io_context& io, const ILogger& logger)
+			: IEventGenerator(1, utility::field::Topic, io, logger), detector_(std::move(detector))
+	{
+	}
+
+	std::deque<NotificationMessage> FieldDetectorEventGenerator::GenerateSynchronizationEvent() const
+	{
+		return detector_->SynchronizeFields();
+	}
+
+	void FieldDetectorEventGenerator::generate_event()
+	{
+		for (const auto& event : detector_->TickFields())
+			event_signal_(event);
+	}
+
+	DInputEventGenerator::DInputEventGenerator(int interval, const std::string& topic,
+																						 boost::asio::io_context& io_context, const ILogger& logger_)
 			: IEventGenerator(interval, topic, io_context, logger_)
-		{
-		}
+	{
+	}
 
 		void DInputEventGenerator::SetDigitalInputsList(const DigitalInputsList& di_list)
 		{

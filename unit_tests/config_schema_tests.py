@@ -83,6 +83,51 @@ class ConfigSchemaTests(unittest.TestCase):
         config["VideoSource"][0]["Bounds"]["width"] = 1280
         self.check("media_profiles.config", config, True)
 
+    def test_field_detector_persistence(self):
+        config = deepcopy(self.configs["media_profiles.config"])
+        rule = {"Name": "zone", "Type": "tt:FieldDetector", "Field": [
+            {"x": "-0.5", "y": "-0.5"}, {"x": "0.5", "y": "-0.5"}, {"x": "0", "y": "0.5"}]}
+        config["Analytics"][0]["rules"] = [rule]
+        self.check("media_profiles.config", config, True)
+        rule["Field"].pop()
+        self.check("media_profiles.config", config, False)
+        rule["Field"].append({"x": 0, "y": 0.5})
+        rule["Segments"] = []
+        self.check("media_profiles.config", config, False)
+
+    def test_license_plate_persistence(self):
+        config = deepcopy(self.configs["media_profiles.config"])
+        rule = {"Name": "plates", "Type": "tt:LicensePlateRecognition", "IncludeImage": "",
+                "PlateLocation": "Front", "Country": "US", "Sensitivity": "0.5", "Threshold": 0.8,
+                "PlateMinWidth": 0, "PlateMaxWidth": 100, "EventInterval": "10"}
+        config["Analytics"][0]["rules"] = [rule]
+        self.check("media_profiles.config", config, True)
+        rule["SnapLine"] = [{"x": 0, "y": -1}, {"x": 0, "y": 1}]
+        self.check("media_profiles.config", config, True)
+        rule["SnapLine"].pop()
+        self.check("media_profiles.config", config, False)
+        del rule["SnapLine"]
+        rule["IncludeImage"] = "Embedded"
+        self.check("media_profiles.config", config, True)
+        rule["IncludeImage"] = "RemoteStorage"
+        self.check("media_profiles.config", config, False)
+
+    def test_face_recognition_persistence(self):
+        config = deepcopy(self.configs["media_profiles.config"])
+        rule = {"Name": "faces", "Type": "tt:FaceRecognition", "IncludeImage": "Embedded", "Threshold": "0.5"}
+        config["Analytics"][0]["rules"] = [rule]
+        for mode in ("Embedded", "LocalStorage", ""):
+            rule["IncludeImage"] = mode
+            self.check("media_profiles.config", config, True)
+        rule["IncludeImage"] = "RemoteStorage"
+        self.check("media_profiles.config", config, False)
+        rule["IncludeImage"] = "Embedded"
+        rule["Threshold"] = "not-a-number"
+        self.check("media_profiles.config", config, False)
+        rule["Threshold"] = 0.5
+        rule["Unknown"] = "value"
+        self.check("media_profiles.config", config, False)
+
     def test_empty_recording_dates_and_required_keys(self):
         config = deepcopy(self.configs["recording_search.config"])
         config["Recordings"][0].update(DateFrom="", DateUntil="")

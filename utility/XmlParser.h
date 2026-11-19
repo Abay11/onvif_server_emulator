@@ -16,6 +16,8 @@ namespace exns
 
 namespace pt = boost::property_tree;
 
+std::string get_element_without_ns(std::string_view el);
+
 // For convinience, all extended methods start with "___"
 class Parser : public pt::ptree
 {

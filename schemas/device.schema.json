@@ -188,6 +188,29 @@
             "DeviceIO"
           ],
           "additionalProperties": false
+        },
+        "Analytics": {
+          "type": "object",
+          "properties": {
+            "XAddr": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^[^/:?#\\s][^\\s]*$",
+              "description": "Path relative to the advertised HTTP base URL, without a leading slash."
+            },
+            "RuleSupport": {
+              "$ref": "types.schema.json#/$defs/boolean"
+            },
+            "AnalyticsModuleSupport": {
+              "$ref": "types.schema.json#/$defs/boolean"
+            }
+          },
+          "required": [
+            "XAddr",
+            "RuleSupport",
+            "AnalyticsModuleSupport"
+          ],
+          "additionalProperties": false
         }
       },
       "required": [
@@ -288,6 +311,46 @@
           },
           "Enabled": {
             "$ref": "types.schema.json#/$defs/boolean"
+          },
+          "Capabilities": {
+            "type": "object",
+            "properties": {
+              "RuleSupport": {
+                "$ref": "types.schema.json#/$defs/boolean"
+              },
+              "AnalyticsModuleSupport": {
+                "$ref": "types.schema.json#/$defs/boolean"
+              },
+              "CellBasedSceneDescriptionSupported": {
+                "$ref": "types.schema.json#/$defs/boolean"
+              },
+              "ImageSendingType": {"type": "string"},
+              "RuleOptionsSupported": {
+                "$ref": "types.schema.json#/$defs/boolean"
+              },
+              "AnalyticsModuleOptionsSupported": {
+                "$ref": "types.schema.json#/$defs/boolean"
+              },
+              "SupportedMetadata": {
+                "$ref": "types.schema.json#/$defs/boolean"
+              },
+              "EFlip": {
+                "$ref": "types.schema.json#/$defs/boolean"
+              },
+              "Reverse": {
+                "$ref": "types.schema.json#/$defs/boolean"
+              },
+              "GetCompatibleConfigurations": {
+                "$ref": "types.schema.json#/$defs/boolean"
+              },
+              "MoveStatus": {
+                "$ref": "types.schema.json#/$defs/boolean"
+              },
+              "StatusPosition": {
+                "$ref": "types.schema.json#/$defs/boolean"
+              }
+            },
+            "additionalProperties": false
           }
         },
         "required": [

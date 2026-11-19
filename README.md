@@ -303,3 +303,18 @@ Both date keys must be present, even when their values are empty. Nonempty value
 use the basic ISO date-time format, for example, `20210523T000000`, and represent
 UTC times. These settings describe a simulated archive; the emulator does not
 record live video to disk.
+
+## Analytics Rules
+
+The Analytics Rules interface supports Motion Region Detector (polygon regions,
+arming and sensitivity), Line Detector (polylines and crossing direction),
+LineCounting (crossing counts, multiple polylines, report intervals and daily resets),
+Field Detector (object presence inside a normalized polygon), License Plate
+Recognition (Annex G.3, synthetic plates, region/snap line, repeat intervals,
+embedded/downloadable test images and five cycling vehicle datasets, including a motorcycle), and Face Recognition
+(Annex G.2, three synthetic identities, reference images, bounding boxes,
+object IDs and embedded/downloadable test portraits).
+They generate PullPoint events using deterministic synthetic input.
+See [Analytics Rules](docs/ANALYTICS.md) for SOAP operations,
+configuration, examples and limitations. This feature does not claim Profile M
+certification or analyze live video.

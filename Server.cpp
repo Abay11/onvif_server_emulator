@@ -2,6 +2,7 @@
 #include "../onvif_services/device_service.h"
 #include "../onvif_services/discovery_service.h"
 #include "../onvif_services/event_service.h"
+#include "../onvif_services/pullpoint/pull_point.h"
 #include "../onvif_services/imaging_service.h"
 #include "../onvif_services/media2_service.h"
 #include "../onvif_services/media_service.h"
@@ -10,7 +11,10 @@
 #include "../onvif_services/recording_search_service.h"
 #include "include/onvif_services/service_configs.h"
 
+#include "utility/AnalyticsRules.h"
 #include "utility/AuthHelper.h"
+#include "utility/FieldDetector.h"
+#include "utility/LineDetector.h"
 #include "utility/MediaProfilesManager.h"
 #include "utility/XmlParser.h"
 
@@ -100,6 +104,7 @@ void Server::init()
 	discovery::init_service(configs_dir, *logger_, *server_configs_);
 	discovery::start();
 
+	AnalyticsService()->Run();
 	DeviceService()->Run();
 	DeviceIOService()->Run();
 	ImagingService()->Run();
@@ -109,7 +114,63 @@ void Server::init()
 	RecordingSearchService()->Run();
 	ReplayControlService()->Run();
 
-	event::init_service(*http_server_, *server_configs_, configs_dir, *logger_);
+	const std::vector<event::EventGeneratorRegistration> event_generators{
+			{[detector = Rules()](const boost::property_tree::ptree&, boost::asio::io_context& io, const ILogger& logger) {
+				 return std::make_shared<event::FaceRecognitionEventGenerator>(detector, io, logger);
+			 },
+			 {utility::face::Topic,
+				{{"VideoSource", "tt:ReferenceToken"}, {"Rule", "xsd:string"}},
+				{{"Likelihood", "xsd:float"}, {"Label", "xsd:string"}, {"EnrollmentID", "xsd:string"},
+				 {"ImageUri", "xsd:anyURI"}, {"RefImageUri", "xsd:anyURI"}},
+				false,
+				{{"ObjectId", "tt:ObjectId"}, {"ParentObjectId", "tt:ObjectId"},
+				 {"BoundingBox", "tt:Rectangle"}, {"Image", "xsd:base64Binary"}}}},
+			{[detector = Rules()](const boost::property_tree::ptree&, boost::asio::io_context& io, const ILogger& logger) {
+				 return std::make_shared<event::LicensePlateEventGenerator>(detector, io, logger);
+			 },
+			 {utility::lpr::Topic,
+				{{"VideoSource", "tt:ReferenceToken"}, {"Rule", "xsd:string"}},
+				{{"Likelihood", "xsd:float"},
+				 {"Speed", "xsd:float"},
+				 {"Direction", "tt:Direction"},
+				 {"ImageURI", "xsd:anyURI"},
+				 {"VehicleImageURI", "xsd:anyURI"}},
+				false,
+				{{"LicensePlateInfo", "tt:LicensePlateInfo"},
+				 {"BoundingBox", "tt:Rectangle"},
+				 {"VehicleInfo", "tt:VehicleInfo"},
+				 {"Image", "xsd:base64Binary"},
+				 {"VehicleImage", "xsd:base64Binary"}}}},
+			{[detector = Rules()](const boost::property_tree::ptree& configs, boost::asio::io_context& io,
+														const ILogger& logger) {
+				 return std::make_shared<event::MotionRegionEventGenerator>(
+						 detector, configs.get<int>("MotionRegion.EventGenerationTimeout", 2), io, logger);
+			 },
+			 {utility::AnalyticsRules::Topic,
+				{{"VideoSource", "tt:ReferenceToken"}, {"RuleName", "xsd:string"}},
+				{{"State", "xsd:boolean"}}}},
+			{[detector = Rules()](const boost::property_tree::ptree& configs, boost::asio::io_context& io,
+														const ILogger& logger) {
+				 return std::make_shared<event::LineDetectorEventGenerator>(
+						 detector, configs.get<int>("LineDetector.EventGenerationTimeout", 2), io, logger);
+			 },
+			 {utility::line::Topic,
+				{{"VideoSource", "tt:ReferenceToken"}, {"AnalyticsConfiguration", "tt:ReferenceToken"}, {"Rule", "xsd:string"}},
+				{{"ObjectId", "tt:StringList"}},
+				false}},
+			{[detector = Rules()](const boost::property_tree::ptree&, boost::asio::io_context& io, const ILogger& logger) {
+				 return std::make_shared<event::LineCountingEventGenerator>(detector, io, logger);
+			 },
+			 {utility::counting::Topic,
+				{{"VideoSource", "tt:ReferenceToken"}, {"AnalyticsConfiguration", "tt:ReferenceToken"}, {"Rule", "xsd:string"}},
+				{{"Count", "xsd:int"}}}},
+			{[detector = Rules()](const boost::property_tree::ptree&, boost::asio::io_context& io, const ILogger& logger) {
+				 return std::make_shared<event::FieldDetectorEventGenerator>(detector, io, logger);
+			 },
+			 {utility::field::Topic,
+				{{"VideoSource", "tt:ReferenceToken"}, {"AnalyticsConfiguration", "tt:ReferenceToken"}, {"Rule", "xsd:string"}},
+				{{"IsInside", "xsd:boolean"}}}}};
+	event::init_service(*http_server_, *server_configs_, configs_dir, *logger_, event_generators);
 
 	// TODO: impl. logic for multichannel cannel
 	auto audio_node = profiles_config_->get_child(CONFIGURATION_ENUMERATION[CONFIGURATION_TYPE::AUDIOENCODER]).front();

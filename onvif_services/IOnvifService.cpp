@@ -227,6 +227,86 @@ public:
 
 				utility::http::fillResponseWithHeaders(*response, os.str(), utility::http::ClientErrorDefaultWriter);
 			}
+			catch (const osrv::invalid_module& e)
+			{
+				auto envelope_tree = utility::soap::getEnvelopeTree(xml_ns_);
+
+				boost::property_tree::ptree code_node;
+				code_node.add("s:Value", "s:Sender");
+				code_node.add("s:Subcode.s:Value", "ter:InvalidArgVal");
+				code_node.add("s:Subcode.s:Subcode.s:Value", "ter:InvalidModule");
+				envelope_tree.add_child("s:Body.s:Fault.s:Code", code_node);
+				envelope_tree.put("s:Body.s:Fault.s:Reason.s:Text", e.what());
+				envelope_tree.put("s:Body.s:Fault.s:Reason.s:Text.<xmlattr>.xml:lang", "en");
+
+				pt::ptree root_tree;
+				root_tree.put_child("s:Envelope", envelope_tree);
+
+				std::ostringstream os;
+				pt::write_xml(os, root_tree);
+
+				utility::http::fillResponseWithHeaders(*response, os.str(), utility::http::ClientErrorDefaultWriter);
+			}
+			catch (const osrv::name_already_existent& e)
+			{
+				auto envelope_tree = utility::soap::getEnvelopeTree(xml_ns_);
+
+				boost::property_tree::ptree code_node;
+				code_node.add("s:Value", "s:Sender");
+				code_node.add("s:Subcode.s:Value", "ter:InvalidArgVal");
+				code_node.add("s:Subcode.s:Subcode.s:Value", "ter:NameAlreadyExistent");
+				envelope_tree.add_child("s:Body.s:Fault.s:Code", code_node);
+				envelope_tree.put("s:Body.s:Fault.s:Reason.s:Text", e.what());
+				envelope_tree.put("s:Body.s:Fault.s:Reason.s:Text.<xmlattr>.xml:lang", "en");
+
+				pt::ptree root_tree;
+				root_tree.put_child("s:Envelope", envelope_tree);
+
+				std::ostringstream os;
+				pt::write_xml(os, root_tree);
+
+				utility::http::fillResponseWithHeaders(*response, os.str(), utility::http::ClientErrorDefaultWriter);
+			}
+			catch (const osrv::too_many_modules& e)
+			{
+				auto envelope_tree = utility::soap::getEnvelopeTree(xml_ns_);
+
+				boost::property_tree::ptree code_node;
+				code_node.add("s:Value", "s:Receiver");
+				code_node.add("s:Subcode.s:Value", "ter:Action");
+				code_node.add("s:Subcode.s:Subcode.s:Value", "ter:TooManyModules");
+				envelope_tree.add_child("s:Body.s:Fault.s:Code", code_node);
+				envelope_tree.put("s:Body.s:Fault.s:Reason.s:Text", e.what());
+				envelope_tree.put("s:Body.s:Fault.s:Reason.s:Text.<xmlattr>.xml:lang", "en");
+
+				pt::ptree root_tree;
+				root_tree.put_child("s:Envelope", envelope_tree);
+
+				std::ostringstream os;
+				pt::write_xml(os, root_tree);
+
+				utility::http::fillResponseWithHeaders(*response, os.str(), utility::http::ClientErrorDefaultWriter);
+			}
+			catch (const osrv::configuration_conflict& e)
+			{
+				auto envelope_tree = utility::soap::getEnvelopeTree(xml_ns_);
+
+				boost::property_tree::ptree code_node;
+				code_node.add("s:Value", "s:Receiver");
+				code_node.add("s:Subcode.s:Value", "ter:Action");
+				code_node.add("s:Subcode.s:Subcode.s:Value", "ter:ConfigurationConflict");
+				envelope_tree.add_child("s:Body.s:Fault.s:Code", code_node);
+				envelope_tree.put("s:Body.s:Fault.s:Reason.s:Text", e.what());
+				envelope_tree.put("s:Body.s:Fault.s:Reason.s:Text.<xmlattr>.xml:lang", "en");
+
+				pt::ptree root_tree;
+				root_tree.put_child("s:Envelope", envelope_tree);
+
+				std::ostringstream os;
+				pt::write_xml(os, root_tree);
+
+				utility::http::fillResponseWithHeaders(*response, os.str(), utility::http::ClientErrorDefaultWriter);
+			}
 			catch (const std::exception& e)
 			{
 				std::ostringstream oss;

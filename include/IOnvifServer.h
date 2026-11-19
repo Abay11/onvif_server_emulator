@@ -13,6 +13,8 @@ namespace pt = boost::property_tree;
 
 class ILogger;
 
+namespace utility { class AnalyticsRules; }
+
 namespace utility::media
 {
 class MediaProfilesManager;
@@ -26,6 +28,7 @@ class ServerConfigs;
 
 namespace SERVICE_URI
 {
+const std::string ANALYTICS = "http://www.onvif.org/ver20/analytics/wsdl";
 const std::string DEVICE = "http://www.onvif.org/ver10/device/wsdl";
 const std::string DEVICEIO = "http://www.onvif.org/ver10/deviceIO/wsdl";
 const std::string IMAGING = "http://www.onvif.org/ver20/imaging/wsdl";
@@ -49,6 +52,7 @@ public:
 
 	const std::string& ConfigsPath() const;
 
+	std::shared_ptr<IOnvifService> AnalyticsService();
 	std::shared_ptr<IOnvifService> DeviceService();
 	std::shared_ptr<IOnvifService> DeviceIOService();
 	std::shared_ptr<IOnvifService> ImagingService();
@@ -71,6 +75,8 @@ public:
 		return media_profiles_manager_.get();
 	};
 
+	std::shared_ptr<utility::AnalyticsRules> Rules();
+
 protected:
 	const std::string& configs_path_;
 
@@ -82,6 +88,8 @@ protected:
 	std::shared_ptr<osrv::HttpServer> http_server_;
 
 private:
+	std::shared_ptr<utility::AnalyticsRules> analytics_rules_;
+	std::shared_ptr<IOnvifService> analytics_service_;
 	std::shared_ptr<IOnvifService> device_service_;
 	std::shared_ptr<IOnvifService> deviceio_service_;
 	std::shared_ptr<IOnvifService> imaging_service_;

@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Analytics service namespace configuration",
+  "type": "object",
+  "properties": {
+    "Namespaces": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    }
+  },
+  "required": [
+    "Namespaces"
+  ],
+  "additionalProperties": false
+}

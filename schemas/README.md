@@ -7,6 +7,10 @@ They are not ONVIF WSDL/XSD schemas and do not certify protocol conformance.
 
 `config-files.json` maps each case-sensitive configuration filename to its schema.
 `types.schema.json` provides shared definitions through relative `$ref` links.
+`analytics-rule.schema.json` describes persisted Motion Region, Line Detector,
+LineCounting, Field Detector, License Plate Recognition and Face Recognition rules referenced by the media profiles schema.
+Polygon geometry, normalized coordinate bounds and cross-rule resource limits
+are checked by the C++ Rules implementation.
 Keep this directory intact when using the schemas with other validators.
 References resolve relative to the schema files. The bundled checker registers
 local file URIs and does not download schemas.
