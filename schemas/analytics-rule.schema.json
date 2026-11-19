@@ -317,6 +317,34 @@
         "EventInterval"
       ],
       "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "Name": {
+          "$ref": "types.schema.json#/$defs/token"
+        },
+        "Type": {
+          "const": "tt:FaceRecognition"
+        },
+        "IncludeImage": {
+          "enum": [
+            "",
+            "Embedded",
+            "LocalStorage"
+          ]
+        },
+        "Threshold": {
+          "$ref": "types.schema.json#/$defs/number"
+        }
+      },
+      "required": [
+        "Name",
+        "Type",
+        "IncludeImage",
+        "Threshold"
+      ],
+      "additionalProperties": false
     }
   ]
 }

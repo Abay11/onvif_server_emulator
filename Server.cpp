@@ -116,6 +116,16 @@ void Server::init()
 
 	const std::vector<event::EventGeneratorRegistration> event_generators{
 			{[detector = Rules()](const boost::property_tree::ptree&, boost::asio::io_context& io, const ILogger& logger) {
+				 return std::make_shared<event::FaceRecognitionEventGenerator>(detector, io, logger);
+			 },
+			 {utility::face::Topic,
+				{{"VideoSource", "tt:ReferenceToken"}, {"Rule", "xsd:string"}},
+				{{"Likelihood", "xsd:float"}, {"Label", "xsd:string"}, {"EnrollmentID", "xsd:string"},
+				 {"ImageUri", "xsd:anyURI"}, {"RefImageUri", "xsd:anyURI"}},
+				false,
+				{{"ObjectId", "tt:ObjectId"}, {"ParentObjectId", "tt:ObjectId"},
+				 {"BoundingBox", "tt:Rectangle"}, {"Image", "xsd:base64Binary"}}}},
+			{[detector = Rules()](const boost::property_tree::ptree&, boost::asio::io_context& io, const ILogger& logger) {
 				 return std::make_shared<event::LicensePlateEventGenerator>(detector, io, logger);
 			 },
 			 {utility::lpr::Topic,

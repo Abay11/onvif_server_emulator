@@ -90,6 +90,19 @@ namespace osrv
 			const ILogger& logger_;
 		};
 
+		class FaceRecognitionEventGenerator : public IEventGenerator
+		{
+		public:
+			FaceRecognitionEventGenerator(std::shared_ptr<utility::AnalyticsRules> detector,
+				boost::asio::io_context& io, const ILogger& logger);
+			std::deque<NotificationMessage> GenerateSynchronizationEvent() const override;
+		protected:
+			void generate_event() override;
+		private:
+			std::shared_ptr<utility::AnalyticsRules> detector_;
+			size_t step_ = 0;
+		};
+
 		class LicensePlateEventGenerator : public IEventGenerator
 		{
 		public:

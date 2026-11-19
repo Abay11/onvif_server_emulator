@@ -93,6 +93,7 @@ std::shared_ptr<utility::AnalyticsRules> IOnvifServer::Rules()
 	{
 		auto manager = media_profiles_manager_;
 		auto images = utility::lpr::LoadImages(configs_path_, server_configs_->HttpAddress());
+		auto faces = utility::face::LoadImages(configs_path_, server_configs_->HttpAddress());
 		auto serve = [&](const std::string& path, const std::string& content) {
 			auto bytes = std::make_shared<const std::string>(content);
 			http_server_->resource[path]["GET"] = [bytes](std::shared_ptr<HttpServer::Response> response,
@@ -112,6 +113,12 @@ std::shared_ptr<utility::AnalyticsRules> IOnvifServer::Rules()
 			serve(route(true), images[index].plate.bytes);
 			serve(route(false), images[index].vehicle.bytes);
 		}
+		for (size_t index = 0; index < faces.size(); ++index)
+		{
+			auto path = utility::face::ImagePath(index);
+			path.insert(path.size() - 4, "\\");
+			serve("^" + path + "$", faces[index].image.bytes);
+		}
 		analytics_rules_ = std::make_shared<utility::AnalyticsRules>(
 				manager->ReaderWriter()->ConfigsTree(),
 				[manager](const std::string& token, const pt::ptree& rules) {
@@ -129,7 +136,7 @@ std::shared_ptr<utility::AnalyticsRules> IOnvifServer::Rules()
 						throw;
 					}
 				},
-				std::chrono::system_clock::now, std::move(images));
+				std::chrono::system_clock::now, std::move(images), std::move(faces));
 	}
 	return analytics_rules_;
 }

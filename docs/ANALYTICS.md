@@ -1,12 +1,12 @@
 # Analytics Rules
 
 The Analytics endpoint `/onvif/analytics_service` implements the Rules interface
-for `tt:MotionRegionDetector`, `tt:LineDetector`, `tt:LineCounting`, `tt:FieldDetector` and `tt:LicensePlateRecognition`.
+for `tt:MotionRegionDetector`, `tt:LineDetector`, `tt:LineCounting`, `tt:FieldDetector`, `tt:LicensePlateRecognition` and `tt:FaceRecognition`.
 This is an emulator with deterministic synthetic input. It does not inspect the RTSP stream or claim Profile M certification.
 
 ## Contract and references
 
-The implementation targets sections 5.2.2, 6.1, 6.2, Annex A.1/A.2/A.3/A.5, Annex C.1 and Annex G.1/G.3 of the
+The implementation targets sections 5.2.2, 6.1, 6.2, Annex A.1/A.2/A.3/A.5, Annex C.1 and Annex G.1/G.2/G.3 of the
 [Analytics Service Specification 26.06](https://www.onvif.org/specs/srv/analytics/ONVIF-Analytics-Service-Spec.pdf).
 The wire format uses the published
 [Analytics WSDL 20.12](https://www.onvif.org/ver20/analytics/wsdl/analytics.wsdl),
@@ -643,3 +643,84 @@ and their ten image downloads; the isolated-network smoke test passed discovery
 and TCP/UDP media. WSDL/XSD validation accepted 110 captured responses and typed
 payloads, including Motorcycle vehicle information. The temporary test server was
 stopped after validation; Windows/VMS and host-network discovery were not retested.
+
+## Face Recognition (Annex G.2)
+
+`tt:FaceRecognition` uses topic `tns1:RuleEngine/Recognition/Face`. Its contract
+was checked on 2026-11-19 against Analytics 26.06 Annex G.1/G.2 and the WSDL,
+ONVIF/common and metadata schema versions linked above. `ObjectId` and
+`ParentObjectId` are ElementItems of metadata type `tt:ObjectId`, with an integer
+`ObjectId` attribute; `BoundingBox` uses the four required `tt:Rectangle`
+attributes in normalized screen coordinates. Event descriptions use the G.2
+spelling `ImageUri`, `RefImageUri` and `EnrollmentID` (case-sensitive).
+
+Create a rule through `CreateRules` after `ConfigurationToken`:
+
+```xml
+<tan:Rule Name="TestFaces" Type="tt:FaceRecognition">
+  <tt:Parameters>
+    <tt:SimpleItem Name="IncludeImage" Value="Embedded"/>
+    <tt:SimpleItem Name="Threshold" Value="0.5"/>
+  </tt:Parameters>
+</tan:Rule>
+```
+
+`Threshold` is the optional generic confidence threshold from G.1, range 0–1,
+default 0.5. `IncludeImage` defaults to `Embedded`: events include both base64
+`Image` and a downloadable `ImageUri` to maximize test payload coverage.
+`LocalStorage` sends only `ImageUri`; an empty value suppresses both recognized
+image fields. `RefImageUri` is independent and remains available in every mode.
+`RemoteStorage` is not supported or advertised because there is no remote upload
+backend. Omitted parameters on modification retain their previous values.
+Rules share the existing four-rule limit and persist in `media_profiles.config`.
+No face rule is enabled by default; create one with SOAP to start notifications.
+
+The dedicated one-second sampler cycles `TEST-PERSON-001` through
+`TEST-PERSON-003`, with labels `Whitelisted`, `Blacklisted`, `Temporary` and
+likelihood 0.98. Every event includes `VideoSource`, `Rule`, `Likelihood`,
+`EnrollmentID`, `Label`, `RefImageUri`, `BoundingBox`, `ObjectId`, and
+`ParentObjectId`. Recognition events are not properties: they have no
+`PropertyOperation` or synchronization/lifecycle notifications.
+
+Simulation scope: no actual detection, biometric comparison, enrollment API or
+RTSP metadata is implemented. Each synthetic face is treated as an exact match
+to its own reference test card; `ImageUri` and `RefImageUri` deliberately point
+to the same PNG. The rectangle and face/person object IDs are fixed synthetic
+scene data, independent of the RTSP test pattern. The reference cards are loaded
+once from `rs/face-test-001.png` through `003.png` and served at
+`/analytics/face/face-001.png` through `003.png`, using `HttpAddress()`.
+The shared rule engine rejects unavailable face images with `ConfigurationConflict`;
+the server reports an image-loading error at startup if a resource file is missing.
+See [asset provenance and generation prompts](../server_configs/rs/README.md#synthetic-face-test-resources).
+
+Validation: the `face_recognition` Boost suite covers descriptions, serialization,
+all three identities, image modes, confidence filtering, restart persistence,
+transaction rollback, deletion, source filtering and invalid requests/samples.
+`python3 unit_tests/face_recognition_smoke.py --host 127.0.0.1` checks the SOAP and
+PullPoint wire format, all image downloads, advertised descriptions and image
+modes against a running server with disposable configuration and auth disabled.
+
+Face Recognition validation on 2026-11-19 used the documented `osrv-dev:latest`
+image with GCC 14.2, Boost 1.83 and GStreamer 1.26.2, building local source in a
+separate `osrv-face-build` volume. Commands run inside the dev container:
+
+```bash
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug -DENABLE_UNIT_TESTS=ON
+cmake --build build --parallel 2
+ctest --test-dir build --output-on-failure
+python3 unit_tests/face_recognition_smoke.py --capture /tmp/face-responses-final
+python3 unit_tests/analytics_smoke.py
+python3 unit_tests/network_smoke.py --multicast-interface 172.17.0.2
+```
+
+All passed. Network checks used a disposable configuration copy in an isolated
+Docker network namespace; `172.17.0.2` was that container's interface, not a
+recommended client address. PullPoint smoke tests ran sequentially because the
+existing Event service only reliably supports one subscriber. The network test
+covered unicast/multicast discovery and audio/video RTP over TCP/UDP. The optional
+configuration checker and its 12 schema regression tests also passed. Using
+`xmlschema` 4.3.2 in XSD 1.1 mode with the above official WSDL and imported schemas,
+57 captured Analytics responses, faults, notifications and typed ElementItems
+passed validation, including `tt:ObjectId`, `tt:Rectangle` and base64 payloads.
+These Linux/container checks do not validate Windows/VMS behavior or establish
+ONVIF conformance.

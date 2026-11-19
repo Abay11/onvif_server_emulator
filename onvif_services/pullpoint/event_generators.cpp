@@ -12,6 +12,25 @@ namespace osrv
 	namespace event
 	{
 
+	FaceRecognitionEventGenerator::FaceRecognitionEventGenerator(std::shared_ptr<utility::AnalyticsRules> detector,
+			boost::asio::io_context& io, const ILogger& logger)
+			: IEventGenerator(1, utility::face::Topic, io, logger), detector_(std::move(detector))
+	{
+	}
+
+	std::deque<NotificationMessage> FaceRecognitionEventGenerator::GenerateSynchronizationEvent() const
+	{
+		return {};
+	}
+
+	void FaceRecognitionEventGenerator::generate_event()
+	{
+		utility::face::Sample sample{step_++ % 3};
+		for (const auto& source : detector_->VideoSources())
+			for (const auto& event : detector_->SampleFace(source, sample))
+				event_signal_(event);
+	}
+
 	LicensePlateEventGenerator::LicensePlateEventGenerator(std::shared_ptr<utility::AnalyticsRules> detector,
 			boost::asio::io_context& io, const ILogger& logger)
 			: IEventGenerator(1, utility::lpr::Topic, io, logger), detector_(std::move(detector))

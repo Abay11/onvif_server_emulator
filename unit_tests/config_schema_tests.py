@@ -112,6 +112,22 @@ class ConfigSchemaTests(unittest.TestCase):
         rule["IncludeImage"] = "RemoteStorage"
         self.check("media_profiles.config", config, False)
 
+    def test_face_recognition_persistence(self):
+        config = deepcopy(self.configs["media_profiles.config"])
+        rule = {"Name": "faces", "Type": "tt:FaceRecognition", "IncludeImage": "Embedded", "Threshold": "0.5"}
+        config["Analytics"][0]["rules"] = [rule]
+        for mode in ("Embedded", "LocalStorage", ""):
+            rule["IncludeImage"] = mode
+            self.check("media_profiles.config", config, True)
+        rule["IncludeImage"] = "RemoteStorage"
+        self.check("media_profiles.config", config, False)
+        rule["IncludeImage"] = "Embedded"
+        rule["Threshold"] = "not-a-number"
+        self.check("media_profiles.config", config, False)
+        rule["Threshold"] = 0.5
+        rule["Unknown"] = "value"
+        self.check("media_profiles.config", config, False)
+
     def test_empty_recording_dates_and_required_keys(self):
         config = deepcopy(self.configs["recording_search.config"])
         config["Recordings"][0].update(DateFrom="", DateUntil="")

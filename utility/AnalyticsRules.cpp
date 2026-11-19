@@ -125,6 +125,8 @@ Tree defaults(const Tree& src)
 
 Tree readRule(const Tree& xml, const Tree& src, const Tree* previous)
 {
+	if (xml.get<std::string>("<xmlattr>.Type") == face::Type)
+		return face::ReadRule(xml, previous);
 	if (xml.get<std::string>("<xmlattr>.Type") == lpr::Type)
 		return lpr::ReadRule(xml, previous);
 	if (xml.get<std::string>("<xmlattr>.Type") == field::Type)
@@ -205,8 +207,8 @@ Tree readRule(const Tree& xml, const Tree& src, const Tree* previous)
 }
 } // namespace
 
-AnalyticsRules::AnalyticsRules(const Tree& profiles, SaveRules save, Clock clock, lpr::Images images)
-		: profiles_(profiles), save_(std::move(save)), clock_(std::move(clock)), images_(std::move(images))
+AnalyticsRules::AnalyticsRules(const Tree& profiles, SaveRules save, Clock clock, lpr::Images images, face::Images faces)
+		: profiles_(profiles), save_(std::move(save)), clock_(std::move(clock)), images_(std::move(images)), faces_(std::move(faces))
 {
 	size_t count = 0;
 	for (auto& [_, cfg] : profiles_.get_child("Analytics"))
@@ -219,6 +221,8 @@ AnalyticsRules::AnalyticsRules(const Tree& profiles, SaveRules save, Clock clock
 			if (!names.insert(rule.get<std::string>("Name")).second)
 				throw RuleFault("RuleAlreadyExistent");
 			rule = readRule(RuleXml(rule), source(profiles_, cfg.get<std::string>("token")), nullptr);
+			if (rule.get<std::string>("Type") == face::Type && !face::ImagesReady(faces_))
+				throw RuleFault("ConfigurationConflict", true);
 			if (rule.get<std::string>("Type") == lpr::Type && !rule.get<std::string>("IncludeImage").empty() &&
 					!lpr::ImagesReady(images_))
 				throw RuleFault("ConfigurationConflict", true);
@@ -233,6 +237,8 @@ AnalyticsRules::AnalyticsRules(const Tree& profiles, SaveRules save, Clock clock
 
 AnalyticsRules::Tree AnalyticsRules::RuleXml(const Tree& rule)
 {
+	if (rule.get<std::string>("Type") == face::Type)
+		return face::RuleXml(rule);
 	if (rule.get<std::string>("Type") == lpr::Type)
 		return lpr::RuleXml(rule);
 	if (rule.get<std::string>("Type") == field::Type)
@@ -328,6 +334,7 @@ AnalyticsRules::Tree AnalyticsRules::Execute(const std::string& operation, const
 			response.add_child("tan:SupportedRules.tt:RuleDescription", line::Description());
 			response.add_child("tan:SupportedRules.tt:RuleDescription", counting::Description());
 			response.add_child("tan:SupportedRules.tt:RuleDescription", lpr::Description());
+			response.add_child("tan:SupportedRules.tt:RuleDescription", face::Description());
 			response.add_child("tan:SupportedRules.tt:RuleDescription", field::Description());
 			return response;
 		}
@@ -335,10 +342,12 @@ AnalyticsRules::Tree AnalyticsRules::Execute(const std::string& operation, const
 		{
 			auto type = request.get<std::string>("tan:RuleType", "");
 			if (!type.empty() && type != "tt:MotionRegionDetector" && type != line::Type && type != counting::Type &&
-					type != field::Type && type != lpr::Type)
+					type != field::Type && type != lpr::Type && type != face::Type)
 				throw RuleFault("RuleNotExistent");
 			if (type == line::Type)
 				return line::Options();
+			if (type == face::Type)
+				return face::Options();
 			if (type == lpr::Type)
 				return lpr::Options();
 			if (type == field::Type)
@@ -361,6 +370,8 @@ AnalyticsRules::Tree AnalyticsRules::Execute(const std::string& operation, const
 			if (type.empty())
 			{
 				for (const auto& option : line::Options())
+					response.push_back(option);
+				for (const auto& option : face::Options())
 					response.push_back(option);
 				for (const auto& option : lpr::Options())
 					response.push_back(option);
@@ -412,6 +423,8 @@ AnalyticsRules::Tree AnalyticsRules::Execute(const std::string& operation, const
 				if (exists && it->second.get<std::string>("Type") != item.get<std::string>("<xmlattr>.Type"))
 					throw RuleFault("TypeChangeProhibited", true);
 				auto rule = readRule(item, source(profiles_, token), exists ? &it->second : nullptr);
+				if (rule.get<std::string>("Type") == face::Type && !face::ImagesReady(faces_))
+					throw RuleFault("ConfigurationConflict", true);
 				if (rule.get<std::string>("Type") == lpr::Type && !rule.get<std::string>("IncludeImage").empty() &&
 						!lpr::ImagesReady(images_))
 					throw RuleFault("ConfigurationConflict", true);
@@ -796,6 +809,65 @@ std::deque<AnalyticsRules::Message> AnalyticsRules::SamplePlate(const std::strin
 					element("Image", image);
 					image.data() = images.vehicle.base64;
 					element("VehicleImage", image);
+				}
+			}
+			result.push_back(std::move(msg));
+		}
+	}
+	return result;
+}
+
+std::deque<AnalyticsRules::Message> AnalyticsRules::SampleFace(const std::string& videoSource,
+		const face::Sample& sample)
+{
+	std::lock_guard lock(mutex_);
+	std::deque<Message> result;
+	if (!face::ImagesReady(faces_) || sample.imageIndex >= faces_.size() ||
+			!std::isfinite(sample.likelihood) || sample.likelihood < 0 || sample.likelihood > 1)
+		return result;
+	const auto& image = faces_[sample.imageIndex];
+	static constexpr const char* labels[] = {"Whitelisted", "Blacklisted", "Temporary"};
+	for (const auto& [_, cfg] : profiles_.get_child("Analytics"))
+	{
+		if (source(profiles_, cfg.get<std::string>("token")).get<std::string>("SourceToken") != videoSource)
+			continue;
+		for (const auto& [__, rule] : cfg.get_child("rules"))
+		{
+			if (rule.get<std::string>("Type") != face::Type || sample.likelihood < rule.get<double>("Threshold"))
+				continue;
+			Message msg;
+			msg.topic = face::Topic;
+			msg.utc_time = datetime::system_utc_datetime();
+			msg.source_item_descriptions = {{"VideoSource", videoSource}, {"Rule", rule.get<std::string>("Name")}};
+			msg.data_name = "Likelihood";
+			msg.data_value = std::to_string(sample.likelihood);
+			msg.data_simple_items = {{"EnrollmentID", "TEST-PERSON-00" + std::to_string(sample.imageIndex + 1)},
+					{"Label", labels[sample.imageIndex]}, {"RefImageUri", image.uri}};
+			auto element = [&](const std::string& name, const Tree& payload) {
+				Tree value;
+				value.put("<xmlattr>.Name", name);
+				value.add_child("tt:" + name, payload);
+				msg.data_element_items.push_back(std::move(value));
+			};
+			Tree box, id;
+			box.put("<xmlattr>.left", -0.45);
+			box.put("<xmlattr>.right", 0.45);
+			box.put("<xmlattr>.bottom", -0.4);
+			box.put("<xmlattr>.top", 0.65);
+			element("BoundingBox", box);
+			id.put("<xmlattr>.ObjectId", sample.imageIndex + 1);
+			element("ObjectId", id);
+			id.put("<xmlattr>.ObjectId", sample.imageIndex + 101);
+			element("ParentObjectId", id);
+			auto mode = rule.get<std::string>("IncludeImage");
+			if (!mode.empty())
+			{
+				msg.data_simple_items.emplace_back("ImageUri", image.uri);
+				if (mode == "Embedded")
+				{
+					Tree binary;
+					binary.data() = image.image.base64;
+					element("Image", binary);
 				}
 			}
 			result.push_back(std::move(msg));

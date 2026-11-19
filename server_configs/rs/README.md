@@ -78,3 +78,22 @@ Prompt:
 Prompt:
 
 > Synthetic license plate recognition software test fixture. Show ONLY one rectangular white motorcycle license plate with a thick black border and exact black characters TEST654. Tightly framed horizontal close-up, no motorcycle or vehicle parts. Clearly legible smaller label TEST IMAGE below the plate, neutral grey background. Crisp clean flat illustration. One standalone plate, not a collage.
+
+## Synthetic face test resources
+
+`face-test-001.png`, `face-test-002.png`, and `face-test-003.png` were generated
+on 2026-11-19 with the built-in image_gen tool using the imagegen skill. They
+show fictional people and contain TEST IMAGE / SYNTHETIC FACE 001–003 labels.
+No reference photographs or third-party image assets were supplied. Each output
+was copied unchanged to this directory. The emulator uses each card as both the
+recognized image and its matching reference; these are software fixtures.
+
+Prompt template (one independent generation per subject):
+
+> Use case: stylized-concept. Asset type: standalone face recognition software test fixture PNG. A clearly artificial clean illustrated headshot of {subject}, straight-on centered face against plain grey background. No real person or reference. Square composition, head and shoulders. Large legible banner text exactly "TEST IMAGE" and below "SYNTHETIC FACE {number}". No brands or logos. One portrait only.
+
+Subjects and numbers:
+
+- 001: a fictional adult woman with short dark hair
+- 002: a fictional adult man with curly hair and glasses
+- 003: a fictional adult woman with silver hair

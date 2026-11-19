@@ -3,6 +3,7 @@
 #include "../onvif_services/pullpoint/pull_point.h"
 #include "LineCounting.h"
 #include "LicensePlateRecognition.h"
+#include "FaceRecognition.h"
 #include <optional>
 #include <boost/property_tree/ptree.hpp>
 #include <functional>
@@ -34,7 +35,7 @@ public:
 	using SaveRules = std::function<void(const std::string&, const Tree&)>;
 	using Clock = std::function<counting::Time()>;
 	AnalyticsRules(const Tree& profiles, SaveRules save, Clock clock = std::chrono::system_clock::now,
-			lpr::Images images = {});
+			lpr::Images images = {}, face::Images faces = {});
 	Tree Execute(const std::string& operation, const std::string& xml);
 	std::deque<Message> Synchronize() const;
 	std::deque<Message> Sample(double x, double y, double strength);
@@ -44,6 +45,7 @@ public:
 	std::deque<Message> SynchronizeFields() const;
 	std::deque<Message> TickFields();
 	std::deque<Message> SamplePlate(const std::string& videoSource, const lpr::Sample& sample);
+	std::deque<Message> SampleFace(const std::string& videoSource, const face::Sample& sample);
 	void ForgetObject(const std::string& videoSource, const std::string& objectId);
 	std::vector<std::string> VideoSources() const;
 	static Tree RuleXml(const Tree& rule);
@@ -64,6 +66,7 @@ private:
 	SaveRules save_;
 	Clock clock_;
 	lpr::Images images_;
+	face::Images faces_;
 	mutable std::mutex mutex_;
 	std::map<std::pair<std::string, std::string>, bool> states_;
 	std::map<std::tuple<std::string, std::string, std::string>, std::pair<double, double>> tracks_;
