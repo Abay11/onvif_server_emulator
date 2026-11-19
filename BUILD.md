@@ -262,6 +262,13 @@ a local Docker build does not upload an image.
 
 ### Network smoke test
 
+For the optional Stage 1 RTSP metadata experiment, including the pinned upstream
+payloader build, runtime dependency probe and offline TCP/UDP receiver checks,
+see [the metadata experiment](experiments/rtsp_metadata/README.md).
+Its `metadata-dev` and `metadata-runtime` Docker targets are separate from the
+normal application image. The plugin requires GStreamer 1.20+; the experiment
+uses the documented Trixie development environment with GStreamer 1.26.2.
+
 With a running emulator, Python 3 can check the default SOAP service configuration,
 returned URLs, snapshot retrieval, unicast and multicast discovery, and live video
 and audio RTP over both TCP and UDP:
@@ -279,3 +286,9 @@ interface joined by discovery. This automated test complements the Windows/VMS
 acceptance steps in [the mirrored guide](docs/WSL2.md); it does not configure
 firewalls. The test assumes authentication is disabled and creates a short-lived
 PullPoint subscription.
+
+After changing event delivery, also run `python3 unit_tests/event_delivery_smoke.py`
+against the same source-built server. It checks two independent PullPoints,
+matching live notifications, message limits, synchronization and unsubscribe.
+See [shared event delivery](docs/EVENT_DELIVERY.md) for the pinned XML validation
+command and subscription simulation limits.

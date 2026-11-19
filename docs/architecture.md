@@ -95,8 +95,9 @@ flowchart TD
    the HTTP thread to finish.
 
 HTTP, discovery, events, and RTSP use separate event loops. Discovery has its own
-Asio context and worker thread; `NotificationsManager` has its own context, timers,
-and thread; RTSP runs a GLib main loop in a separate thread. An additional Asio
+Asio context and worker thread; `EventSource` owns the event context and worker,
+with PullPoint timers on that context. RTSP runs a GLib main loop in a separate
+thread. An additional Asio
 context in `Server` handles simulated network delays in the Event service.
 
 ## SOAP Request Handling
@@ -232,20 +233,31 @@ references, configuration, simulation deviations, and validation commands.
 
 ## Events and Lifecycle
 
-`NotificationsManager` connects generators to subscribers. `Server::init()` supplies
+`Server` owns a shared `EventSource` and injects it into the Event service and
+RTSP server. `NotificationsManager` adapts that source to HTTP PullPoint;
+production RTP metadata delivery remains pending. `Server::init()` supplies
 registrations for additional `IEventGenerator` implementations, pairing a factory
 with its topic and Source/Data field descriptions for `GetEventProperties`.
 Event service invokes these factories with its
-configuration, the manager's Asio context and logger before starting the event
-loop, and the manager owns the resulting generators. Factories capture shared
+configuration, the source's Asio context and logger before starting generator
+timers, and the source owns the resulting generators. Its worker serializes
+generator and PullPoint operations. Factories capture shared
 dependencies by value; each generator retains the dependencies needed by its
 callbacks. Concrete analytics detectors are assembled in `Server`, so another
 rule event generator can be registered without changing the Event service API.
 
-Each `PullPoint` holds a notification queue and a wait timer. Digital input, motion, cell motion, and
-audio generators deliver notifications through Boost.Signals2. Subscription paths
+Each consumer owns a bounded queue of immutable notifications. `PullPoint` adds
+wait and expiration timers. Digital input, motion, cell motion, and
+audio generators publish through Boost.Signals2 into the shared source. Subscription paths
 have the form `/onvif/event_service/sN`; supported operations include PullMessages,
 Renew, SetSynchronizationPoint, and Unsubscribe.
+
+Subscriptions receive distinct paths and initial property states. Connecting a
+subscriber does not reset generator timers. MessageLimit preserves the unsent
+remainder; synchronization appends property states without clearing pending
+transient events. Queue overflow records loss and permits property resynchronization.
+See [Shared Event Delivery](EVENT_DELIVERY.md) for ownership, queue limits,
+contract references, validation and the fixed subscription-lease simulation.
 
 PullMessages responds when an event is available or the timer expires. It uses
 `PullPoint.Timeout` from configuration and ignores the client's Timeout value.

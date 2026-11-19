@@ -17,6 +17,7 @@ add_executable(test_executable
 	device_service_tests.cpp
 	discovery_tests.cpp
 	event_service_tests.cpp	
+	event_source_tests.cpp
 	http_da_tests.cpp
 	face_recognition_tests.cpp
 	license_plate_tests.cpp

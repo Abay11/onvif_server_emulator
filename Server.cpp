@@ -3,6 +3,7 @@
 #include "../onvif_services/discovery_service.h"
 #include "../onvif_services/event_service.h"
 #include "../onvif_services/pullpoint/pull_point.h"
+#include "../onvif_services/pullpoint/event_generators.h"
 #include "../onvif_services/imaging_service.h"
 #include "../onvif_services/media2_service.h"
 #include "../onvif_services/media_service.h"
@@ -43,6 +44,7 @@ Server::Server(const std::string& configs_dir, std::shared_ptr<ILogger> log) : I
 Server::~Server()
 {
 	discovery::stop();
+	event::stop_service();
 
 	io_context_work_.reset();
 	try
@@ -170,7 +172,8 @@ void Server::init()
 			 {utility::field::Topic,
 				{{"VideoSource", "tt:ReferenceToken"}, {"AnalyticsConfiguration", "tt:ReferenceToken"}, {"Rule", "xsd:string"}},
 				{{"IsInside", "xsd:boolean"}}}}};
-	event::init_service(*http_server_, *server_configs_, configs_dir, *logger_, event_generators);
+	event_source_ = std::make_shared<event::EventSource>(*logger_);
+	event::init_service(*http_server_, *server_configs_, configs_dir, *logger_, event_source_, event_generators);
 
 	// TODO: impl. logic for multichannel cannel
 	auto audio_node = profiles_config_->get_child(CONFIGURATION_ENUMERATION[CONFIGURATION_TYPE::AUDIOENCODER]).front();
@@ -183,7 +186,7 @@ void Server::init()
 			audio_node.second.get<unsigned int>("SampleRate") * 1000,
 	};
 
-	rtspServer_ = new rtsp::Server(&*logger_, *server_configs_, std::move(ainfo));
+	rtspServer_ = new rtsp::Server(&*logger_, *server_configs_, std::move(ainfo), event_source_);
 
 	if (auto delay = server_configs_->network_delay_simulation_; delay > 0)
 	{

@@ -5,12 +5,14 @@
 
 #include <string>
 #include <thread>
+#include <memory>
 
 class ILogger;
 
 namespace osrv
 {
 struct ServerConfigs;
+namespace event { class IEventSource; }
 namespace rtsp
 {
 
@@ -32,12 +34,14 @@ struct AudioInfo
 class Server
 {
 public:
-	Server(ILogger* /*logger*/, ServerConfigs& /*server_configs*/, const AudioInfo& ainfo);
+	Server(ILogger* /*logger*/, ServerConfigs& /*server_configs*/, const AudioInfo& ainfo,
+			std::shared_ptr<event::IEventSource> event_source = {});
 	~Server();
 	void run();
 
 private:
 	ILogger* logger_;
+	std::shared_ptr<event::IEventSource> event_source_;
 
 	GMainLoop* loop_;
 	GstRTSPServer* server_;

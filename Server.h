@@ -17,6 +17,7 @@
 // namespace onvif server
 namespace osrv
 {
+namespace event { class EventSource; }
 enum class AUTH_SCHEME
 {
 	NONE = 0,
@@ -89,6 +90,7 @@ private:
 	// osrv::ServerConfigs server_configs_;
 
 	rtsp::Server* rtspServer_ = nullptr;
+	std::shared_ptr<event::EventSource> event_source_;
 
 	std::shared_ptr<boost::asio::io_context> io_context_;
 	std::shared_ptr<boost::asio::io_context::work> io_context_work_;

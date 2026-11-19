@@ -193,8 +193,9 @@ namespace osrv
 {
 namespace rtsp
 {
-Server::Server(ILogger* logger, ServerConfigs& server_configs, const AudioInfo& ainfo)
-		: logger_(logger), server_configs_(&server_configs)
+Server::Server(ILogger* logger, ServerConfigs& server_configs, const AudioInfo& ainfo,
+		std::shared_ptr<event::IEventSource> event_source)
+		: logger_(logger), event_source_(std::move(event_source)), server_configs_(&server_configs)
 {
 	gst_init(NULL, NULL);
 

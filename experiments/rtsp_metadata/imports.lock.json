@@ -1,0 +1,57 @@
+{
+  "http://docs.oasis-open.org/wsn/b-2.xsd": {
+    "url": "https://docs.oasis-open.org/wsn/b-2.xsd",
+    "file": "f3b91b966a5ff4b6bf3cbec551b1e3064f999779b86100f0444b66f4d6a27089.xsd",
+    "sha256": "26f0c7aa9a3719412e2e3275bc80320edb4b2dc9783bf2bb08c6378f4ca681fe"
+  },
+  "http://www.w3.org/2005/08/addressing/ws-addr.xsd": {
+    "url": "https://www.w3.org/2005/08/addressing/ws-addr.xsd",
+    "file": "758113c37ceb9746dfa957d2f0db44e032d5de572e7e828f1b6c676c01f8ff87.xsd",
+    "sha256": "af806cc9af2514e9b0b07efe4e4dc42a32dad8ac08473dc025136207779d5ee9"
+  },
+  "http://docs.oasis-open.org/wsrf/bf-2.xsd": {
+    "url": "https://docs.oasis-open.org/wsrf/bf-2.xsd",
+    "file": "c5a788668f872073628b03f5336800f07e1c225f8967736c32e21ffee46fe36e.xsd",
+    "sha256": "7863ccf5b21105c374a405968266fa18ecd0ebe0f7b9b19cd9378656229ff468"
+  },
+  "http://www.w3.org/2001/xml.xsd": {
+    "url": "https://www.w3.org/2001/xml.xsd",
+    "file": "47812a16d9bc8d456ac092ad413f32029bdda78153759654f42767c76316f302.xsd",
+    "sha256": "61960fb3131e38022caad5360e2f33a3382578ab3c80cd58bd74320ede61b20c"
+  },
+  "http://docs.oasis-open.org/wsn/t-1.xsd": {
+    "url": "https://docs.oasis-open.org/wsn/t-1.xsd",
+    "file": "95e749b0cfa50f32998501c2f034355edb2ad47b36618343b401a2af762dd005.xsd",
+    "sha256": "ad5db0432a3885d1c8a574ba6b4058193af29bc971232c4bb6b31f8295fe3329"
+  },
+  "https://www.w3.org/2005/05/xmlmime": {
+    "url": "https://www.w3.org/2005/05/xmlmime",
+    "file": "f7a544302a0ad681c9352ce1a51d26261ae15d6b02bf701e88f8d2c08c459349.xsd",
+    "sha256": "330ab79ecdd3a8628f12ef4cbe34351e448f9b9231bacad339881ce1a61237a2"
+  },
+  "https://www.w3.org/2003/05/soap-envelope": {
+    "url": "https://www.w3.org/2003/05/soap-envelope",
+    "file": "71bc1315b8088bcf882411d922d3a30095e49171d22f1dc93ebf8ad8f045765b.xsd",
+    "sha256": "3ae8caa9a74e83528cc0e1a59fc12784435e8e0086e890d0e1b04d881c079bec"
+  },
+  "https://www.w3.org/2004/08/xop/include": {
+    "url": "https://www.w3.org/2004/08/xop/include",
+    "file": "eb291e501bbbc7b5f604f5eab1ea47bfc821ec6983504e33fbe0803efc58ed04.xsd",
+    "sha256": "dff9100efce4afb21de0cf673fb7fad103672a169862ab0f12e34c312b20e60d"
+  },
+  "http://docs.oasis-open.org/wsn/bw-2.wsdl": {
+    "url": "https://docs.oasis-open.org/wsn/bw-2.wsdl",
+    "file": "638c66e9412f5b712d823fde7edd4aafed85d9dce51b3a8312202300e5cb732c.xsd",
+    "sha256": "b757495d89f0b362bc754f8d8e7ce405c96eba497a9ff7eb207ec8cb80360e9b"
+  },
+  "http://docs.oasis-open.org/wsrf/rw-2.wsdl": {
+    "url": "https://docs.oasis-open.org/wsrf/rw-2.wsdl",
+    "file": "fe3241471e84ee68591c73b93a32ffa6a9e9c35c570f12dd33fc189d7d0d0728.xsd",
+    "sha256": "1e799c563e4bc6f39dda93c4060daece3a0a45b5d5a0450f7ebe8be91fc937f8"
+  },
+  "http://docs.oasis-open.org/wsrf/r-2.xsd": {
+    "url": "https://docs.oasis-open.org/wsrf/r-2.xsd",
+    "file": "24cebfbd5dd4277a390812f2b12fff4333d35d5b7105c801f233de19acf08d9d.xsd",
+    "sha256": "07888a967e326901a348e1dda4c6025e7bfa1478903c11148f4dfffe76aa4658"
+  }
+}

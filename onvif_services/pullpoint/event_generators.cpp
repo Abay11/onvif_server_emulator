@@ -2,7 +2,6 @@
 #include "../../utility/AnalyticsRules.h"
 #include "../../utility/FieldDetector.h"
 #include "../../utility/LineDetector.h"
-#include "pull_point.h"
 
 #include "../utility/DateTime.hpp"
 

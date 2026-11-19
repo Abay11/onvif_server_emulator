@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../onvif_services/pullpoint/pull_point.h"
+#include "../onvif/Notification.h"
 #include "LineCounting.h"
 #include "LicensePlateRecognition.h"
 #include "FaceRecognition.h"

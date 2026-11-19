@@ -69,6 +69,8 @@ FILE(GLOB SERVICES_SRC
 	"onvif_services/discovery_service.h"
 	"onvif_services/event_service.cpp"
 	"onvif_services/event_service.h"
+	"onvif_services/EventSource.cpp"
+	"onvif_services/EventSource.h"
 	"onvif_services/imaging_service.cpp"
 	"onvif_services/imaging_service.h"
 	"onvif_services/media2_service.cpp"
@@ -92,6 +94,8 @@ FILE(GLOB SERVICES_SRC
   	"onvif_services/physical_components/IDigitalInput.h"
 
 	"onvif/Recording.h"
+	"onvif/Notification.cpp"
+	"onvif/Notification.h"
 	"onvif/Recording.cpp"
 	"onvif/OnvifRequest.h"	
 )
