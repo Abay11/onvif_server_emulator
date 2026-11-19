@@ -95,6 +95,23 @@ class ConfigSchemaTests(unittest.TestCase):
         rule["Segments"] = []
         self.check("media_profiles.config", config, False)
 
+    def test_license_plate_persistence(self):
+        config = deepcopy(self.configs["media_profiles.config"])
+        rule = {"Name": "plates", "Type": "tt:LicensePlateRecognition", "IncludeImage": "",
+                "PlateLocation": "Front", "Country": "US", "Sensitivity": "0.5", "Threshold": 0.8,
+                "PlateMinWidth": 0, "PlateMaxWidth": 100, "EventInterval": "10"}
+        config["Analytics"][0]["rules"] = [rule]
+        self.check("media_profiles.config", config, True)
+        rule["SnapLine"] = [{"x": 0, "y": -1}, {"x": 0, "y": 1}]
+        self.check("media_profiles.config", config, True)
+        rule["SnapLine"].pop()
+        self.check("media_profiles.config", config, False)
+        del rule["SnapLine"]
+        rule["IncludeImage"] = "Embedded"
+        self.check("media_profiles.config", config, True)
+        rule["IncludeImage"] = "RemoteStorage"
+        self.check("media_profiles.config", config, False)
+
     def test_empty_recording_dates_and_required_keys(self):
         config = deepcopy(self.configs["recording_search.config"])
         config["Recordings"][0].update(DateFrom="", DateUntil="")

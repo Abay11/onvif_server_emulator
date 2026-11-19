@@ -201,7 +201,7 @@ it does not record live video to disk.
 ## Analytics Rules
 
 The Analytics service implements the Rules interface for
-`tt:MotionRegionDetector`, `tt:LineDetector`, `tt:LineCounting` and `tt:FieldDetector`. A shared `utility::AnalyticsRules`
+`tt:MotionRegionDetector`, `tt:LineDetector`, `tt:LineCounting`, `tt:FieldDetector` and `tt:LicensePlateRecognition`. A shared `utility::AnalyticsRules`
 validates and stores rule snapshots, alarm state and object history under a mutex.
 `utility::line` handles Line Detector parameters and geometry. SOAP mutations persist rules
 through the media manager; synthetic event generators read the shared snapshot
@@ -217,6 +217,13 @@ its own generator. The injected clock in `AnalyticsRules` makes deadlines testab
 without sleeping. Field Detector uses the same object samples and tracks zone occupancy
 across objects, with its own synchronization and lifecycle event generator.
 `utility::field` validates normalized polygons and evaluates point membership.
+`utility::lpr` validates License Plate Recognition parameters; a dedicated synthetic
+sampler emits non-property recognition events with a structured LicensePlateInfo
+ElementItem, vehicle information, speed/direction, a bounding box and optional
+base64 images and image URLs. The sampler cycles five vehicle datasets with independent per-plate trajectories.
+The shared context loads their ten plate-only and vehicle test PNGs once
+and registers separate static image GET routes using their corresponding bytes. Rule-local plate
+history enforces the repeat interval and snap line.
 See [Analytics Rules](ANALYTICS.md) for the normative
 references, configuration, simulation deviations, and validation commands.
 

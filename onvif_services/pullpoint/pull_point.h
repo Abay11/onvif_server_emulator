@@ -12,7 +12,7 @@
 #include <boost/asio.hpp>
 #include <boost/signals2.hpp>
 #include <boost/date_time/posix_time/posix_time.hpp>
-#include <boost/property_tree/ptree_fwd.hpp>
+#include <boost/property_tree/ptree.hpp>
 
 #include "../HttpServerFwd.h"
 #include "../Simple-Web-Server/server_http.hpp"
@@ -37,6 +37,8 @@ namespace osrv
 
 			std::string data_name;
 			std::string data_value;
+			StringPairsList_t data_simple_items;
+			std::vector<boost::property_tree::ptree> data_element_items;
 		};
 
 		class PullPoint

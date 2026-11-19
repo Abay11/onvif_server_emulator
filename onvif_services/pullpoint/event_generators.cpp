@@ -12,6 +12,25 @@ namespace osrv
 	namespace event
 	{
 
+	LicensePlateEventGenerator::LicensePlateEventGenerator(std::shared_ptr<utility::AnalyticsRules> detector,
+			boost::asio::io_context& io, const ILogger& logger)
+			: IEventGenerator(1, utility::lpr::Topic, io, logger), detector_(std::move(detector))
+	{
+	}
+
+	std::deque<NotificationMessage> LicensePlateEventGenerator::GenerateSynchronizationEvent() const
+	{
+		return {};
+	}
+
+	void LicensePlateEventGenerator::generate_event()
+	{
+		auto sample = utility::lpr::SyntheticSample(step_++);
+		for (const auto& source : detector_->VideoSources())
+			for (const auto& event : detector_->SamplePlate(source, sample))
+				event_signal_(event);
+	}
+
 	MotionRegionEventGenerator::MotionRegionEventGenerator(std::shared_ptr<utility::AnalyticsRules> detector,
 																												 int interval, boost::asio::io_context& io,
 																												 const ILogger& logger)

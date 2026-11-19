@@ -213,6 +213,110 @@
         "Field"
       ],
       "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "Name": {
+          "$ref": "types.schema.json#/$defs/token"
+        },
+        "Type": {
+          "const": "tt:LicensePlateRecognition"
+        },
+        "IncludeImage": {
+          "enum": ["", "Embedded", "LocalStorage"]
+        },
+        "PlateLocation": {
+          "enum": [
+            "",
+            "Front",
+            "Rear"
+          ]
+        },
+        "Country": {
+          "type": "string"
+        },
+        "Sensitivity": {
+          "$ref": "types.schema.json#/$defs/number"
+        },
+        "Threshold": {
+          "$ref": "types.schema.json#/$defs/number"
+        },
+        "PlateMinWidth": {
+          "$ref": "types.schema.json#/$defs/number"
+        },
+        "PlateMaxWidth": {
+          "$ref": "types.schema.json#/$defs/number"
+        },
+        "EventInterval": {
+          "oneOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 2147483647
+            },
+            {
+              "type": "string",
+              "pattern": "^[+]?[0-9]+$"
+            }
+          ]
+        },
+        "Region": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 8,
+          "items": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "$ref": "types.schema.json#/$defs/number"
+              },
+              "y": {
+                "$ref": "types.schema.json#/$defs/number"
+              }
+            },
+            "required": [
+              "x",
+              "y"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "SnapLine": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 8,
+          "items": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "$ref": "types.schema.json#/$defs/number"
+              },
+              "y": {
+                "$ref": "types.schema.json#/$defs/number"
+              }
+            },
+            "required": [
+              "x",
+              "y"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "Name",
+        "Type",
+        "IncludeImage",
+        "PlateLocation",
+        "Country",
+        "Sensitivity",
+        "Threshold",
+        "PlateMinWidth",
+        "PlateMaxWidth",
+        "EventInterval"
+      ],
+      "additionalProperties": false
     }
   ]
 }

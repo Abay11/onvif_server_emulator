@@ -293,6 +293,16 @@ namespace osrv
 				msg_node.add("wsnt:Message.tt:Message.tt:Data.tt:SimpleItem.<xmlattr>.Value", msg.data_value);
 				msg_node.add("wsnt:Message.tt:Message.tt:Data.tt:SimpleItem.<xmlattr>.Name", msg.data_name);
 								
+				for (const auto& [name, value] : msg.data_simple_items)
+				{
+					pt::ptree item;
+					item.put("<xmlattr>.Name", name);
+					item.put("<xmlattr>.Value", value);
+					msg_node.add_child("wsnt:Message.tt:Message.tt:Data.tt:SimpleItem", item);
+				}
+				for (const auto& item : msg.data_element_items)
+					msg_node.add_child("wsnt:Message.tt:Message.tt:Data.tt:ElementItem", item);
+
 				result.add_child("wsnt:NotificationMessage", msg_node);
 			}
 

@@ -20,7 +20,8 @@ public:
 	EventPropertiesSerializer(const std::string& topic,
 														const StringPairsList_t& source_properties, // pairs of name and type
 													 const StringPairsList_t& data_properties,
-													 bool is_property = true);
+													 bool is_property = true,
+				const StringPairsList_t& data_elements = {});
 
 	boost::property_tree::ptree Ptree() const;
 	std::string Name() const;
@@ -31,5 +32,6 @@ private:
 	const StringPairsList_t& source_properties_;
 	const StringPairsList_t& data_properties_;
 	bool is_property_;
+	StringPairsList_t data_elements_;
 };
 } // namespace osrv::event

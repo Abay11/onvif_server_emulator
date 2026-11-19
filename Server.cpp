@@ -115,6 +115,22 @@ void Server::init()
 	ReplayControlService()->Run();
 
 	const std::vector<event::EventGeneratorRegistration> event_generators{
+			{[detector = Rules()](const boost::property_tree::ptree&, boost::asio::io_context& io, const ILogger& logger) {
+				 return std::make_shared<event::LicensePlateEventGenerator>(detector, io, logger);
+			 },
+			 {utility::lpr::Topic,
+				{{"VideoSource", "tt:ReferenceToken"}, {"Rule", "xsd:string"}},
+				{{"Likelihood", "xsd:float"},
+				 {"Speed", "xsd:float"},
+				 {"Direction", "tt:Direction"},
+				 {"ImageURI", "xsd:anyURI"},
+				 {"VehicleImageURI", "xsd:anyURI"}},
+				false,
+				{{"LicensePlateInfo", "tt:LicensePlateInfo"},
+				 {"BoundingBox", "tt:Rectangle"},
+				 {"VehicleInfo", "tt:VehicleInfo"},
+				 {"Image", "xsd:base64Binary"},
+				 {"VehicleImage", "xsd:base64Binary"}}}},
 			{[detector = Rules()](const boost::property_tree::ptree& configs, boost::asio::io_context& io,
 														const ILogger& logger) {
 				 return std::make_shared<event::MotionRegionEventGenerator>(

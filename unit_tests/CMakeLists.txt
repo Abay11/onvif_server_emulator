@@ -18,6 +18,7 @@ add_executable(test_executable
 	discovery_tests.cpp
 	event_service_tests.cpp	
 	http_da_tests.cpp
+	license_plate_tests.cpp
 	field_detector_tests.cpp
 	line_detector_tests.cpp
 	line_counting_tests.cpp

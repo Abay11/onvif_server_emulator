@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Rules and PullPoint checks. Run against a disposable configuration with auth disabled.
 
-Creates four rules and removes them on completion. Requires Python 3 only.
+Creates temporary rules and removes them on completion. Requires Python 3 only.
 """
 import argparse
+import base64
 from datetime import datetime, timedelta, timezone
 import http.client
 import time
@@ -72,6 +73,7 @@ def run(args):
     line_name = name + "_line"
     count_name = name + "_count"
     field_name = name + "_field"
+    plate_name = name + "_plate"
     subscription = None
 
     def rule(rule_name, armed=True):
@@ -315,14 +317,116 @@ def run(args):
                     message = notification.find("wsnt:Message/tt:Message", NS)
                     deleted |= message.attrib["PropertyOperation"] == "Deleted"
         assert deleted, "FieldDetector Deleted event missing"
-        print("PASS Motion Region, Line Detector, LineCounting and Field Detector: CRUD, options, faults, "
-              "Media/Media2, PullPoint, property transitions, aggregated counts and scheduled reset")
+        caps = soap("GetServiceCapabilities").find(".//tan:Capabilities", NS)
+        assert caps.attrib["ImageSendingType"] == "Embedded LocalStorage"
+        plate_description = properties.find(".//Recognition/LicensePlate/tt:MessageDescription", NS)
+        assert plate_description is not None and plate_description.attrib["IsProperty"] == "false"
+        elements = {i.attrib["Name"]: i.attrib["Type"] for i in plate_description.findall("tt:Data/tt:ElementItemDescription", NS)}
+        assert elements == {"LicensePlateInfo": "tt:LicensePlateInfo", "VehicleInfo": "tt:VehicleInfo",
+                            "BoundingBox": "tt:Rectangle", "Image": "xsd:base64Binary", "VehicleImage": "xsd:base64Binary"}
+        plate_rule = (f'<tan:Rule Name="{plate_name}" Type="tt:LicensePlateRecognition"><tt:Parameters>'
+                      '<tt:SimpleItem Name="EventInterval" Value="3"/>'
+                      '</tt:Parameters></tan:Rule>')
+        soap("GetRuleOptions", "<tan:RuleType>tt:LicensePlateRecognition</tan:RuleType>" + token)
+        soap("CreateRules", token + plate_rule)
+        for service, prefix, op in [("media", "trt", "GetVideoAnalyticsConfigurations"),
+                                    ("media2", "tr2", "GetAnalyticsConfigurations")]:
+            configs = soap(op, service=service, prefix=prefix)
+            assert any(r.attrib["Name"] == plate_name for r in configs.findall(".//tt:Rule", NS))
+        expected_vehicles = {
+            "TEST123": ("US", "Car", "Test Brand", "Synthetic Vehicle", ""),
+            "TEST456": ("GB", "Car", "Test Motors", "Red SUV", "-TEST456"),
+            "TEST789": ("DE", "Truck", "Test Cargo", "White Van", "-TEST789"),
+            "TEST321": ("FR", "Bus", "Test Transit", "Yellow Minibus", "-TEST321"),
+            "TEST654": ("IT", "Motorcycle", "Test Riders", "Green Motorcycle", "-TEST654"),
+        }
+        received = {}
+        repeated = False
+        image_payloads = {}
+        deadline = time.monotonic() + 2 * len(expected_vehicles) + 4
+        while time.monotonic() < deadline and (len(received) < len(expected_vehicles) or not repeated):
+            events = soap("PullMessages", "<tet:Timeout>PT1S</tet:Timeout><tet:MessageLimit>100</tet:MessageLimit>",
+                          prefix="tet", url=subscription)
+            for notification in events.findall(".//wsnt:NotificationMessage", NS):
+                if not (notification.find("wsnt:Topic", NS).text or "").endswith("Recognition/LicensePlate"):
+                    continue
+                message = notification.find("wsnt:Message/tt:Message", NS)
+                assert "PropertyOperation" not in message.attrib
+                assert {i.attrib["Name"] for i in message.findall("tt:Source/tt:SimpleItem", NS)} == {"VideoSource", "Rule"}
+                likelihood = message.find("tt:Data/tt:SimpleItem[@Name='Likelihood']", NS)
+                assert 0 <= float(likelihood.attrib["Value"]) <= 1
+                plate = message.find("tt:Data/tt:ElementItem[@Name='LicensePlateInfo']/tt:LicensePlateInfo", NS)
+                number = plate.find("tt:PlateNumber", NS).text
+                assert number in expected_vehicles
+                country, vehicle_type, brand, model, suffix = expected_vehicles[number]
+                assert plate.find("tt:CountryCode", NS).text == country
+                values = {i.attrib["Name"]: i.attrib["Value"] for i in message.findall("tt:Data/tt:SimpleItem", NS)}
+                assert float(values["Speed"]) >= 0 and values["Direction"] in {"Left", "Right", "Any"}
+                vehicle = message.find("tt:Data/tt:ElementItem[@Name='VehicleInfo']/tt:VehicleInfo", NS)
+                assert vehicle.find("tt:Type", NS).text == vehicle_type
+                assert vehicle.find("tt:Brand", NS).text == brand
+                assert vehicle.find("tt:Model", NS).text == model
+                box = message.find("tt:Data/tt:ElementItem[@Name='BoundingBox']/tt:BoundingBox", NS)
+                assert -1 <= float(box.attrib["left"]) <= float(box.attrib["right"]) <= 1
+                assert -1 <= float(box.attrib["bottom"]) <= float(box.attrib["top"]) <= 1
+                images = {}
+                for field, uri_name in [("Image", "ImageURI"), ("VehicleImage", "VehicleImageURI")]:
+                    binary = base64.b64decode(message.find(f"tt:Data/tt:ElementItem[@Name='{field}']/tt:{field}", NS).text, validate=True)
+                    images[field] = binary
+                    target = urlsplit(values[uri_name])
+                    assert target.hostname == args.host and target.port == args.port
+                    kind = "plate" if field == "Image" else "vehicle"
+                    assert target.path == f"/analytics/lpr/{kind}{suffix}.png"
+                    connection = http.client.HTTPConnection(target.hostname, target.port, timeout=10)
+                    try:
+                        connection.request("GET", target.path)
+                        response = connection.getresponse()
+                        assert response.status == 200 and response.getheader("Content-Type") == "image/png"
+                        assert response.read() == binary and binary.startswith(b"\x89PNG\r\n\x1a\n")
+                    finally:
+                        connection.close()
+                assert images["Image"] != images["VehicleImage"], "Plate image must differ from vehicle image"
+                image_payloads[number] = (images["Image"], images["VehicleImage"])
+                timestamp = datetime.fromisoformat(message.attrib["UtcTime"].replace("Z", "+00:00"))
+                if number in received:
+                    assert (timestamp - received[number]).total_seconds() >= 3
+                    repeated = True
+                received[number] = timestamp
+        assert set(received) == set(expected_vehicles), "Not all vehicles produced events"
+        assert repeated, "No repeated plate to verify EventInterval"
+        for kind in (0, 1):
+            assert len({pair[kind] for pair in image_payloads.values()}) == len(expected_vehicles), "Vehicle image pairs must be distinct"
+        # Modification clears repeat state; exercise both non-embedded modes on the wire.
+        for mode in ("LocalStorage", ""):
+            changed = (f'<tan:Rule Name="{plate_name}" Type="tt:LicensePlateRecognition"><tt:Parameters>'
+                       f'<tt:SimpleItem Name="IncludeImage" Value="{mode}"/>'
+                       '<tt:SimpleItem Name="EventInterval" Value="0"/>'
+                       '</tt:Parameters></tan:Rule>')
+            soap("ModifyRules", token + changed)
+            checked = False
+            deadline = time.monotonic() + 5
+            while time.monotonic() < deadline and not checked:
+                events = soap("PullMessages", "<tet:Timeout>PT1S</tet:Timeout><tet:MessageLimit>100</tet:MessageLimit>",
+                              prefix="tet", url=subscription)
+                for notification in events.findall(".//wsnt:NotificationMessage", NS):
+                    if not (notification.find("wsnt:Topic", NS).text or "").endswith("Recognition/LicensePlate"):
+                        continue
+                    data = notification.find("wsnt:Message/tt:Message/tt:Data", NS)
+                    assert data.find("tt:ElementItem[@Name='Image']", NS) is None
+                    assert data.find("tt:ElementItem[@Name='VehicleImage']", NS) is None
+                    for uri_name in ("ImageURI", "VehicleImageURI"):
+                        assert (data.find(f"tt:SimpleItem[@Name='{uri_name}']", NS) is not None) == bool(mode)
+                    checked = True
+            assert checked, f"Missing LPR event for IncludeImage={mode!r}"
+        soap("DeleteRules", token + f"<tan:RuleName>{plate_name}</tan:RuleName>")
+        print("PASS Motion Region, Line Detector, LineCounting, Field Detector and License Plate Recognition: CRUD, options, faults, "
+              "Media/Media2, PullPoint, image modes/downloads, vehicle fields, property transitions, counts and reset")
     finally:
         if subscription:
             soap("Unsubscribe", prefix="wsnt", url=subscription)
         existing = soap("GetRules", token).findall(".//tan:Rule", NS)
         cleanup = [r.attrib["Name"] for r in existing
-                   if r.attrib["Name"] in {name, second, line_name, count_name, field_name, name + "_rollback", name + "_overflow"}]
+                   if r.attrib["Name"] in {name, second, line_name, count_name, field_name, plate_name, name + "_rollback", name + "_overflow"}]
         if cleanup:
             soap("DeleteRules", token + "".join(f"<tan:RuleName>{n}</tan:RuleName>" for n in cleanup))
 

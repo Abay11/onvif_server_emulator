@@ -244,7 +244,8 @@ struct GetEventPropertiesHandler : public utility::http::RequestHandlerBase
 			for (const auto& description : additional_event_topics)
 			{
 				EventPropertiesSerializer serializer(
-						description.topic, description.source_properties, description.data_properties, description.is_property);
+						description.topic, description.source_properties, description.data_properties,
+						description.is_property, description.data_elements);
 				response_tree.put_child("wstop:TopicSet." + serializer.Path() + "." + serializer.Name(),
 						serializer.Ptree().get_child(serializer.Name()));
 			}

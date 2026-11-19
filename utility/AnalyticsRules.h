@@ -2,6 +2,8 @@
 
 #include "../onvif_services/pullpoint/pull_point.h"
 #include "LineCounting.h"
+#include "LicensePlateRecognition.h"
+#include <optional>
 #include <boost/property_tree/ptree.hpp>
 #include <functional>
 #include <map>
@@ -31,7 +33,8 @@ public:
 	using Message = osrv::event::NotificationMessage;
 	using SaveRules = std::function<void(const std::string&, const Tree&)>;
 	using Clock = std::function<counting::Time()>;
-	AnalyticsRules(const Tree& profiles, SaveRules save, Clock clock = std::chrono::system_clock::now);
+	AnalyticsRules(const Tree& profiles, SaveRules save, Clock clock = std::chrono::system_clock::now,
+			lpr::Images images = {});
 	Tree Execute(const std::string& operation, const std::string& xml);
 	std::deque<Message> Synchronize() const;
 	std::deque<Message> Sample(double x, double y, double strength);
@@ -40,6 +43,7 @@ public:
 	std::deque<Message> SynchronizeCounts() const;
 	std::deque<Message> SynchronizeFields() const;
 	std::deque<Message> TickFields();
+	std::deque<Message> SamplePlate(const std::string& videoSource, const lpr::Sample& sample);
 	void ForgetObject(const std::string& videoSource, const std::string& objectId);
 	std::vector<std::string> VideoSources() const;
 	static Tree RuleXml(const Tree& rule);
@@ -50,9 +54,16 @@ private:
 	Message CountNotification(const std::string& token, const Tree& rule, const std::string& operation, int count) const;
 	Message FieldNotification(const std::string& token, const Tree& rule, const std::string& operation,
 														bool inside) const;
+	struct PlateState
+	{
+		std::optional<std::pair<double, double>> position;
+		std::optional<counting::Time> last;
+	};
+	std::map<std::tuple<std::string, std::string, std::string, std::string>, PlateState> plates_;
 	Tree profiles_;
 	SaveRules save_;
 	Clock clock_;
+	lpr::Images images_;
 	mutable std::mutex mutex_;
 	std::map<std::pair<std::string, std::string>, bool> states_;
 	std::map<std::tuple<std::string, std::string, std::string>, std::pair<double, double>> tracks_;

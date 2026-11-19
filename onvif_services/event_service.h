@@ -31,6 +31,7 @@ struct EventTopicDescription
 	std::vector<std::pair<std::string, std::string>> source_properties;
 	std::vector<std::pair<std::string, std::string>> data_properties;
 	bool is_property = true;
+	std::vector<std::pair<std::string, std::string>> data_elements;
 };
 
 struct EventGeneratorRegistration

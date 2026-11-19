@@ -1,12 +1,12 @@
-# Analytics Rules: Motion Region, Line Detector, LineCounting and Field Detector
+# Analytics Rules
 
 The Analytics endpoint `/onvif/analytics_service` implements the Rules interface
-for `tt:MotionRegionDetector`, `tt:LineDetector`, `tt:LineCounting` and `tt:FieldDetector`.
+for `tt:MotionRegionDetector`, `tt:LineDetector`, `tt:LineCounting`, `tt:FieldDetector` and `tt:LicensePlateRecognition`.
 This is an emulator with deterministic synthetic input. It does not inspect the RTSP stream or claim Profile M certification.
 
 ## Contract and references
 
-The implementation targets sections 5.2.2, 6.1, 6.2, Annex A.1/A.2/A.3/A.5 and Annex C.1 of the
+The implementation targets sections 5.2.2, 6.1, 6.2, Annex A.1/A.2/A.3/A.5, Annex C.1 and Annex G.1/G.3 of the
 [Analytics Service Specification 26.06](https://www.onvif.org/specs/srv/analytics/ONVIF-Analytics-Service-Spec.pdf).
 The wire format uses the published
 [Analytics WSDL 20.12](https://www.onvif.org/ver20/analytics/wsdl/analytics.wsdl),
@@ -50,7 +50,7 @@ and `DeleteRules` use a VideoAnalyticsConfiguration token, by default
 `GetAnalyticsConfigurations` return the same persisted rules. Read operations use
 READ_MEDIA access; mutations use ACTUATE under the existing digest authorization.
 
-The device supports up to four rules in total across all four types and all analytics
+The device supports up to four rules in total across all five types and all analytics
 configurations.
 
 ## Motion Region Detector (Annex C.1)
@@ -141,6 +141,139 @@ sample-driven Changed notifications occur only when the state changes. A rule
 modification resets its evaluated state to false before the next sample.
 The topic is also described by `GetEventProperties`.
 
+## License Plate Recognition (Annex G.3)
+
+`tt:LicensePlateRecognition` uses the same Rules CRUD, atomic persistence,
+configuration tokens, access levels and shared four-rule limit. The G.1/G.3
+contract was inspected on 2026-11-19 against Analytics 26.06, Analytics WSDL
+20.12, ONVIF schema 25.12 and metadata schema 25.12 linked above. Rule and event
+payloads are independently implemented; no specification material is bundled.
+
+| Parameter | Supported values and creation default |
+| --- | --- |
+| `IncludeImage` | `Embedded` (creation default), `LocalStorage`, or empty (no images); `RemoteStorage` is unsupported |
+| `PlateLocation` | `Front`, `Rear`, or empty (default, either location) |
+| `Country` | Country string, or empty (default, no country filter) |
+| `Sensitivity` | Finite float in `[0,1]`, default `0.5` |
+| `Threshold` | Finite confidence threshold in `[0,1]`, default `0.5` |
+| `PlateMinWidth`, `PlateMaxWidth` | Percentage of scene image width in `[0,100]`, defaults `0`, `100`; minimum must not exceed maximum |
+| `EventInterval` | Integer seconds in `[0,2147483647]`, default `0`; minimum time between notifications for the same country/plate within a rule |
+| `Region` | Optional ElementItem containing `tt:Polygon`, 3–8 vertices in normalized `[-1,1]` coordinates; absent means full frame |
+| `SnapLine` | Optional ElementItem containing `tt:Polyline`, 2–8 vertices in normalized `[-1,1]` coordinates; absent means no snap constraint |
+
+All other parameters are SimpleItems. Omitted parameters on modification retain
+their values. Duplicate/unknown parameters, malformed geometry, non-finite or
+out-of-range numbers, and unsupported image modes return `InvalidRule`.
+Geometry uses the same simple-polygon/polyline restrictions as Field/Line Detector.
+`GetSupportedRules` describes these parameters and the emitted event fields;
+`GetRuleOptions` exposes numeric and geometry limits. Country strings are not
+restricted to an enumeration. IncludeImage options and the Analytics ImageSendingType
+capability advertise `Embedded LocalStorage`.
+
+For example, send this independently written rule body after ConfigurationToken
+in CreateRules, using the namespace bindings of the Motion Region example:
+
+```xml
+<tan:Rule Name="EntryPlates" Type="tt:LicensePlateRecognition">
+  <tt:Parameters>
+    <tt:SimpleItem Name="Threshold" Value="0.8"/>
+    <tt:SimpleItem Name="EventInterval" Value="5"/>
+  </tt:Parameters>
+</tan:Rule>
+```
+
+Rules persist as flat objects in `Analytics[].rules`, with `Name`, `Type` and the
+SimpleItem names as JSON keys; optional `Region`/`SnapLine` are arrays of `{x,y}`
+points. Media and Media2 serialize the same persisted values. Restart retains
+configuration and clears transient sampling/repeat history. Successful modification
+clears only that rule's history; failed batches/saves retain configuration and history.
+
+A dedicated one-second event generator cycles through five synthetic vehicles:
+
+| Plate | Country | Type | Brand / Model | Moving speed (m/s) | Plate width (%) | Likelihood |
+| --- | --- | --- | --- | --- | --- | --- |
+| TEST123 | US | Car | Test Brand / Synthetic Vehicle (blue car) | 12.5 | 10 | 0.95 |
+| TEST456 | GB | Car | Test Motors / Red SUV | 8 | 12 | 0.92 |
+| TEST789 | DE | Truck | Test Cargo / White Van | 6 | 14 | 0.97 |
+| TEST321 | FR | Bus | Test Transit / Yellow Minibus | 10 | 16 | 0.90 |
+| TEST654 | IT | Motorcycle | Test Riders / Green Motorcycle | 15 | 6 | 0.94 |
+
+The sequence repeats in table order, with one vehicle sampled each second for
+every video source. Each vehicle advances its own x position every five seconds
+through `-0.75, -0.25, 0.25, 0.75, 0.75, 0.25, -0.25, -0.75`, at y=0. The complete
+trajectory cycle takes 40 seconds. This preserves independent plate histories for
+SnapLine evaluation. With default parameters all five plates appear within five
+seconds; Country, Threshold, width, Region/SnapLine and EventInterval settings can
+reduce the emitted events. EventInterval remains per country/plate within a rule,
+so another vehicle is not suppressed by the previous vehicle's notification.
+The motorcycle is sampled from the rear (`PlateLocation=Rear`); the other four
+vehicles use `Front`. A rule restricted to Front therefore excludes TEST654,
+and a Rear-only rule selects it.
+The sample must satisfy the region, location, country, width and threshold
+filters. Sensitivity is simulated by requiring likelihood >= `1 - Sensitivity`.
+When SnapLine is present, recognition occurs on crossing in either direction,
+using Line Detector's boundary/tangency handling. The region is checked at the
+current sample position. These deterministic filters, percentage ranges, seconds
+for EventInterval and point geometry are explicit emulator choices where G.3 does
+not fully prescribe an algorithm or range. There is no OCR, image extraction,
+PTZ remapping, real vehicle classification or RTSP metadata. The extra vehicle
+fields and image are synthetic test data, independent of the video stream.
+
+PullPoint notifications use `tns1:RuleEngine/Recognition/LicensePlate`, with Source
+SimpleItems `VideoSource` and `Rule`, Data SimpleItem `Likelihood` and Data
+ElementItem `LicensePlateInfo`. The latter contains `tt:LicensePlateInfo` with
+required `tt:PlateNumber` and optional `tt:CountryCode` in schema order, both of
+metadata type `tt:StringLikelihood`. The country is omitted when absent in input.
+Additional SimpleItems are `Speed` (metres per second) and `Direction` (ONVIF
+`tt:Direction`). The generator reports `Right` or `Left` according to horizontal
+motion and the moving speed in the table above; repeated endpoint positions
+report `Any` and speed `0`.
+Additional ElementItems are `VehicleInfo` (`tt:VehicleInfo`, with the selected vehicle
+Type, Brand and Model in schema order) and `BoundingBox`
+(`tt:Rectangle`, centered on the plate sample, width from the table and height 5 percent
+of the frame, clipped to normalized bounds). No object ID or label is emitted.
+
+With `IncludeImage=Embedded`, `Image` and `VehicleImage` are base64 ElementItems;
+`ImageURI` and `VehicleImageURI` are also supplied as SimpleItems. With
+`LocalStorage`, only the two URI fields are included. Empty IncludeImage omits
+all four image fields. Existing persisted rules with empty IncludeImage remain
+image-free; use ModifyRules to set it to `Embedded` to receive all four fields:
+
+```xml
+<tan:Rule Name="EntryPlates" Type="tt:LicensePlateRecognition">
+  <tt:Parameters><tt:SimpleItem Name="IncludeImage" Value="Embedded"/></tt:Parameters>
+</tan:Rule>
+```
+
+The URI names use uppercase `URI`, following the G.3 rule description (G.1 text
+uses ImageUri). Both URLs use `ServerConfigs::HttpAddress()`, respecting advertised
+addresses and port overrides, and serve immutable PNG data over HTTP GET at
+`/analytics/lpr/plate.png` and `/analytics/lpr/vehicle.png` for TEST123. The other
+vehicles use `/analytics/lpr/plate-TEST456.png` and
+`/analytics/lpr/vehicle-TEST456.png`, with TEST789/TEST321/TEST654 substituted as appropriate.
+Each URI always serves the same vehicle's bytes, even after later events.
+`Image`/`ImageURI`
+use `server_configs/rs/lpr-plate-test.png`, a separate close-up of the synthetic
+plate `TEST123` marked TEST IMAGE. `VehicleImage`/`VehicleImageURI` use
+`server_configs/rs/lpr-test.png`, the complete unbranded car test card marked
+TEST IMAGE / NOT A REAL CAPTURE. Plate and vehicle bytes are distinct; each
+embedded image matches the bytes returned by its own URL. Both are static test
+assets, not crops extracted from live video. Additional pairs use the matching
+`-TEST456`, `-TEST789`, `-TEST321` and `-TEST654` filename suffixes.
+The routes are public static test resources, like the existing snapshot route.
+All ten images are loaded and base64-encoded once during initialization. A missing or
+unreadable asset prevents initialization with an explicit error. When using an
+existing configuration mount, copy all `rs/lpr-test*.png` and
+`rs/lpr-plate-test*.png` files into that mount.
+This is not remote image upload; RemoteStorage remains unsupported.
+
+This is a non-property event: notifications omit PropertyOperation, and rule CRUD
+and synchronization generate no recognition messages. GetEventProperties advertises
+all structured fields as ElementItemDescriptions and the remaining fields as
+SimpleItemDescriptions.
+Repeat history is keyed by configuration, rule, country and plate; entries last
+until rule modification/deletion or restart. There is no automatic track expiry.
+
 ## Field Detector (Annex A.3)
 
 `tt:FieldDetector` uses the same six Rules operations, access levels, atomic
@@ -203,7 +336,7 @@ the default full-frame polygon stays occupied after the first sample.
 
 Line Detector uses the same six Rules operations, access levels, configuration
 token and persistence transaction as Motion Region. `GetSupportedRules` describes
-all four rule types. `GetRuleOptions` without a type returns their options; with
+all five rule types. `GetRuleOptions` without a type returns their options; with
 `tt:LineDetector` it returns `Direction` (`tt:StringList`: `Left Right Any`) and
 `Segments` (`tt:IntRange`: 2–8 points). The optional RuleType precedes
 ConfigurationToken in the request, as required by Analytics WSDL 20.12.
@@ -434,3 +567,79 @@ with imports; three complete SOAP fault envelopes were also validated, using `xm
 libxml2 could not compile the upstream wildcard content models (including
 MotionRegionConfigOptions); the schemas were not patched. This is a validation
 tool limitation, not a claim of complete protocol or product conformance.
+
+
+License Plate Recognition validation on 2026-11-19 used `osrv-dev:latest`, the
+local WSL Docker Engine (`default` context), and the documented `osrv-dev-build`
+and `osrv-dev-ccache` volumes. Commands inside the development container:
+
+```bash
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug -DENABLE_UNIT_TESTS=ON \
+  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+cmake --build build --parallel 2
+ctest --test-dir build --output-on-failure
+```
+
+All 129 Boost test cases passed. The JSON configuration checker and all 11 schema
+regression checks passed. `python3 unit_tests/analytics_smoke.py --capture <directory>`
+and `python3 unit_tests/network_smoke.py --multicast-interface 127.0.0.1` passed
+against the newly built server with a disposable configuration. Both clients shared
+the isolated server container's network namespace; the existing host deployment
+was left running. The analytics check includes LPR advertisement, options, Media/
+Media2 serialization, structured PullPoint events and the repeat interval. Network
+checks include multicast discovery and video/audio RTP over TCP and UDP.
+Using `xmlschema` 4.3.2 in XSD 1.1 mode with the unmodified published imports,
+76 captured Analytics responses/faults, media configuration payloads, notifications
+and explicitly typed LicensePlateInfo payloads passed validation. This does not
+validate OCR accuracy, Windows/VMS clients or WSL LAN/firewall behavior.
+
+After the existing deployment was stopped, the final build was also tested with
+Docker `--network host` in WSL mirrored mode. The complete Analytics smoke test,
+including LPR/PullPoint, passed from the WSL host. SOAP URLs/snapshots and independent
+video/audio RTP checks passed over TCP and UDP. The full network smoke test timed
+out waiting for the first unicast discovery reply, both through loopback and the
+selected WSL interface; it therefore did not reach multicast discovery. The cause
+was not established. The isolated-network discovery pass above does not establish
+host-network discovery functionality. All tests used disposable configuration;
+the temporary host-network server was stopped afterward.
+
+The image/vehicle extension was validated on 2026-11-19 with the same dev image
+and CMake/CTest commands above: all 130 executed Boost cases passed, along with
+all 11 JSON schema checks and the shipped configuration checker. The extended
+Analytics smoke test passed all image modes, fetched both image URLs over HTTP,
+checked PNG content type, and compared downloaded bytes with decoded embedded
+images. The ImageSendingType capability was checked on the running server.
+The complete network smoke test passed in the isolated Docker network, including
+unicast/multicast discovery and audio/video RTP over TCP and UDP. WSDL/XSD checks
+validated 92 captured responses and typed payloads, including VehicleInfo,
+BoundingBox, LicensePlateInfo and base64 image values. These checks do not change
+the host-network discovery limitation recorded above. The temporary test server
+was stopped after validation. The generated resource's exact prompt and provenance
+are recorded in [the resource README](../server_configs/rs/README.md).
+
+The plate/vehicle separation was checked on 2026-11-19 using the same dev-container
+build and CTest workflow: all 130 Boost cases passed. The Analytics smoke test
+confirmed that Image and VehicleImage differ and that each decoded payload matches
+its corresponding HTTP download. The complete isolated-network smoke test passed;
+93 captured responses and typed payloads passed the same WSDL/XSD validation.
+Both synthetic assets and their generation prompts are recorded in the resource
+README. The temporary validation server was stopped afterward.
+
+The four-vehicle extension was validated on 2026-11-19 with the same dev-container
+CMake build and CTest workflow: all 131 executed Boost cases passed. All 11 JSON
+schema checks and the shipped configuration validator passed. The extended
+Analytics smoke test captured TEST123/TEST456/TEST789/TEST321 with their respective
+countries, types, brands and models, downloaded all eight distinct image URIs,
+compared each download with its embedded bytes, and checked EventInterval on a
+repeated plate. The isolated-network smoke test passed discovery and TCP/UDP media.
+The same WSDL/XSD validator accepted 105 captured responses and typed payloads.
+Windows/VMS and host-network discovery were not revalidated by these isolated
+container checks. The disposable validation server was stopped afterward.
+
+The motorcycle addition was validated on 2026-11-19 using the same dev-container
+build and CTest commands: all 131 Boost cases passed, including the five-vehicle
+cycle and Rear/Front filtering. Analytics smoke verified all five vehicle datasets
+and their ten image downloads; the isolated-network smoke test passed discovery
+and TCP/UDP media. WSDL/XSD validation accepted 110 captured responses and typed
+payloads, including Motorcycle vehicle information. The temporary test server was
+stopped after validation; Windows/VMS and host-network discovery were not retested.

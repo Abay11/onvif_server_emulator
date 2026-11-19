@@ -92,8 +92,29 @@ std::shared_ptr<utility::AnalyticsRules> IOnvifServer::Rules()
 	if (!analytics_rules_)
 	{
 		auto manager = media_profiles_manager_;
+		auto images = utility::lpr::LoadImages(configs_path_, server_configs_->HttpAddress());
+		auto serve = [&](const std::string& path, const std::string& content) {
+			auto bytes = std::make_shared<const std::string>(content);
+			http_server_->resource[path]["GET"] = [bytes](std::shared_ptr<HttpServer::Response> response,
+																										std::shared_ptr<HttpServer::Request>) {
+				SimpleWeb::CaseInsensitiveMultimap headers;
+				headers.emplace("Content-Type", "image/png");
+				response->write(SimpleWeb::StatusCode::success_ok, *bytes, headers);
+			};
+		};
+		for (size_t index = 0; index < images.size(); ++index)
+		{
+			auto route = [&](bool plate) {
+				auto path = utility::lpr::ImagePath(index, plate);
+				path.insert(path.size() - 4, "\\"); // Match the filename dot literally.
+				return "^" + path + "$";
+			};
+			serve(route(true), images[index].plate.bytes);
+			serve(route(false), images[index].vehicle.bytes);
+		}
 		analytics_rules_ = std::make_shared<utility::AnalyticsRules>(
-				manager->ReaderWriter()->ConfigsTree(), [manager](const std::string& token, const pt::ptree& rules) {
+				manager->ReaderWriter()->ConfigsTree(),
+				[manager](const std::string& token, const pt::ptree& rules) {
 					auto& cfg =
 							utility::AnalyticsConfigurationReaderByToken(token, manager->ReaderWriter()->ConfigsTree()).Config();
 					auto backup = cfg;
@@ -107,7 +128,8 @@ std::shared_ptr<utility::AnalyticsRules> IOnvifServer::Rules()
 						cfg.swap(backup);
 						throw;
 					}
-				});
+				},
+				std::chrono::system_clock::now, std::move(images));
 	}
 	return analytics_rules_;
 }

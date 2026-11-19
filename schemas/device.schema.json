@@ -324,6 +324,7 @@
               "CellBasedSceneDescriptionSupported": {
                 "$ref": "types.schema.json#/$defs/boolean"
               },
+              "ImageSendingType": {"type": "string"},
               "RuleOptionsSupported": {
                 "$ref": "types.schema.json#/$defs/boolean"
               },

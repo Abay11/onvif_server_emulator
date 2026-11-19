@@ -78,7 +78,7 @@ BOOST_FIXTURE_TEST_SUITE(line_counting, Fixture)
 BOOST_AUTO_TEST_CASE(discovery_defaults_persistence_and_lifecycle)
 {
 	auto descriptions = call("GetSupportedRules").get_child("tan:SupportedRules");
-	BOOST_TEST(descriptions.count("tt:RuleDescription") == 4u);
+	BOOST_TEST(descriptions.count("tt:RuleDescription") == 5u);
 	auto desc = std::next(descriptions.begin(), 3)->second;
 	BOOST_TEST(desc.get<std::string>("<xmlattr>.Name") == "tt:LineCounting");
 	BOOST_TEST(desc.get<bool>("tt:Messages.<xmlattr>.IsProperty"));
