@@ -218,7 +218,7 @@ static std::string metadata_branch(int index)
 }
 
 Server::Server(ILogger* logger, ServerConfigs& server_configs, const AudioInfo& ainfo,
-		std::shared_ptr<event::IEventSource> event_source)
+							 std::shared_ptr<event::IEventSource> event_source, std::shared_ptr<scene::ISource> scenes)
 		: logger_(logger), event_source_(std::move(event_source)), server_configs_(&server_configs)
 {
 	gst_init(NULL, NULL);
@@ -233,7 +233,7 @@ Server::Server(ILogger* logger, ServerConfigs& server_configs, const AudioInfo& 
 	context_ = g_main_context_new();
 	loop_ = g_main_loop_new(context_, FALSE);
 	if (server_configs_->rtsp_metadata_enabled_)
-		metadata_ = std::make_unique<MetadataStreams>(event_source_, *logger_, context_);
+		metadata_ = std::make_unique<MetadataStreams>(event_source_, *logger_, context_, std::move(scenes));
 
 	/* create a server instance */
 	server_ = gst_rtsp_server_new();

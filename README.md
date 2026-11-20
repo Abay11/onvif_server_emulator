@@ -293,8 +293,10 @@ The example metadata catalog has two configurations with events enabled and no
 profile associations. Supported controls include event enable/disable, topic and
 ItemFilter content filters, and media synchronization points. See
 [live RTSP metadata](docs/RTSP_METADATA.md) for SOAP operations, filter examples,
-persistence/session behavior and validation commands. Analytics scene frames,
-PTZ metadata, compression and multicast metadata are unsupported.
+persistence/session behavior and validation commands. Synthetic analytics scene
+frames can be enabled separately with `Analytics=true` on a profile that also
+references an analytics configuration. PTZ metadata, compression and multicast
+metadata are unsupported.
 
 ### Discovery Service (`discovery.config`)
 

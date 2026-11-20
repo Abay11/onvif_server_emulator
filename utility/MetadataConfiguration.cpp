@@ -274,6 +274,17 @@ std::shared_ptr<const Settings> Compile(const pt::ptree& config)
 {
 	auto settings = std::make_shared<Settings>();
 	settings->events = config.get<bool>("Events", false);
+	settings->analytics = config.get<bool>("Analytics", false);
+	if (auto modules = config.get_child_optional("AnalyticsModules"))
+	{
+		settings->tracker = false;
+		for (const auto& [_, module] : *modules)
+		{
+			if (module.data() != scene::ModuleName)
+				throw Fault("ConfigModify", "Unsupported analytics metadata module");
+			settings->tracker = true;
+		}
+	}
 	std::ostringstream identity;
 	pt::write_json(identity, config);
 	settings->identity = identity.str();
@@ -386,13 +397,21 @@ pt::ptree ConfigurationXml(const pt::ptree& config, const pt::ptree& profiles)
 		}
 		out.add_child("tt:Events", events);
 	}
-	out.put("tt:Analytics", false);
+	out.put("tt:Analytics", config.get<bool>("Analytics", false));
 	out.put("tt:Multicast.tt:Address.tt:Type", "IPv4");
 	out.put("tt:Multicast.tt:Address.tt:IPv4Address", "0.0.0.0");
 	out.put("tt:Multicast.tt:Port", 0);
 	out.put("tt:Multicast.tt:TTL", 1);
 	out.put("tt:Multicast.tt:AutoStart", false);
 	out.put("tt:SessionTimeout", "PT60S");
+	if (auto selected = config.get_child_optional("AnalyticsModules"))
+	{
+		pt::ptree engine;
+		for (const auto& [_, name] : *selected)
+			if (name.data() == scene::ModuleName)
+				engine.add_child("tt:AnalyticsModule", scene::ModuleXml());
+		out.add_child("tt:AnalyticsEngineConfiguration", engine);
+	}
 	return out;
 }
 
@@ -456,7 +475,18 @@ std::string Control::Uri(const std::string& token)
 		throw incomplete_configuration();
 	std::shared_ptr<const Settings> settings;
 	if (!metadata.empty())
-		settings = Compile(manager_.GetConfigByToken(metadata, "Metadata"));
+	{
+		auto scoped = std::make_shared<Settings>(*Compile(manager_.GetConfigByToken(metadata, "Metadata")));
+		auto source = profile.get<std::string>("VideoSource", "");
+		if (!source.empty())
+			scoped->video_source = manager_.GetConfigByToken(source, "VideoSource").get<std::string>("SourceToken");
+		scoped->analytics_configuration = profile.get<std::string>("Analytics", "");
+		if (!scoped->analytics_configuration.empty())
+			manager_.GetConfigByToken(scoped->analytics_configuration, "Analytics");
+		scoped->identity += "\n" + std::to_string(scoped->video_source.size()) + ":" + scoped->video_source +
+												scoped->analytics_configuration;
+		settings = std::move(scoped);
+	}
 	if (!configure_)
 		throw std::runtime_error("RTSP profile control is unavailable");
 	configure_(path(token), encoder.empty() ? "" : encoders_.at(encoder),
@@ -603,11 +633,11 @@ pt::ptree Control::Execute(const std::string& operation, const std::string& xml,
 		if (name.empty() || name.size() > 64)
 			throw Fault("ConfigModify", "Metadata name must contain 1..64 bytes");
 		updated.put("Name", name);
+		updated.put("Analytics", boolean(text(configuration, "Analytics", "false")));
 		for (const auto& [key, value] : configuration)
 		{
 			auto field = local(key);
-			if (field == "Analytics" && boolean(value.data()))
-				throw Fault("ConfigModify", "Analytics scene metadata is not supported");
+
 			if (field == "PTZStatus")
 				for (const auto& [flagName, flag] : value)
 					if (flagName != "<xmlattr>" && boolean(flag.data()))
@@ -678,6 +708,28 @@ pt::ptree Control::Execute(const std::string& operation, const std::string& xml,
 				if (!storedFilters.empty())
 					updated.add_child("Filters", storedFilters);
 			}
+		}
+		if (auto engine = optional(configuration, "AnalyticsEngineConfiguration"))
+		{
+			auto scope = ns;
+			bindings(*engine, scope);
+			pt::ptree selected;
+			for (const auto& [key, module] : *engine)
+			{
+				if (key == "<xmlattr>")
+					continue;
+				auto moduleNs = scope;
+				bindings(module, moduleNs);
+				child(module, "Parameters");
+				if (expanded(key, moduleNs) != std::string("{") + Schema + "}AnalyticsModule" ||
+						module.get<std::string>("<xmlattr>.Name", "") != scene::ModuleName ||
+						expanded(module.get<std::string>("<xmlattr>.Type", ""), moduleNs) !=
+								std::string("{") + scene::ModuleNamespace + "}SyntheticObjectTracker" ||
+						!selected.empty())
+					throw Fault("ConfigModify", "Unsupported analytics metadata module selection");
+				selected.push_back({"", pt::ptree(scene::ModuleName)});
+			}
+			updated.add_child("AnalyticsModules", selected);
 		}
 		Compile(updated);
 		auto& tree = manager_.ReaderWriter()->ConfigsTree();

@@ -2,6 +2,8 @@
 
 #include <boost/property_tree/ptree.hpp>
 
+#include "SceneDescription.h"
+
 #include <deque>
 #include <map>
 #include <memory>
@@ -28,6 +30,7 @@ using NotificationPtr = std::shared_ptr<const NotificationMessage>;
 // Returns the contents of one wsnt:NotificationMessage, without a transport envelope.
 boost::property_tree::ptree serialize_notification(const NotificationMessage& message);
 std::string serialize_metadata(const std::deque<NotificationMessage>& messages,
-															 const std::map<std::string, std::string>& namespaces = {});
+															 const std::map<std::string, std::string>& namespaces = {},
+															 const std::vector<scene::Frame>& frames = {});
 std::size_t notification_size(const NotificationMessage& message);
 } // namespace osrv::event

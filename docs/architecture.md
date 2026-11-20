@@ -220,9 +220,12 @@ validates and stores rule snapshots, alarm state and object history under a mute
 `utility::line` handles Line Detector parameters and geometry. SOAP mutations persist rules
 through the media manager; synthetic event generators read the shared snapshot
 without accessing the manager from the event thread. Media and Media2 serialize
-rules from the manager's current tree. Scene analytics modules remain unsupported.
-Optional RTSP metadata carries events, not scene
-frames. Line crossing notifications are non-property events and have no
+rules from the manager's current tree. A fixed `SyntheticObjectTracker` module
+publishes immutable scene snapshots from the same samples used by Line Detector,
+Line Counting and Field Detector. `onvif/SceneDescription` bounds retained frames
+and objects; each RTSP bridge reads independently by video source and analytics
+configuration, without accessing the media manager. Metadata settings separately
+select events and analytics. Line crossing notifications are non-property events and have no
 synchronization state. `utility::counting::State` tracks counts, per-object passages,
 report deadlines and daily resets; only its rule configuration is persisted.
 Counting reuses the Line Detector synthetic object samples. A separate one-second

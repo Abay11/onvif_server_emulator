@@ -1,8 +1,10 @@
-# Live RTSP event metadata
+# Live RTSP metadata
 
 The GStreamer RTSP server can deliver the shared event source as an ONVIF XML
 metadata RTP track alongside live video/audio. PullPoint subscribers and RTSP
-clients receive independent copies of the same generated notifications.
+clients receive independent copies of the same generated notifications. The track
+can also carry synthetic analytics scene frames, separately enabled in the
+metadata configuration.
 
 ## Enable the transport
 
@@ -102,14 +104,70 @@ associations. Topic/content filters apply to property snapshots as well as live
 notifications. They do not change independent PullPoint subscriptions; existing
 PullPoint filter simulation limits remain described in [event delivery](EVENT_DELIVERY.md).
 
-Only uncompressed event metadata is supported. Configuration responses explicitly
+Only uncompressed metadata is supported. Configuration responses explicitly
 include `CompressionType="None"`, including after SetMetadataConfiguration, so
-clients can read back the selected mode. Analytics, PTZ status/position,
+clients can read back the selected mode. Analytics can be enabled independently
+as described below. PTZ status/position,
 GeoLocation and ShapePolygon cannot be enabled. Options report false PTZ flags,
 CompressionType=None and MaxContentFilterSize=4096. The supported multicast
 placeholder is IPv4 0.0.0.0, port 0, TTL 1, AutoStart=false; multicast streaming is
 unadvertised and unsupported. Media SessionTimeout is fixed at PT60S; Media2
-ignores the deprecated timeout field. Scene metadata remains Stage 5 work.
+ignores the deprecated timeout field.
+
+### Synthetic scene description
+
+Set `tt:Analytics` to `true` in a metadata configuration and attach it to a profile
+that references both a VideoSourceConfiguration and a VideoAnalyticsConfiguration.
+The default metadata configurations retain `Analytics=false`. The fixed module
+`SyntheticObjectTracker` produces `tt:VideoAnalytics/tt:Frame` with UTC time,
+numeric object identifiers, identity transformation, normalized bounding boxes,
+centers and Human classification. `Frame.Source` identifies the module name.
+Media and Media2 include the module in the analytics configuration; Analytics
+supports `GetAnalyticsModules`, `GetSupportedAnalyticsModules` and
+`GetSupportedMetadata`. The latter returns a representative frame whose geometry
+is in the top-left image quadrant. The module type is the QName
+`osrv:SyntheticObjectTracker`, with `osrv` bound to
+`urn:onvif-server-emulator:analytics`. It is a built-in, read-only module with no
+configurable parameters; module CRUD and options are not advertised.
+
+Omitting `tt:AnalyticsEngineConfiguration` selects all available modules. An empty
+element selects none. To select the supported module explicitly, include this
+element after `tt:SessionTimeout` in the metadata configuration:
+
+```xml
+<tt:AnalyticsEngineConfiguration xmlns:tt="http://www.onvif.org/ver10/schema"
+    xmlns:osrv="urn:onvif-server-emulator:analytics">
+  <tt:AnalyticsModule Name="SyntheticObjectTracker" Type="osrv:SyntheticObjectTracker">
+    <tt:Parameters/>
+  </tt:AnalyticsModule>
+</tt:AnalyticsEngineConfiguration>
+```
+
+Only module selection is applied here; module parameters in this selector are
+ignored. Unknown module names/types return ConfigModify. The persisted JSON
+`Metadata[].AnalyticsModules` is either `["SyntheticObjectTracker"]` or an empty
+list (PropertyTree writes the latter as `""`); an absent key selects all modules.
+`Events` and `Analytics` are independent: omitting Events yields a scene-only
+stream; enabling both yields scene frames and notifications. Event topic/content
+filters do not filter scene frames. A profile without an analytics association
+receives no scene frames. Existing sessions retain their settings until reconnect.
+
+The Line Detector simulator supplies the same object samples to the scene buffer
+and rule engine. A line-crossing event and its corresponding frame have identical
+ObjectId and UTC time. IDs remain stable for an object's lifetime and are not
+reused after deletion within a running simulator. Each frame describes the current
+objects; deletion records remove objects previously delivered to that media
+instance. The buffer retains 128 frames and at most 64 active objects per video
+source. A slow reader that falls behind receives the latest full snapshot and a
+diagnostic rather than an unbounded backlog. PLAY and synchronization resend the
+latest scene snapshot as well as event property states.
+
+This is an intentional simulation limitation: the module describes synthetic
+object samples, not analysis of the video test pattern or arbitrary file input.
+UTC is the simulator sample time; exact correspondence to an encoded video frame
+is not implemented. Visual correlation requires a separate renderer/analyzer.
+LPR, face recognition and motion-region event generators do not produce scene
+frames through this module. PTZ metadata remains unsupported.
 
 ### Persistence and active sessions
 
@@ -171,8 +229,8 @@ emulation retains the existing hardcoded pipeline limitations.
   estimation on sparse XML traffic. The normal five-second minimum RTCP interval
   remains in effect; actual intervals are randomized by GStreamer.
 
-No analytics scene/frame description, compression, multicast RTP, media recording
-or historical metadata replay is introduced by this stage.
+Compression, multicast RTP, media recording and historical metadata replay remain
+unsupported.
 
 ## Lifetime and cleanup
 
@@ -198,7 +256,11 @@ RTSP session sections, Core event filtering/property synchronization, Media
 metadata configuration and synchronization sections, Media2 generic configuration
 operations, `wsdl/ver10/media/wsdl/media.wsdl`,
 `wsdl/ver20/media/wsdl/media.wsdl`, `metadatastream.xsd`,
-`common.xsd`, `onvif.xsd` and imported definitions. See
+`common.xsd`, `onvif.xsd` and imported definitions. Stage 5 uses the same release's
+Analytics specification, Analytics WSDL 20.12 at
+`wsdl/ver20/analytics/wsdl/analytics.wsdl` (module queries and supported metadata),
+and the scene Frame/Object/Appearance/ObjectTree types in `metadatastream.xsd`.
+See
 [the Stage 1 references/cache instructions](../experiments/rtsp_metadata/README.md)
 and [the immutable release](https://github.com/onvif/specs/tree/d7f3684501c4a6d58f879e72e1e3322c120f95e6).
 GStreamer API references are [appsrc](https://gstreamer.freedesktop.org/documentation/app/appsrc.html),
@@ -228,12 +290,13 @@ python3 unit_tests/network_smoke.py --profile-uris
 python3 unit_tests/event_delivery_smoke.py
 python3 unit_tests/rtsp_metadata_smoke.py --contract /contract
 python3 unit_tests/metadata_configuration_smoke.py --contract /contract
+python3 unit_tests/scene_metadata_smoke.py --contract /contract
 python3 unit_tests/metadata_restart_smoke.py
 ```
 
 `/contract` is the Stage 1 pinned schema cache mounted into the test container.
 Omit that argument for a standard-library-only receiver without XSD validation.
-The Stage 4 script additionally uses the optional validation-only `xmlschema`
+The configuration and scene scripts additionally use the optional validation-only `xmlschema`
 Python package (tested with Debian python3-xmlschema 3.4.5). It uses XSD 1.1
 priority rules for the unchanged upstream schema: libxml2's XSD 1.0 checker rejects
 VideoSourceConfigurationOptionsExtension2 because of its element/wildcard model.
@@ -245,6 +308,11 @@ For metadata-enabled `network_smoke.py`, add `--profile-uris`. The configuration
 smoke script requires writable disposable default configs; it restores the
 settings and associations it changes. The transport smoke script attaches both
 stock profiles, obtains their SOAP URIs and removes its associations afterwards.
+The scene script also requires disposable default configs. It checks fixed module
+queries and faults, scene-only and mixed streams, module selection, profile and
+active-session isolation, and identical scene/event ObjectId and UTC in RTSP and
+PullPoint. Its Analytics schema loader explicitly includes `metadatastream.xsd`
+alongside `onvif.xsd`, which share the same target namespace.
 
 All scripts accept explicit host/port options. The metadata script checks two
 RTSP consumers plus two PullPoints, identical live events, late property state,
@@ -311,3 +379,24 @@ Docker context `default` used the WSL Linux Engine on its Unix socket.
 All network tests used isolated container networks and disposable configuration
 copies. The full runtime image was not rebuilt in Stage 4; Windows/LAN/VMS
 acceptance and sustained load/backpressure tests remain outside these results.
+
+### Recorded Stage 5 results
+
+The source build and complete CTest suite passed using the same Linux Docker
+development workflow. Five new scene unit cases cover immutable scoped snapshots,
+independent readers, bounded retention and recovery, object deletion/ID lifetime,
+shared scene/event sample identity and analytics/module selection.
+
+`scene_metadata_smoke.py --contract /contract` passed with real TCP/UDP RTP and
+the pinned metadata, Media, Media2 and Analytics schemas. It verified module
+discovery, sample geometry, module/type faults, scene-only/mixed streams, module
+selection, profile association changes, unchanged active sessions and identical
+ObjectId/UTC across a scene frame, RTSP line event and PullPoint line event.
+The configuration, RTSP transport, event delivery, Analytics and network smoke
+scripts passed as regressions. Shipped and SOAP-modified configurations passed
+JSON schema validation; Python syntax, local documentation links and
+`git diff --check` passed.
+
+Tests used isolated container networking and disposable configuration copies.
+The runtime image was not rebuilt; Windows/LAN/VMS acceptance, sustained load and
+visual or exact video-frame correlation remain outside this validation.

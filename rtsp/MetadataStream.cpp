@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <atomic>
 #include <mutex>
+#include <set>
 #include <vector>
 
 namespace osrv::rtsp
@@ -21,8 +22,10 @@ class Bridge : public std::enable_shared_from_this<Bridge>
 {
 public:
 	using Ptr = std::shared_ptr<Bridge>;
-	Bridge(GstElement* element, GstElement* appsrc, std::shared_ptr<event::IEventSource> source, const ILogger& logger, std::shared_ptr<const metadata::Settings> settings)
-			: settings_(std::move(settings)), element_(element), appsrc_(appsrc), source_(std::move(source)), logger_(logger)
+	Bridge(GstElement* element, GstElement* appsrc, std::shared_ptr<event::IEventSource> source, const ILogger& logger,
+				 std::shared_ptr<const metadata::Settings> settings, std::shared_ptr<scene::ISource> scenes)
+			: scenes_(std::move(scenes)), settings_(std::move(settings)), element_(element), appsrc_(appsrc),
+				source_(std::move(source)), logger_(logger)
 	{
 		namespaces_ = source_->Namespaces();
 		subscription_ = source_->Subscribe({}, false);
@@ -124,6 +127,7 @@ public:
 			g_signal_handler_disconnect(appsrc_, std::exchange(enough_, 0));
 		subscription_->Close();
 		source_.reset();
+		scenes_.reset();
 	}
 
 private:
@@ -155,7 +159,10 @@ private:
 				gst_app_src_get_current_level_bytes(GST_APP_SRC(appsrc_)) >= 128 * 1024)
 			return;
 		if (synchronize_.exchange(false))
+		{
 			source_->Synchronize(subscription_);
+			scene_cursor_ = 0;
+		}
 		auto batch = subscription_->Take(16);
 		std::deque<event::NotificationMessage> messages;
 		for (const auto& message : batch.messages)
@@ -164,10 +171,34 @@ private:
 			logger_.Warn("RTSP metadata queue lost " + std::to_string(batch.dropped) + " notifications");
 		if (batch.needs_synchronization)
 			synchronize_.store(true);
-		if (!messages.empty() || g_get_monotonic_time() - last_push_ >= G_USEC_PER_SEC)
-			Push(event::serialize_metadata(messages, namespaces_));
+		std::vector<scene::Frame> frames;
+		if (scenes_ && settings_ && settings_->analytics && settings_->tracker)
+		{
+			auto batch = scenes_->Read(settings_->video_source, settings_->analytics_configuration, scene_cursor_);
+			if (batch.skipped)
+				logger_.Warn("RTSP scene consumer skipped old samples; publishing a current snapshot");
+			for (const auto& sample : batch.frames)
+			{
+				auto frame = *sample;
+				std::set<std::string> current;
+				for (const auto& object : frame.objects)
+					current.insert(object.id);
+				frame.deleted.clear();
+				for (const auto& id : scene_objects_)
+					if (!current.contains(id))
+						frame.deleted.push_back(id);
+				scene_objects_ = std::move(current);
+				scene_cursor_ = frame.sequence;
+				frames.push_back(std::move(frame));
+			}
+		}
+		if (!frames.empty() || !messages.empty() || g_get_monotonic_time() - last_push_ >= G_USEC_PER_SEC)
+			Push(event::serialize_metadata(messages, namespaces_, frames));
 	}
 
+	std::shared_ptr<scene::ISource> scenes_;
+	std::uint64_t scene_cursor_ = 0;
+	std::set<std::string> scene_objects_;
 	std::shared_ptr<const metadata::Settings> settings_;
 	GstElement* element_;
 	GstElement* appsrc_;
@@ -191,13 +222,15 @@ private:
 struct MetadataStreams::State
 {
 	std::shared_ptr<event::IEventSource> source;
+	std::shared_ptr<scene::ISource> scenes;
 	const ILogger& logger;
 	GMainContext* context;
 	std::mutex mutex;
 	bool stopped = false;
 	std::vector<std::weak_ptr<Bridge>> streams;
-	State(std::shared_ptr<event::IEventSource> source, const ILogger& logger, GMainContext* context)
-			: source(std::move(source)), logger(logger), context(g_main_context_ref(context))
+	State(std::shared_ptr<event::IEventSource> source, const ILogger& logger, GMainContext* context,
+				std::shared_ptr<scene::ISource> scenes)
+			: source(std::move(source)), scenes(std::move(scenes)), logger(logger), context(g_main_context_ref(context))
 	{
 	}
 	~State()
@@ -207,8 +240,8 @@ struct MetadataStreams::State
 };
 
 MetadataStreams::MetadataStreams(std::shared_ptr<event::IEventSource> source, const ILogger& logger,
-																 GMainContext* context)
-		: state_(std::make_shared<State>(std::move(source), logger, context))
+																 GMainContext* context, std::shared_ptr<scene::ISource> scenes)
+		: state_(std::make_shared<State>(std::move(source), logger, context, std::move(scenes)))
 {
 }
 
@@ -237,7 +270,8 @@ void MetadataStreams::Attach(GstRTSPMediaFactory* factory, std::shared_ptr<const
 				Bridge::Ptr bridge;
 				try
 				{
-					bridge = std::make_shared<Bridge>(element, source, state->source, state->logger, attachment.second);
+					bridge =
+							std::make_shared<Bridge>(element, source, state->source, state->logger, attachment.second, state->scenes);
 					bridge->Start(media, state->context);
 					std::erase_if(state->streams, [](const auto& weak) { return weak.expired(); });
 					state->streams.push_back(bridge);
@@ -267,6 +301,7 @@ void MetadataStreams::Stop()
 			stream->Stop();
 	state_->streams.clear();
 	state_->source.reset();
+	state_->scenes.reset();
 }
 
 void MetadataStreams::Synchronize(GstRTSPMedia* media)

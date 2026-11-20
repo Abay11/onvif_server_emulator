@@ -97,6 +97,8 @@ FILE(GLOB SERVICES_SRC
 
 	"onvif/Recording.h"
 	"onvif/Notification.cpp"
+	"onvif/SceneDescription.cpp"
+	"onvif/SceneDescription.h"
 	"onvif/Notification.h"
 	"onvif/Recording.cpp"
 	"onvif/OnvifRequest.h"	

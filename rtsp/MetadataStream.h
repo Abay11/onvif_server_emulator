@@ -10,6 +10,11 @@ namespace osrv::event
 class IEventSource;
 }
 
+namespace osrv::scene
+{
+class ISource;
+}
+
 namespace osrv::metadata { struct Settings; }
 
 namespace osrv::rtsp
@@ -18,7 +23,8 @@ namespace osrv::rtsp
 class MetadataStreams
 {
 public:
-	MetadataStreams(std::shared_ptr<event::IEventSource> source, const ILogger& logger, GMainContext* context);
+	MetadataStreams(std::shared_ptr<event::IEventSource> source, const ILogger& logger, GMainContext* context,
+									std::shared_ptr<scene::ISource> scenes = {});
 	~MetadataStreams();
 	void Attach(GstRTSPMediaFactory* factory, std::shared_ptr<const metadata::Settings> settings = {});
 	static void Synchronize(GstRTSPMedia* media);

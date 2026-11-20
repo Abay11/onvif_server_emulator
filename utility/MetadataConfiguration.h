@@ -26,6 +26,9 @@ struct Fault : std::runtime_error
 struct Settings
 {
 	bool events = false;
+	bool analytics = false;
+	bool tracker = true;
+	std::string video_source, analytics_configuration;
 	std::string identity;
 	std::function<bool(const event::NotificationMessage&, const std::map<std::string, std::string>&)> accepts;
 };

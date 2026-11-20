@@ -493,12 +493,17 @@ For example, `Segments: [[{"x": 0, "y": -1}, {"x": 0, "y": 1}]]` defines one lin
 Use an empty `ResetTime` array for a persisted configuration without resets.
 
 The former branch's experimental MotionRegionDetector AnalyticsModule and sample
-vehicle metadata are no longer exposed: MotionRegionDetector is a rule. Analytics
-module, cell scene description and supported metadata capabilities are false.
+vehicle metadata are no longer exposed: MotionRegionDetector is a rule. Cell scene
+description remains unsupported. Stage 5 adds a separate fixed, read-only
+`SyntheticObjectTracker` module, documented in [RTSP metadata](RTSP_METADATA.md#synthetic-scene-description).
+`GetAnalyticsModules`, `GetSupportedAnalyticsModules` and `GetSupportedMetadata`
+expose this module and its sample frame. `SupportedMetadata=true` advertises the
+last operation; module creation/modification and module options remain unsupported
+and their capabilities remain false.
 Legacy module utilities remain covered by isolated fixtures. When migrating an
 old configuration, remove the experimental `analyticsModules` entries and use
-`rules` instead. This implementation does not add an RTSP metadata track or the
-other features needed for a complete Profile M product. Existing Event service
+`rules` instead. RTSP metadata support does not establish the other features
+needed for a complete Profile M product. Existing Event service
 restart and shutdown limitations described in the architecture still apply.
 
 ## Validation

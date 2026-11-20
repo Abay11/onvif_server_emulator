@@ -351,6 +351,7 @@ void osrv::IOnvifService::Run()
 		xml_namespaces_.try_emplace(key, tree.get_value<std::string>());
 
 	xml_namespaces_.try_emplace("ter", "http://www.onvif.org/ver10/error");
+	xml_namespaces_.try_emplace("osrv", "urn:onvif-server-emulator:analytics");
 	if (service_name_ == "media" || service_name_ == "media2") xml_namespaces_.try_emplace("wsnt", "http://docs.oasis-open.org/wsn/b-2");
 
 	const auto service_config = dvc_srv_cfg->find("GetServices");

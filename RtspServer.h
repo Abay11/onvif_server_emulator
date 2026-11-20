@@ -13,6 +13,10 @@ class ILogger;
 namespace osrv
 {
 struct ServerConfigs;
+namespace scene
+{
+class ISource;
+}
 namespace metadata { struct Settings; }
 namespace event { class IEventSource; }
 namespace rtsp
@@ -38,7 +42,7 @@ class Server
 {
 public:
 	Server(ILogger* /*logger*/, ServerConfigs& /*server_configs*/, const AudioInfo& ainfo,
-			std::shared_ptr<event::IEventSource> event_source = {});
+				 std::shared_ptr<event::IEventSource> event_source = {}, std::shared_ptr<scene::ISource> scenes = {});
 	~Server();
 	void run();
 	unsigned short Port() const;

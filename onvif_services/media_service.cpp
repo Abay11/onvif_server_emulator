@@ -886,15 +886,23 @@ void fill_soap_media_profile(const pt::ptree& profileConfigs, pt::ptree& profile
 			profileOutNode.put_child("tt:AudioEncoderConfiguration", ae_node);
 		}
 	}
+	if (auto token = profileConfigs.get<std::string>("Analytics", ""); !token.empty())
+		for (const auto& [_, configuration] : profiles_cfg.get_child("Analytics", emptyIfNoNode))
+			if (configuration.get<std::string>("token") == token)
+			{
+				pt::ptree analytics;
+				osrv::analytics::fillConfiguration(configuration, analytics, profiles_cfg);
+				profileOutNode.add_child("tt:VideoAnalyticsConfiguration", analytics);
+			}
 	if (auto token = profileConfigs.get<std::string>("Metadata", ""); !token.empty())
 		for (const auto& [_, configuration] : profiles_cfg.get_child("Metadata", emptyIfNoNode))
 			if (configuration.get<std::string>("token") == token)
-				profileOutNode.add_child("tt:MetadataConfiguration", osrv::metadata::ConfigurationXml(configuration, profiles_cfg));
-
+				profileOutNode.add_child("tt:MetadataConfiguration",
+																 osrv::metadata::ConfigurationXml(configuration, profiles_cfg));
 }
-	
+
 std::string osrv::media::util::generate_rtsp_url(const osrv::ServerConfigs& server_configs,
-	const std::string& profile_stream_url)
+																								 const std::string& profile_stream_url)
 {
 	return server_configs.RtspAddress() + profile_stream_url;
 }

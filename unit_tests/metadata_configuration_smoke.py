@@ -26,10 +26,11 @@ TOPICS = "http://www.onvif.org/ver10/topics"
 def soap(host, port, operation, body="", media2=False, expected=200, validate=None):
     namespace = M2 if media2 else M
     payload = (f'<s:Envelope xmlns:s="{S}" xmlns:m="{namespace}" xmlns:tt="{T}" '
-               f'xmlns:wsnt="{W}" xmlns:alias="{TOPICS}"><s:Body>'
+               f'xmlns:wsnt="{W}" xmlns:osrv="urn:onvif-server-emulator:analytics" xmlns:alias="{TOPICS}"><s:Body>'
                f'<m:{operation}>{body}</m:{operation}></s:Body></s:Envelope>')
     if validate and expected == 200:
-        validate(ET.tostring(ET.fromstring(payload).find(f"{{{S}}}Body")[0]), media2)
+        from lxml import etree
+        validate(etree.tostring(etree.fromstring(payload.encode()).find(f"{{{S}}}Body")[0]), media2)
     connection = http.client.HTTPConnection(host, port, timeout=15)
     try:
         connection.request("POST", "/onvif/" + ("media2" if media2 else "media") + "_service",
@@ -39,7 +40,8 @@ def soap(host, port, operation, body="", media2=False, expected=200, validate=No
         assert response.status == expected, (operation, response.status, data)
         root = ET.fromstring(data)
         if validate:
-            validate(ET.tostring(root.find(f"{{{S}}}Body")[0]), media2) if expected == 200 else validate(data, None)
+            from lxml import etree
+            validate(etree.tostring(etree.fromstring(data).find(f"{{{S}}}Body")[0]), media2) if expected == 200 else validate(data, None)
         return root
     finally:
         connection.close()

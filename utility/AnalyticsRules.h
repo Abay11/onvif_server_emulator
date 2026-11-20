@@ -39,7 +39,8 @@ public:
 	Tree Execute(const std::string& operation, const std::string& xml);
 	std::deque<Message> Synchronize() const;
 	std::deque<Message> Sample(double x, double y, double strength);
-	std::deque<Message> SampleObject(const std::string& videoSource, const std::string& objectId, double x, double y);
+	std::deque<Message> SampleObject(const std::string& videoSource, const std::string& objectId, double x, double y,
+																	 const std::string& classification = {});
 	std::deque<Message> TickCounting();
 	std::deque<Message> SynchronizeCounts() const;
 	std::deque<Message> SynchronizeFields() const;
@@ -48,6 +49,10 @@ public:
 	std::deque<Message> SampleFace(const std::string& videoSource, const face::Sample& sample);
 	void ForgetObject(const std::string& videoSource, const std::string& objectId);
 	std::vector<std::string> VideoSources() const;
+	std::shared_ptr<osrv::scene::ISource> Scenes() const
+	{
+		return scenes_;
+	}
 	static Tree RuleXml(const Tree& rule);
 	static constexpr const char* Topic = "tns1:RuleEngine/MotionRegionDetector/Motion";
 
@@ -67,6 +72,7 @@ private:
 	Clock clock_;
 	lpr::Images images_;
 	face::Images faces_;
+	std::shared_ptr<osrv::scene::Buffer> scenes_ = std::make_shared<osrv::scene::Buffer>();
 	mutable std::mutex mutex_;
 	std::map<std::pair<std::string, std::string>, bool> states_;
 	std::map<std::tuple<std::string, std::string, std::string>, std::pair<double, double>> tracks_;

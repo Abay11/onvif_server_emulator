@@ -41,7 +41,8 @@ pt::ptree serialize_notification(const NotificationMessage& message)
 }
 
 std::string serialize_metadata(const std::deque<NotificationMessage>& messages,
-															 const std::map<std::string, std::string>& namespaces)
+															 const std::map<std::string, std::string>& namespaces,
+															 const std::vector<scene::Frame>& frames)
 {
 	auto bindings = namespaces;
 	bindings["tt"] = "http://www.onvif.org/ver10/schema";
@@ -50,6 +51,8 @@ std::string serialize_metadata(const std::deque<NotificationMessage>& messages,
 	pt::ptree stream;
 	for (const auto& [prefix, uri] : bindings)
 		stream.put("<xmlattr>.xmlns:" + prefix, uri);
+	for (const auto& frame : frames)
+		stream.add_child("tt:VideoAnalytics.tt:Frame", scene::FrameXml(frame));
 	for (const auto& message : messages)
 		stream.add_child("tt:Event.wsnt:NotificationMessage", serialize_notification(message));
 	pt::ptree root;

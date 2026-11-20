@@ -31,6 +31,7 @@ add_executable(test_executable
 	pull_point_tests.cpp
 	recording_tests.cpp
 	rtsp_metadata_tests.cpp
+	scene_description_tests.cpp
 	server_tests.cpp	
 	service_configs_tests.cpp
 	tests_main.cpp

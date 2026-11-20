@@ -20,7 +20,7 @@ There are two different descriptions to account for:
   the metadata XML. This requires a producer beyond the existing notification
   generators and is planned separately below.
 
-## Repository findings
+## Initial repository findings
 
 - `RtspServer.cpp` creates shared high and low live factories. High has video and
   audio, including a file-input variant; low has video only. Replay is separate.
@@ -99,6 +99,13 @@ initialization, transient events and structured recognition payloads.
 
 ## Stage 3: Integrate live RTSP metadata
 
+Status: implemented and validated in the source-built development environment
+and standard runtime image. Implementation uses an opt-in
+`rtsp_metadata.enabled` transport switch until
+Stage 4 supplies metadata configuration/profile control. This documented staging
+deviation enables both fixed live mounts without advertising SOAP metadata support.
+See [live RTSP metadata](RTSP_METADATA.md) for behavior and validation.
+
 Conceptual additional branch; Stage 1 determines exact caps and properties:
 
 ```text
@@ -127,6 +134,12 @@ Replay metadata is outside this live-stream milestone.
 
 ## Stage 4: ONVIF configuration and discoverability
 
+Status: implemented. Media/Media2 metadata configuration, profile associations,
+namespace-aware topic and ItemFilter filtering, profile-specific stable RTSP URIs,
+immutable active-session settings, persistence and media synchronization are
+covered by unit and SOAP/RTP checks. See [RTSP metadata](RTSP_METADATA.md) for
+supported values, operations, lifecycle and validation limits.
+
 1. Add metadata configuration storage, JSON schema, defaults and copied fixtures.
    Use authoritative configuration snapshots for RTSP rather than accessing the
    mutable profile tree from streaming threads.
@@ -153,6 +166,15 @@ retrieve the matching RTSP URI, and receive the configured events without
 creating a PullPoint subscription. PullPoint remains independently usable.
 
 ## Stage 5: Analytics scene description
+
+Status: implemented. The fixed read-only `SyntheticObjectTracker` module emits
+schema-validated scene frames from the Line Detector simulator's object samples.
+Scene-only and mixed event/scene streams, analytics/module selection, profile
+isolation and immutable active sessions are covered by unit and SOAP/RTP checks.
+The network check verifies identical ObjectId and UTC across a scene frame,
+RTSP line-crossing notification and PullPoint notification. See
+[scene configuration and simulation limits](RTSP_METADATA.md#synthetic-scene-description).
+Windows/LAN/VMS acceptance remains part of Stage 6.
 
 If "stream description" means scene/object information, include this stage in
 the requested delivery. SDP support is already covered by Stage 3.

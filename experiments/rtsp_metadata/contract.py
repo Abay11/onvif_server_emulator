@@ -89,16 +89,26 @@ def load_media_schema(destination, media2=False):
     under XSD 1.0 UPA rules. No upstream document is modified to work around it.
     Requires the optional, validation-only xmlschema package (tested with 3.4.5).
     """
+    return load_service_schema(destination, "wsdl/ver20/media/wsdl/media.wsdl" if media2 else
+                               "wsdl/ver10/media/wsdl/media.wsdl")
+
+
+def load_service_schema(destination, relative):
+    """Compile a pinned service WSDL with all imports restricted to the cache."""
     from lxml import etree
     from xmlschema import XMLSchema11
     root = destination / "specs"
     verify_repository(root)
     imports = checked_imports(destination)
-    path = (root / ("wsdl/ver20/media/wsdl/media.wsdl" if media2 else
-                    "wsdl/ver10/media/wsdl/media.wsdl")).resolve()
+    path = (root / relative).resolve()
     wsdl = etree.parse(str(path), etree.XMLParser(no_network=True, resolve_entities=False))
     schema = wsdl.find(".//{http://www.w3.org/2001/XMLSchema}schema")
-    return XMLSchema11(etree.tostring(schema), base_url=path.parent.as_uri() + "/",
+    sources = [etree.tostring(schema)]
+    if relative == "wsdl/ver20/analytics/wsdl/analytics.wsdl":
+        # Frame is defined in a second document sharing onvif.xsd's namespace.
+        # Load both documents explicitly; some validators retain only one import.
+        sources.append(str((root / "wsdl/ver10/schema/metadatastream.xsd").resolve()))
+    return XMLSchema11(sources, base_url=path.parent.as_uri() + "/",
                        uri_mapper={url: str(file.resolve()) for url, file in imports.items()},
                        allow="local", use_fallback=False)
 

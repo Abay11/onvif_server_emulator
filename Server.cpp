@@ -195,7 +195,7 @@ void Server::init()
 			audio_node.second.get<unsigned int>("SampleRate") * 1000,
 	};
 
-	rtspServer_ = new rtsp::Server(&*logger_, *server_configs_, std::move(ainfo), event_source_);
+	rtspServer_ = new rtsp::Server(&*logger_, *server_configs_, std::move(ainfo), event_source_, Rules()->Scenes());
 	// Keep profile URIs valid after disabling metadata, without requiring its payloader.
 	Metadata()->Bind(
 			[this](const auto& path, const auto& encoder, bool audio, auto settings) {

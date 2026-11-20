@@ -89,7 +89,7 @@ namespace osrv
 		constexpr double positions[] = {-0.75, -0.25, 0.25, 0.75, 0.75, 0.25, -0.25, -0.75};
 		auto x = positions[step_++ % 8];
 		for (const auto& source : detector_->VideoSources())
-			for (const auto& event : detector_->SampleObject(source, "1", x, 0.0))
+			for (const auto& event : detector_->SampleObject(source, "1", x, 0.0, "Human"))
 				event_signal_(event);
 	}
 

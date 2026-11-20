@@ -803,6 +803,23 @@
               ],
               "additionalProperties": false
             }
+          },
+          "Analytics": {
+            "$ref": "types.schema.json#/$defs/boolean"
+          },
+          "AnalyticsModules": {
+            "oneOf": [
+              {
+                "type": "array",
+                "maxItems": 1,
+                "items": {
+                  "const": "SyntheticObjectTracker"
+                }
+              },
+              {
+                "const": ""
+              }
+            ]
           }
         },
         "required": [
