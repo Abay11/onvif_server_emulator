@@ -118,6 +118,7 @@ BOOST_AUTO_TEST_CASE(network_config_parsing_and_validation)
     tree.put("advertised.pullpoint_port", 15550);
     tree.put("rtp.port_min", 51000);
     tree.put("rtp.port_max", 51099);
+    tree.put("rtsp_metadata.enabled", true);
     const std::string path = "network_validation.config";
     pt::write_json(path, tree);
     const auto cfg = osrv::read_server_configs(path);
@@ -125,6 +126,7 @@ BOOST_AUTO_TEST_CASE(network_config_parsing_and_validation)
     BOOST_TEST(cfg->RtspAddress() == "rtsp://192.168.1.10:18554/");
     BOOST_TEST(cfg->rtp_port_min_ == 51000);
     BOOST_TEST(cfg->rtp_port_max_ == 51099);
+    BOOST_TEST(cfg->rtsp_metadata_enabled_);
     for (const auto* invalid_ip : {"0.0.0.0", "239.255.255.250", "255.255.255.255", "not-an-ip"})
     {
         tree.put("advertised.ipv4", invalid_ip);

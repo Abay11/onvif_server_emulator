@@ -67,6 +67,7 @@ struct ServerConfigs
 	unsigned char channels_count_ = 0;
 
 	std::string rtsp_streaming_file_;
+	bool rtsp_metadata_enabled_ = false;
 };
 
 class Server : public IOnvifServer

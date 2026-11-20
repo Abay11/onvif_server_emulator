@@ -231,6 +231,19 @@ BOOST_AUTO_TEST_CASE(subscription_references_match_complete_paths)
 	BOOST_TEST(compare_subscription_references("/onvif/event_service/s1", "onvif/event_service/s1"));
 }
 
+BOOST_AUTO_TEST_CASE(event_source_supplies_custom_namespace_bindings_to_transport_adapters)
+{
+	QuietLogger logger;
+	auto source = std::make_shared<EventSource>(logger);
+	source->SetNamespaces({{"vendor", "urn:osrv:metadata-test"}});
+	auto message = Message();
+	message.topic = "vendor:Device/Trigger/DigitalInput";
+	auto xml = serialize_metadata({message}, source->Namespaces());
+	BOOST_TEST(xml.find("xmlns:vendor=\"urn:osrv:metadata-test\"") != std::string::npos);
+	source->Run();
+	BOOST_CHECK_THROW(source->SetNamespaces({}), std::logic_error);
+}
+
 BOOST_FIXTURE_TEST_CASE(pending_pull_is_not_overwritten_and_closing_cancels_queued_wakes, Fixture)
 {
 	NotificationsManager manager(logger, {}, source);

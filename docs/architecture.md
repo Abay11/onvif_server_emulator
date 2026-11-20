@@ -72,6 +72,9 @@ flowchart TD
     Context --> Profiles[MediaProfilesManager]
     Profiles --> JSON[media_profiles.config]
     Server --> Events[Event service / NotificationsManager / PullPoint]
+    Server --> EventSource[Shared event source]
+    EventSource --> Events
+    EventSource --> RTSP
     Events --> HTTP
     Server --> Discovery[IPv4 WS-Discovery / UDP]
     Server --> RTSP[GStreamer / RTSP / RTP]
@@ -195,6 +198,14 @@ clients can use RTP/RTCP over UDP or interleaved RTSP/TCP. Many pipeline paramet
 are hardcoded, so changing codec or resolution settings through SOAP does not
 guarantee a change to the actual stream.
 
+`common.config` can opt into event metadata with `rtsp_metadata.enabled=true`.
+Both live factories then add an application RTP track using appsrc and the pinned
+ONVIF payloader. Metadata-only, aggregate and audio/video-only track selection are
+supported. A per-media bridge consumes the shared event source on the private
+RTSP GLib context and requests fresh property state for metadata PLAY, including
+late clients. See [RTSP Metadata](RTSP_METADATA.md) for the explicit Stage 3
+control-plane simulation deviation and the pending Stage 4 SOAP configuration.
+
 `onvif/Recording.*` models recording descriptions, time ranges, and search sessions
 for Recording Search. Replay Control returns an RTSP URI. This emulates an archive;
 it does not record live video to disk.
@@ -207,8 +218,9 @@ validates and stores rule snapshots, alarm state and object history under a mute
 `utility::line` handles Line Detector parameters and geometry. SOAP mutations persist rules
 through the media manager; synthetic event generators read the shared snapshot
 without accessing the manager from the event thread. Media and Media2 serialize
-rules from the manager's current tree. Scene analytics modules and RTSP metadata
-are not advertised. Line crossing notifications are non-property events and have no
+rules from the manager's current tree. Scene analytics modules and SOAP metadata
+capabilities are not advertised. Optional RTSP metadata carries events, not scene
+frames. Line crossing notifications are non-property events and have no
 synchronization state. `utility::counting::State` tracks counts, per-object passages,
 report deadlines and daily resets; only its rule configuration is persisted.
 Counting reuses the Line Detector synthetic object samples. A separate one-second
@@ -235,7 +247,7 @@ references, configuration, simulation deviations, and validation commands.
 
 `Server` owns a shared `EventSource` and injects it into the Event service and
 RTSP server. `NotificationsManager` adapts that source to HTTP PullPoint;
-production RTP metadata delivery remains pending. `Server::init()` supplies
+the opt-in RTSP bridge delivers the same events as metadata. `Server::init()` supplies
 registrations for additional `IEventGenerator` implementations, pairing a factory
 with its topic and Source/Data field descriptions for `GetEventProperties`.
 Event service invokes these factories with its
@@ -265,9 +277,10 @@ PullMessages responds when an event is available or the timer expires. It uses
 separate listener on `PullPoint.Port` (default: `5550`).
 
 Shutdown is partially implemented: `Server` stops discovery, releases the work
-guard of its own Asio context, and joins that context's thread. Stopping the RTSP
-GLib loop on a signal remains a TODO, and the separate PullPoint HTTP listener
-runs in a detached thread. The Event service keeps file-level state and rejects
+guard of its own Asio context, and joins that context's thread. RTSP destruction
+closes clients/sessions, stops metadata subscriptions, quits its private GLib loop
+and joins its worker. A complete application signal shutdown remains unfinished,
+and the separate PullPoint HTTP listener runs in a detached thread. The Event service keeps file-level state and rejects
 reinitialization. Correct restart of all subsystems and independence of multiple
 servers in a single process cannot currently be assumed.
 

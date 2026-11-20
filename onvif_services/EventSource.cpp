@@ -175,6 +175,20 @@ boost::asio::io_context& EventSource::GetIoContext()
 	return io_context_;
 }
 
+void EventSource::SetNamespaces(std::map<std::string, std::string> namespaces)
+{
+	Invoke([this, namespaces = std::move(namespaces)]() {
+		if (running_)
+			throw std::logic_error("Configure event namespaces before EventSource::Run");
+		namespaces_ = namespaces;
+	});
+}
+
+std::map<std::string, std::string> EventSource::Namespaces()
+{
+	return Invoke([this]() { return namespaces_; });
+}
+
 std::shared_ptr<EventSubscription> EventSource::Subscribe(EventQueueLimits limits, bool initial_state)
 {
 	return Invoke([this, limits, initial_state]() {

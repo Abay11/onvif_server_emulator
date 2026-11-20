@@ -69,6 +69,10 @@ public:
 	virtual ~IEventSource() = default;
 	virtual std::shared_ptr<EventSubscription> Subscribe(EventQueueLimits limits = {}, bool initial_state = true) = 0;
 	virtual void Synchronize(const std::shared_ptr<EventSubscription>& subscription) = 0;
+	virtual std::map<std::string, std::string> Namespaces()
+	{
+		return {};
+	}
 };
 
 // All generator/state operations run on this object's single worker. Consumers
@@ -82,6 +86,8 @@ public:
 	EventSource& operator=(const EventSource&) = delete;
 	void AddGenerator(std::shared_ptr<IEventGenerator> generator);
 	void Run();
+	void SetNamespaces(std::map<std::string, std::string> namespaces);
+	std::map<std::string, std::string> Namespaces() override;
 	std::shared_ptr<EventSubscription> Subscribe(EventQueueLimits limits = {}, bool initial_state = true) override;
 	void Synchronize(const std::shared_ptr<EventSubscription>& subscription) override;
 	boost::asio::io_context& GetIoContext();
@@ -103,6 +109,7 @@ private:
 	boost::asio::executor_work_guard<boost::asio::io_context::executor_type> work_;
 	std::thread worker_;
 	bool running_ = false;
+	std::map<std::string, std::string> namespaces_;
 	std::vector<std::shared_ptr<IEventGenerator>> generators_;
 	std::vector<boost::signals2::scoped_connection> connections_;
 	std::vector<std::weak_ptr<EventSubscription>> subscriptions_;

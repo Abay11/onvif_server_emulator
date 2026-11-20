@@ -29,6 +29,7 @@ add_executable(test_executable
 	mediaprofiles_manager_tests.cpp
 	pull_point_tests.cpp
 	recording_tests.cpp
+	rtsp_metadata_tests.cpp
 	server_tests.cpp	
 	service_configs_tests.cpp
 	tests_main.cpp

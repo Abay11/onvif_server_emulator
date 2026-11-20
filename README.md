@@ -279,6 +279,19 @@ The `PullPoint` section contains the following settings:
 - `Port`: sets the separate listener's port when `UseHttpServerPort` is `false`.
   The default is `5550`.
 
+### RTSP event metadata (`common.config`)
+
+Set `rtsp_metadata.enabled` to `true` to add an ONVIF XML event metadata track to
+both live RTSP streams, including file input. It defaults to `false`. RTSP clients
+can select metadata alone or receive it with video/audio while PullPoint clients
+continue receiving the same notifications independently. Normal Docker runtime
+builds include the required GStreamer payloader.
+
+This Stage 3 setting enables the transport on the fixed live mounts. SOAP metadata
+configuration/profile support is planned for Stage 4. See
+[live RTSP metadata](docs/RTSP_METADATA.md) for receiving, build/test commands and
+the current simulation scope.
+
 ### Discovery Service (`discovery.config`)
 
 `enabled` controls IPv4 WS-Discovery Probe responses. `interface_ipv4` selects a

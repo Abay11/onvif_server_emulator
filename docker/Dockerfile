@@ -45,8 +45,7 @@ RUN apt-get update \
 WORKDIR /workspace
 CMD ["bash"]
 
-# Optional Stage 1 metadata feasibility images. The application runtime below
-# stays independent until live metadata is integrated.
+# Pinned metadata plugin, shared by the runtime and metadata development image.
 FROM dev AS metadata-plugin-build
 
 RUN apt-get update \
@@ -68,7 +67,8 @@ RUN --mount=type=cache,id=osrv-metadata-cargo,target=/root/.cargo,sharing=locked
     && cp net/onvif/LICENSE-MPL-2.0 /opt/metadata/LICENSE-MPL-2.0
 
 RUN --mount=type=cache,id=osrv-metadata-cargo,target=/root/.cargo,sharing=locked \
-    mkdir -p /opt/metadata/dependency-notices \
+    strip --strip-unneeded /opt/metadata/libgstrsonvif.so \
+    && mkdir -p /opt/metadata/dependency-notices \
     && find /root/.cargo/registry/src /root/.cargo/git/checkouts -type f \
         \( -iname 'license*' -o -iname 'copying*' -o -iname 'copyright*' -o -iname 'notice*' \) \
         -exec cp --parents '{}' /opt/metadata/dependency-notices/ \;
@@ -77,7 +77,8 @@ RUN --mount=type=cache,id=osrv-metadata-cargo,target=/root/.cargo,sharing=locked
 # notices with the plugin; the upstream ONVIF plugin uses MPL-2.0.
 FROM base AS metadata-runtime
 COPY --from=metadata-plugin-build /opt/metadata/libgstrsonvif.so /usr/local/lib/gstreamer-1.0/
-COPY --from=metadata-plugin-build /opt/metadata/ /usr/local/share/osrv-metadata/
+COPY --from=metadata-plugin-build /opt/metadata/LICENSE-MPL-2.0 /opt/metadata/gst-plugins-rs-source.tar.gz /usr/local/share/osrv-metadata/
+COPY --from=metadata-plugin-build /opt/metadata/dependency-notices/ /usr/local/share/osrv-metadata/dependency-notices/
 ENV GST_PLUGIN_PATH=/usr/local/lib/gstreamer-1.0
 
 FROM dev AS metadata-dev
@@ -107,7 +108,7 @@ RUN --mount=type=cache,id=onvif-build,target=/workspace/build,sharing=locked \
     && cmake --build build --parallel "${BUILD_JOBS:-$(nproc)}" \
     && install -D build/main /app/main
 
-FROM base AS runtime
+FROM metadata-runtime AS runtime
 
 WORKDIR /app
 COPY --from=build /app/main ./main

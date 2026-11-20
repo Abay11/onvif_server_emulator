@@ -1,6 +1,7 @@
 #include "RtspServer.h"
 #include "Logger.h"
 #include "Server.h"
+#include "rtsp/MetadataStream.h"
 
 #include "../utility/AudioSourceReader.h"
 #include "include/MediaFormats.h"
@@ -187,6 +188,7 @@ gchar* check_requirements_callback(GstRTSPClient* self, GstRTSPContext* ctx, cha
 void client_connected_callback(GstRTSPServer* self, GstRTSPClient* object, gpointer user_data)
 {
 	g_signal_connect(object, "check-requirements", G_CALLBACK(check_requirements_callback), NULL);
+	g_signal_connect(object, "play-request", G_CALLBACK(osrv::rtsp::MetadataStreams::OnPlay), nullptr);
 }
 
 namespace osrv
@@ -199,7 +201,17 @@ Server::Server(ILogger* logger, ServerConfigs& server_configs, const AudioInfo& 
 {
 	gst_init(NULL, NULL);
 
-	loop_ = g_main_loop_new(NULL, FALSE);
+	if (server_configs_->rtsp_metadata_enabled_)
+	{
+		if (!event_source_) throw std::runtime_error("RTSP metadata requires an event source");
+		auto plugin = gst_element_factory_find("rtponvifmetadatapay");
+		if (!plugin) throw std::runtime_error("RTSP metadata enabled but rtponvifmetadatapay is unavailable");
+		gst_object_unref(plugin);
+	}
+	context_ = g_main_context_new();
+	loop_ = g_main_loop_new(context_, FALSE);
+	if (server_configs_->rtsp_metadata_enabled_)
+		metadata_ = std::make_unique<MetadataStreams>(event_source_, *logger_, context_);
 
 	/* create a server instance */
 	server_ = gst_rtsp_server_new();
@@ -224,7 +236,7 @@ Server::Server(ILogger* logger, ServerConfigs& server_configs, const AudioInfo& 
 									"name=pay0 pt=97"
 							 << " audiotestsrc is-live=1 ! audioconvert ! audioresample ! audio/x-raw,rate=8000 ! "
 							 << asetup->Encoding() << " ! " << asetup->PayloadPluginName()
-							 << " name=pay1 pt= " << std::to_string(asetup->PayloadNum()) << " )";
+							 << " name=pay1 pt= " << std::to_string(asetup->PayloadNum());
 	}
 	else
 	{
@@ -233,17 +245,30 @@ Server::Server(ILogger* logger, ServerConfigs& server_configs, const AudioInfo& 
 							 << "\" loop=true stop-index=-1 ! decodebin name=demuxer"
 							 << " demuxer. ! autovideoconvert ! x264enc ! rtph264pay name=pay0 pt=96"
 							 << " demuxer. ! audioconvert ! audioresample ! audio/x-raw,rate=8000 ! " << asetup->Encoding() << " ! "
-							 << asetup->PayloadPluginName() << " name=pay1 pt= " << std::to_string(asetup->PayloadNum()) << " )";
+							 << asetup->PayloadPluginName() << " name=pay1 pt= " << std::to_string(asetup->PayloadNum());
 	}
+	auto metadata_branch = [](int index) {
+		return " appsrc name=metadata_src is-live=true format=time block=false max-bytes=262144 "
+				"caps=application/x-onvif-metadata ! rtponvifmetadatapay name=pay" + std::to_string(index) +
+				" pt=107 mtu=1200 ";
+	};
+	if (metadata_) mediadescr << metadata_branch(2);
+	mediadescr << " )";
 
 	gst_rtsp_media_factory_set_launch(factoryHighStream_, mediadescr.str().c_str());
 	gst_rtsp_media_factory_set_shared(factoryHighStream_, TRUE);
 
 	factoryLowStream_ = gst_rtsp_media_factory_new();
-	gst_rtsp_media_factory_set_launch(factoryLowStream_,
-																		"(videotestsrc is-live=1 ! timeoverlay ! video/x-raw,width=640,height=320 ! "
-																		"x264enc ! rtph264pay name=pay0 pt=96 )");
+	std::string low_pipeline = "(videotestsrc is-live=1 ! timeoverlay ! video/x-raw,width=640,height=320 ! "
+			"x264enc ! rtph264pay name=pay0 pt=96 ";
+	if (metadata_) low_pipeline += metadata_branch(1);
+	gst_rtsp_media_factory_set_launch(factoryLowStream_, (low_pipeline + " )").c_str());
 	gst_rtsp_media_factory_set_shared(factoryLowStream_, TRUE);
+	if (metadata_)
+	{
+		metadata_->Attach(factoryHighStream_);
+		metadata_->Attach(factoryLowStream_);
+	}
 
 	replayFactory_ = onvif_factory_new();
 	gst_rtsp_media_factory_set_media_gtype(replayFactory_, GST_TYPE_RTSP_ONVIF_MEDIA);
@@ -270,41 +295,79 @@ Server::Server(ILogger* logger, ServerConfigs& server_configs, const AudioInfo& 
 
 Server::~Server()
 {
-	if (!worker_thread_)
-		return;
+	if (worker_thread_.joinable())
+	{
+		// An attached source always runs on the worker, even when stop races its
+		// initial entry to g_main_loop_run(). A direct quit could lose that race.
+		auto stop = g_idle_source_new();
+		g_source_set_callback(stop, +[](gpointer data) -> gboolean {
+			auto self = static_cast<Server*>(data);
+			self->Shutdown();
+			g_main_loop_quit(self->loop_);
+			return G_SOURCE_REMOVE;
+		}, this, nullptr);
+		g_source_attach(stop, context_);
+		g_source_unref(stop);
+		worker_thread_.join();
+	}
+	else Shutdown();
+	g_object_unref(server_);
+	g_main_loop_unref(loop_);
+	g_main_context_unref(context_);
+}
 
-	try
+void Server::Shutdown()
+{
+	if (session_cleanup_)
 	{
-		worker_thread_->join();
+		g_source_destroy(session_cleanup_);
+		g_source_unref(session_cleanup_);
+		session_cleanup_ = nullptr;
 	}
-	catch (const std::exception&)
+	if (listener_)
 	{
+		if (auto source = g_main_context_find_source_by_id(context_, listener_)) g_source_destroy(source);
+		listener_ = 0;
 	}
-};
+	if (metadata_) metadata_->Stop();
+	auto clients = gst_rtsp_server_client_filter(server_,
+			+[](GstRTSPServer*, GstRTSPClient*, gpointer) { return GST_RTSP_FILTER_REF; }, nullptr);
+	for (auto entry = clients; entry; entry = entry->next)
+	{
+		gst_rtsp_client_close(GST_RTSP_CLIENT(entry->data));
+		g_object_unref(entry->data);
+	}
+	g_list_free(clients);
+	auto pool = gst_rtsp_server_get_session_pool(server_);
+	gst_rtsp_session_pool_filter(pool,
+			+[](GstRTSPSessionPool*, GstRTSPSession*, gpointer) { return GST_RTSP_FILTER_REMOVE; }, nullptr);
+	g_object_unref(pool);
+}
+
+unsigned short Server::Port() const
+{
+	return static_cast<unsigned short>(gst_rtsp_server_get_bound_port(server_));
+}
 
 void Server::run()
 {
-	// TODO: stop GSt main loop by signal
-	worker_thread_ = new std::thread([this]() {
-		/* attach the server to the default maincontext */
-		gst_rtsp_server_attach(server_, NULL);
-
-		// gchar* service = gst_rtsp_server_get_service(server_);
-		int actually_used_port = gst_rtsp_server_get_bound_port(server_);
-		if (stoi(server_configs_->rtsp_port_) != actually_used_port)
-			logger_->Warn("RTSP Server port is binding on: " + std::to_string(actually_used_port));
-
-		const auto advertised_address = server_configs_->RtspAddress();
-		std::stringstream uris;
-		uris << advertised_address << "Live&HighStream";
-		uris << "\n" << advertised_address << "Live&LowStream";
-		uris << "\n" << advertised_address << "Recording0";
-
-
-		logger_->Info("RTSP Server is running. Available URIs:\n" + uris.str());
-
+	if (worker_thread_.joinable()) throw std::logic_error("RTSP server is already running");
+	listener_ = gst_rtsp_server_attach(server_, context_);
+	if (!listener_) throw std::runtime_error("Cannot bind RTSP server listener");
+	session_cleanup_ = g_timeout_source_new_seconds(5);
+	g_source_set_callback(session_cleanup_, +[](gpointer data) -> gboolean {
+		gst_rtsp_session_pool_cleanup(GST_RTSP_SESSION_POOL(data));
+		return G_SOURCE_CONTINUE;
+	}, gst_rtsp_server_get_session_pool(server_), +[](gpointer data) { g_object_unref(data); });
+	g_source_attach(session_cleanup_, context_);
+	logger_->Info("RTSP Server is running. Available URIs:\n" + server_configs_->RtspAddress() +
+			"Live&HighStream\n" + server_configs_->RtspAddress() + "Live&LowStream\n" +
+			server_configs_->RtspAddress() + "Recording0");
+	worker_thread_ = std::thread([this]() {
+		g_main_context_push_thread_default(context_);
 		g_main_loop_run(loop_);
+		g_main_context_pop_thread_default(context_);
 	});
-};
+}
 } // namespace rtsp
 } // namespace osrv

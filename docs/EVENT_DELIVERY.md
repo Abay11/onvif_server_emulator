@@ -2,9 +2,9 @@
 
 The emulator now generates each live notification once and distributes immutable
 messages to independent consumers. HTTP PullPoint uses this source. The RTSP
-server receives the same `IEventSource` dependency; adding the production RTP
-metadata track remains Stage 3. No additional metadata capability is advertised
-by Stage 2.
+server receives the same `IEventSource` dependency. [Stage 3](RTSP_METADATA.md)
+adds an opt-in live metadata track using that source. SOAP metadata configuration
+and capability advertisement remain Stage 4 work.
 
 ## Ownership and execution
 
@@ -92,6 +92,8 @@ node used by `serialize_metadata()` under
 `tt:MetadataStream/tt:Event/wsnt:NotificationMessage`. The metadata wrapper has
 no SOAP envelope. Its default namespace bindings cover `tt`, `wsnt` and `tns1`;
 callers can supply additional topic and structured-payload namespace bindings.
+Event initialization also stores its configured bindings on the shared source;
+the RTSP adapter captures those bindings before preparing its media instance.
 XML escaping and structured ElementItem trees are preserved. An unset legacy
 data_name no longer produces an unnamed SimpleItem.
 

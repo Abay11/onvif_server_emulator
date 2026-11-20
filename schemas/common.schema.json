@@ -109,6 +109,12 @@
       "additionalProperties": false,
       "description": "UDP RTP/RTCP pool. The lower port must also be less than the upper port; check this separately."
     },
+    "rtsp_metadata": {
+      "type": "object",
+      "properties": {"enabled": {"type": "boolean", "default": false}},
+      "additionalProperties": false,
+      "description": "Opt-in live RTSP event metadata transport; SOAP metadata configuration is not yet implemented."
+    },
     "authenticationMethods": {
       "type": "array",
       "items": {

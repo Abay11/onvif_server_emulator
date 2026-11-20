@@ -15,6 +15,7 @@ struct ServerConfigs;
 namespace event { class IEventSource; }
 namespace rtsp
 {
+class MetadataStreams;
 
 G_BEGIN_DECLS
 
@@ -38,12 +39,14 @@ public:
 			std::shared_ptr<event::IEventSource> event_source = {});
 	~Server();
 	void run();
+	unsigned short Port() const;
 
 private:
 	ILogger* logger_;
 	std::shared_ptr<event::IEventSource> event_source_;
 
 	GMainLoop* loop_;
+	GMainContext* context_;
 	GstRTSPServer* server_;
 	GstRTSPMountPoints* mounts_;
 	GstRTSPMediaFactory* factoryHighStream_;
@@ -52,7 +55,11 @@ private:
 
 	ServerConfigs* server_configs_ = nullptr;
 
-	std::thread* worker_thread_ = nullptr;
+	std::thread worker_thread_;
+	guint listener_ = 0;
+	GSource* session_cleanup_ = nullptr;
+	std::unique_ptr<MetadataStreams> metadata_;
+	void Shutdown();
 };
 } // namespace rtsp
 } // namespace osrv

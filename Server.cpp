@@ -209,25 +209,37 @@ void Server::run()
 
 	// Start server and receive assigned port when server is listening for requests
 	promise<unsigned short> server_port;
+	auto listening = server_port.get_future();
 	thread server_thread([this, &server_port]() {
+		bool announced = false;
 		// Start HTTP server
 		try
 		{
-			http_server_->start([&server_port](unsigned short port) { server_port.set_value(port); });
+			http_server_->start([&server_port, &announced](unsigned short port) {
+				announced = true;
+				server_port.set_value(port);
+			});
 		}
 		catch (const std::exception& e)
 		{
 			logger_->Error(std::string("HTTP server finished with a critical erroe: ") + e.what());
+			if (!announced) server_port.set_exception(std::current_exception());
 		}
 	});
 
-	rtspServer_->run();
-
-	std::string msg("Server is successfully started on port: ");
-	msg += std::to_string(server_port.get_future().get());
-	logger_->Info(msg);
-
-	server_thread.join();
+	try
+	{
+		auto port = listening.get();
+		rtspServer_->run();
+		logger_->Info("Server is successfully started on port: " + std::to_string(port));
+		server_thread.join();
+	}
+	catch (...)
+	{
+		http_server_->stop();
+		if (server_thread.joinable()) server_thread.join();
+		throw;
+	}
 }
 
 std::shared_ptr<ServerConfigs> read_server_configs(const std::string& config_path)
@@ -257,6 +269,7 @@ std::shared_ptr<ServerConfigs> read_server_configs(const std::string& config_pat
 	read_configs->advertised_pullpoint_port_ = configs_tree.get<unsigned short>("advertised.pullpoint_port", 0);
 	read_configs->rtp_port_min_ = configs_tree.get<unsigned short>("rtp.port_min", 50000);
 	read_configs->rtp_port_max_ = configs_tree.get<unsigned short>("rtp.port_max", 50199);
+	read_configs->rtsp_metadata_enabled_ = configs_tree.get<bool>("rtsp_metadata.enabled", false);
 	if (read_configs->rtp_port_min_ == 0 || read_configs->rtp_port_min_ % 2 != 0 ||
 		read_configs->rtp_port_max_ <= read_configs->rtp_port_min_ || read_configs->rtp_port_max_ % 2 != 1)
 		throw std::runtime_error("RTP range must start at a positive even port and end at a larger odd port");

@@ -265,9 +265,12 @@ a local Docker build does not upload an image.
 For the optional Stage 1 RTSP metadata experiment, including the pinned upstream
 payloader build, runtime dependency probe and offline TCP/UDP receiver checks,
 see [the metadata experiment](experiments/rtsp_metadata/README.md).
-Its `metadata-dev` and `metadata-runtime` Docker targets are separate from the
-normal application image. The plugin requires GStreamer 1.20+; the experiment
-uses the documented Trixie development environment with GStreamer 1.26.2.
+The normal application runtime now includes that pinned plugin. Use the
+`metadata-dev` target to build/test with `rtsp_metadata.enabled=true`; the ordinary
+`dev` target does not contain the payloader. The plugin requires GStreamer 1.20+;
+the documented Trixie environment uses GStreamer 1.26.2. See
+[live RTSP metadata](docs/RTSP_METADATA.md) for its Stage 3 scope and the
+`unit_tests/rtsp_metadata_smoke.py` receiver checks.
 
 With a running emulator, Python 3 can check the default SOAP service configuration,
 returned URLs, snapshot retrieval, unicast and multicast discovery, and live video

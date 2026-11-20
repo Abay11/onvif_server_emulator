@@ -473,6 +473,7 @@ void init_service(HttpServer& srv, const osrv::ServerConfigs& server_configs_ins
 	auto namespaces_tree = EVENT_CONFIGS_TREE.get_child("Namespaces");
 	for (const auto& n : namespaces_tree)
 		XML_NAMESPACES.insert({n.first, n.second.get_value<std::string>()});
+	source->SetNamespaces(XML_NAMESPACES);
 
 	notifications_manager =
 			std::make_unique<osrv::event::NotificationsManager>(logger, XML_NAMESPACES, source);

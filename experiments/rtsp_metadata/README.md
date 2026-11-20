@@ -14,8 +14,9 @@ From the repository root, check the Docker context as described in
 docker build -f docker/Dockerfile --target metadata-dev -t osrv-metadata-dev:stage1 .
 ```
 
-The normal application build and final `runtime` image do not use these optional
-targets. `metadata-plugin-build` compiles only `gst-plugin-onvif` using upstream's
+Stage 3 reuses this plugin in the final application `runtime` image and adds an
+opt-in live transport; see [RTSP metadata](../../docs/RTSP_METADATA.md).
+`metadata-plugin-build` compiles only `gst-plugin-onvif` using upstream's
 Cargo lock file. `metadata-runtime` installs the result on the application's base
 image, without a compiler or Rust runtime. `metadata-dev` adds inspection and
 validation tools. All targets use the same Debian/GStreamer libraries.
