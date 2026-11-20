@@ -20,7 +20,9 @@ The first version provides:
 - Application restart with a confirmation dialog, progress, reconnection and a
   check that the application instance changed.
 
-Settings are read only. The API selects explicit fields and excludes account
+The overview settings are read only; the [detector panel](DETECTORS_UI.md)
+provides persisted rule editing and runtime event enable controls.
+The status API selects explicit fields and excludes account
 lists, passwords, arbitrary config contents and the media input file/URI.
 Configuration settings are captured during initialization; unapplied file edits
 are not presented as active settings. Profile associations come from the shared
@@ -215,3 +217,11 @@ publication ordering, bounded retention and payloads, cursor reset/gap behavior,
 filter validation, secret exclusion, and capture despite a slow external
 subscriber overflowing its queue. Browser acceptance should additionally check
 pause/resume, filter changes, reconnect, missing-history notices and layout.
+
+## Detector panel
+
+Open `/admin/#detectors` for built-in detector settings, the rule-based hierarchy,
+uniform-frame geometry previews, vertex editing, enable switches and rule CRUD.
+See [Detector administration](DETECTORS_UI.md) for API, coordinates, persistence
+and runtime pause semantics. Rule changes persist; enable switches reset after
+restart. WebUI authorization remains unchanged, including for these mutations.

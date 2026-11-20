@@ -4,6 +4,7 @@
 #include "IOnvifServer.h"
 #include "Logger.h"
 #include "utility/SystemJournal.h"
+#include "utility/DetectorControls.h"
 #include "RtspServer.h"
 
 #include "utility/HttpDigestHelper.h"
@@ -34,6 +35,7 @@ using HttpServer = SimpleWeb::Server<socket_t>;
 
 struct ServerConfigs
 {
+	std::shared_ptr<DetectorControls> detectors = std::make_shared<DetectorControls>();
 	std::shared_ptr<SystemJournal> journal = std::make_shared<SystemJournal>();
 
 	// Installed by the executable; invoked only after the reboot response is sent.

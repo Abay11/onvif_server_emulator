@@ -5,5 +5,6 @@ namespace osrv::admin_assets
 {
 inline constexpr std::string_view Html = R"osrv_asset(@ADMIN_HTML@)osrv_asset";
 inline constexpr std::string_view Css = R"osrv_asset(@ADMIN_CSS@)osrv_asset";
+inline constexpr std::string_view Detectors = R"osrv_asset(@DETECTORS_JS@)osrv_asset";
 inline constexpr std::string_view Js = R"osrv_asset(@ADMIN_JS@)osrv_asset";
 }

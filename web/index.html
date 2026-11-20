@@ -7,6 +7,7 @@
   <title>Administration · ONVIF Server Emulator</title>
   <link rel="stylesheet" href="/admin/app.css">
   <script src="/admin/app.js" defer></script>
+  <script src="/admin/detectors.js" defer></script>
 </head>
 <body>
   <a class="skip-link" href="#main">Skip to content</a>
@@ -16,6 +17,7 @@
     <nav>
       <a class="nav-link" href="#overview"><span aria-hidden="true">▦</span> Overview</a>
       <a class="nav-link" href="#configuration"><span aria-hidden="true">≡</span> Configuration</a>
+      <a class="nav-link" href="#detectors"><span aria-hidden="true">◇</span> Detectors</a>
       <a class="nav-link" href="#journal"><span aria-hidden="true">☷</span> Event journal</a>
       <a class="nav-link" href="#system"><span aria-hidden="true">⏻</span> System</a>
     </nav>
@@ -39,6 +41,20 @@
         <div class="panel config-panel" id="settings"><p class="loading">Loading application settings…</p></div>
         <article class="panel table-panel"><div class="panel-heading"><h2>Media profiles</h2><span class="tag">Current associations</span></div><div class="table-scroll"><table><caption class="sr-only">Current media profile configuration associations</caption><thead><tr><th>Profile</th><th>Video encoder</th><th>Audio encoder</th><th>Metadata</th></tr></thead><tbody id="profiles-body"><tr><td colspan="4">Loading profiles…</td></tr></tbody></table></div><p class="table-note">Profile associations describe configuration; some streaming parameters are fixed by the emulator.</p></article>
         <article class="panel table-panel"><div class="panel-heading"><h2>ONVIF services</h2><span class="tag">Configured endpoints</span></div><div class="table-scroll"><table><caption class="sr-only">Configured ONVIF services and advertisement settings</caption><thead><tr><th>Service</th><th>Endpoint</th><th>Discovery listing</th></tr></thead><tbody id="services-body"><tr><td colspan="3">Loading services…</td></tr></tbody></table></div></article>
+      </section>
+      <section id="detectors" aria-labelledby="detector-title">
+        <div class="section-heading"><div><h2 id="detector-title">Detectors</h2><p>Inspect and control built-in detectors and rule-based analytics.</p></div><button id="detector-refresh" class="button secondary" type="button">Refresh detectors</button></div>
+        <p id="detector-message" class="notice" role="status" aria-live="polite">Loading detectors…</p>
+        <div class="detector-layout">
+          <aside class="panel detector-catalog" aria-label="Detector list" id="detector-catalog"></aside>
+          <article class="panel detector-editor">
+            <div class="panel-heading"><h3 id="detector-selected-title">Select a detector or rule</h3><span class="tag">Simulated scene</span></div>
+            <canvas id="detector-scene" width="960" height="540" aria-label="Configured detector geometry over a uniform simulated frame"></canvas>
+            <p id="detector-coordinate-note" class="table-note">The scene is a schematic, not live camera video.</p>
+            <div id="detector-settings" class="detector-settings"></div>
+          </article>
+        </div>
+        <p class="table-note">Rules are saved to media_profiles.config. Enable switches are runtime controls and reset on application restart. Existing queued events remain available to clients.</p>
       </section>
       <section id="journal" aria-labelledby="journal-title">
         <div class="section-heading"><div><h2 id="journal-title">System event journal</h2><p>Application activity and detector summaries, collected internally.</p></div><button id="journal-pause" class="button secondary" type="button" aria-pressed="false">Pause updates</button></div>

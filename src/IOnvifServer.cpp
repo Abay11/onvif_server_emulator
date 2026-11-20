@@ -151,6 +151,7 @@ std::shared_ptr<utility::AnalyticsRules> IOnvifServer::Rules()
 				},
 				std::chrono::system_clock::now, std::move(images), std::move(faces));
 	}
+	analytics_rules_->BindControls(server_configs_->detectors);
 	return analytics_rules_;
 }
 

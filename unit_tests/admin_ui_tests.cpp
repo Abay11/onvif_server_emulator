@@ -188,8 +188,73 @@ BOOST_AUTO_TEST_CASE(journal_http_filters_and_cursors_do_not_consume_history)
 	BOOST_TEST(result.get<unsigned>("cursor") == 2u);
 	BOOST_TEST(result.get<bool>("has_more"));
 	BOOST_TEST(journal->Read(0, 100, {}).entries.size() == 3u);
-	for (const auto* query : {"after=-1", "limit=0", "limit=201", "after=abc", "category=invalid", "level=debug", "limit=1&limit=2"})
+	for (const auto* query :
+			 {"after=-1", "limit=0", "limit=201", "after=abc", "category=invalid", "level=debug", "limit=1&limit=2"})
 		BOOST_TEST(endpoint.Request("GET", std::string("/admin/api/journal?") + query)->status_code == "400 Bad Request");
+}
+
+BOOST_AUTO_TEST_CASE(detector_catalog_and_rule_crud_use_the_shared_model)
+{
+	Endpoint endpoint;
+	auto get = [&]() {
+		auto response = endpoint.Request("GET", "/admin/api/detectors");
+		BOOST_REQUIRE_EQUAL(response->status_code, "200 OK");
+		Tree result;
+		boost::property_tree::read_json(response->content, result);
+		return result;
+	};
+	auto post = [&](const Tree& command, const std::string& expected = "200 OK") {
+		std::ostringstream json;
+		boost::property_tree::write_json(json, command);
+		auto response = endpoint.Request("POST", "/admin/api/detectors", json.str(),
+																		 {{"Content-Type", "application/json"}, {"X-ONVIF-Admin", "detectors"}});
+		BOOST_REQUIRE_EQUAL(response->status_code, expected);
+	};
+	auto snapshot = get();
+	BOOST_TEST(snapshot.get_child("simple").size() == 4u);
+	BOOST_TEST(snapshot.get_child("families").size() == 6u);
+	const auto cfg = snapshot.get_child("configurations").front().second;
+	const auto token = cfg.get<std::string>("token");
+	BOOST_TEST(cfg.get_child("templates").size() == 6u);
+	// Every supported type can be created and removed from its canonical template.
+	for (const auto& [_, initial] : cfg.get_child("templates"))
+	{
+		auto rule = initial;
+		rule.put("Name", "UI test");
+		Tree command;
+		command.put("action", "create");
+		command.put("configuration", token);
+		command.put("name", "UI test");
+		command.put_child("rule", rule);
+		post(command);
+		auto stored = get().get_child("configurations").front().second.get_child("rules").front().second;
+		stored.erase("enabled");
+		BOOST_TEST(stored.get<std::string>("Type") == rule.get<std::string>("Type"));
+		command.put("action", "toggle");
+		command.put("enabled", false);
+		post(command);
+		BOOST_TEST(!endpoint.server->GetServerConfigs()->detectors->RuleEnabled(token, "UI test"));
+		command.put("action", "modify");
+		command.put_child("previous", stored);
+		command.put_child("rule", stored);
+		post(command);
+		auto stale = stored;
+		stale.put("Name", "stale");
+		command.put_child("previous", stale);
+		post(command, "409 Conflict");
+		command.put("action", "delete");
+		command.put_child("previous", stored);
+		post(command);
+		BOOST_TEST(get().get_child("configurations").front().second.get_child("rules").empty());
+		BOOST_TEST(endpoint.server->GetServerConfigs()->detectors->RuleEnabled(token, "UI test"));
+	}
+	Tree command;
+	command.put("action", "detector");
+	command.put("id", "MotionAlarm");
+	command.put("enabled", true);
+	post(command);
+	BOOST_TEST(endpoint.server->GetServerConfigs()->detectors->Enabled("MotionAlarm"));
+	BOOST_TEST(endpoint.Request("POST", "/admin/api/detectors", "{}")->status_code == "403 Forbidden");
 }
 
 BOOST_AUTO_TEST_SUITE_END()

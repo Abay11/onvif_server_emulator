@@ -2,6 +2,7 @@
 
 #include "../Logger.h"
 #include "../utility/SystemJournal.h"
+#include "../utility/DetectorControls.h"
 #include "pullpoint/event_generators.h"
 
 #include <algorithm>
@@ -127,8 +128,9 @@ bool EventSubscription::Enqueue(NotificationPtr message, std::size_t bytes)
 	return retained_all;
 }
 
-EventSource::EventSource(const ILogger& logger, std::shared_ptr<SystemJournal> journal)
-		: logger_(logger), journal_(std::move(journal)), work_(boost::asio::make_work_guard(io_context_)),
+EventSource::EventSource(const ILogger& logger, std::shared_ptr<SystemJournal> journal,
+	std::shared_ptr<DetectorControls> controls)
+		: logger_(logger), journal_(std::move(journal)), controls_(std::move(controls)), work_(boost::asio::make_work_guard(io_context_)),
 			worker_([this]() { io_context_.run(); })
 {
 }
@@ -213,7 +215,7 @@ void EventSource::Synchronize(const std::shared_ptr<EventSubscription>& subscrip
 			for (auto& message : generator->GenerateSynchronizationEvent())
 			{
 				// Transient notifications do not have an initialization state.
-				if (message.property_operation != "Initialized")
+				if (message.property_operation != "Initialized" || (controls_ && !controls_->Allows(message)))
 					continue;
 				auto bytes = notification_size(message);
 				complete =
@@ -228,6 +230,7 @@ void EventSource::Synchronize(const std::shared_ptr<EventSubscription>& subscrip
 
 void EventSource::Publish(NotificationMessage message)
 {
+	if (controls_ && !controls_->Allows(message)) return;
 	if (journal_)
 		journal_->Detector(message);
 	auto bytes = notification_size(message);

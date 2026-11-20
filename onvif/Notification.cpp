@@ -68,6 +68,6 @@ std::size_t notification_size(const NotificationMessage& message)
 	root.add_child("wsnt:NotificationMessage", serialize_notification(message));
 	std::ostringstream output;
 	pt::write_xml(output, root);
-	return output.str().size();
+	return output.str().size() + message.analytics_configuration.size();
 }
 } // namespace osrv::event

@@ -1,5 +1,6 @@
 #include "../onvif_services/EventSource.h"
 #include "../utility/SystemJournal.h"
+#include "../utility/DetectorControls.h"
 #include "../onvif_services/pullpoint/event_generators.h"
 #include "../onvif_services/pullpoint/pull_point.h"
 
@@ -81,7 +82,8 @@ struct Fixture
 {
 	QuietLogger logger;
 	std::shared_ptr<osrv::SystemJournal> journal = std::make_shared<osrv::SystemJournal>();
-	std::shared_ptr<EventSource> source = std::make_shared<EventSource>(logger, journal);
+	std::shared_ptr<osrv::DetectorControls> controls = std::make_shared<osrv::DetectorControls>();
+	std::shared_ptr<EventSource> source = std::make_shared<EventSource>(logger, journal, controls);
 	std::shared_ptr<Generator> property = std::make_shared<Generator>(source->GetIoContext(), logger);
 	std::shared_ptr<Generator> transient = std::make_shared<Generator>(source->GetIoContext(), logger, false);
 	Fixture()
@@ -350,6 +352,37 @@ BOOST_FIXTURE_TEST_CASE(journal_receives_events_without_clients_and_survives_slo
 	// Reading either transport queue or journal cannot consume another reader's data.
 	BOOST_TEST(journal->Read(0, 100, {}).entries.size() == 11u);
 	BOOST_TEST(journal->Read(batch.cursor, 100, {}).entries.empty());
+}
+
+BOOST_FIXTURE_TEST_CASE(disabled_detectors_and_rules_do_not_publish_or_synchronize, Fixture)
+{
+	controls->Register("input", Message().topic, true);
+	controls->Set("input", false);
+	auto subscriber = source->Subscribe();
+	BOOST_TEST(subscriber->Take(100).messages.empty());
+	Emit(Message());
+	BOOST_TEST(journal->Read(0, 100, {}).entries.empty());
+	BOOST_TEST(subscriber->Take(100).messages.empty());
+	controls->Set("input", true);
+	Emit(Message());
+	BOOST_TEST(subscriber->Take(100).messages.size() == 1u);
+	auto rule = Message();
+	rule.analytics_configuration = "configA";
+	rule.source_item_descriptions = {{"Rule", "sameName"}};
+	controls->SetRule("configA", "sameName", false);
+	Emit(rule);
+	BOOST_TEST(subscriber->Take(100).messages.empty());
+	rule.analytics_configuration = "configB";
+	Emit(rule);
+	BOOST_TEST(subscriber->Take(100).messages.size() == 1u);
+	controls->Set("rules", false);
+	Emit(rule);
+	BOOST_TEST(subscriber->Take(100).messages.empty());
+	controls->Set("rules", true);
+	controls->ForgetRule("configA", "sameName");
+	rule.analytics_configuration = "configA";
+	Emit(rule);
+	BOOST_TEST(subscriber->Take(100).messages.size() == 1u);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

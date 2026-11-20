@@ -503,8 +503,13 @@ void init_service(HttpServer& srv, const osrv::ServerConfigs& server_configs_ins
 		additional_event_topics.push_back(registration.description);
 	}
 
+	// Register every built-in generator so initially disabled detectors can be
+	// enabled live. The shared source gates publication and synchronization.
+	for (const auto* id : {"DigitalInputsAlarm", "MotionAlarm", "CellMotion", "AudioDetection"})
+		server_configs->detectors->Register(id, EVENT_CONFIGS_TREE.get<std::string>(std::string(id) + ".Topic"),
+			EVENT_CONFIGS_TREE.get<bool>(std::string(id) + ".GenerateEvents", true));
 	// add motion alarms generator
-	if (EVENT_CONFIGS_TREE.get<bool>("MotionAlarm.GenerateEvents"))
+
 	{
 		auto ma_event_generator = std::make_shared<osrv::event::MotionAlarmEventGenerator>(
 				EVENT_CONFIGS_TREE.get<std::string>("MotionAlarm.Source"),
@@ -515,7 +520,7 @@ void init_service(HttpServer& srv, const osrv::ServerConfigs& server_configs_ins
 	}
 
 	// add cell motion alarms generator
-	if (EVENT_CONFIGS_TREE.get<bool>("CellMotion.GenerateEvents"))
+
 	{
 		auto cellmotion_generator = std::make_shared<osrv::event::CellMotionEventGenerator>(
 				EVENT_CONFIGS_TREE.get<std::string>("CellMotion.VideoSourceConfigurationToken"),
@@ -529,7 +534,7 @@ void init_service(HttpServer& srv, const osrv::ServerConfigs& server_configs_ins
 	}
 
 	// add audio detection alarms generator
-	if (EVENT_CONFIGS_TREE.get<bool>("AudioDetection.GenerateEvents"))
+
 	{
 		auto audio_generator = std::make_shared<osrv::event::AudioDetectectionEventGenerator>(
 				EVENT_CONFIGS_TREE.get<std::string>("AudioDetection.SourceConfigurationToken"),

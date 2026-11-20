@@ -52,7 +52,8 @@ an official conformance claim; see the
 | `include/IOnvifServer.h`, `src/IOnvifServer.cpp` | Shared context, factory and lazy SOAP service creation, media profile manager |
 | `onvif_services/` | SOAP services, operation handlers, discovery, and events |
 | `onvif/` | Base ONVIF request handler, recording/search models, notification serialization and scene snapshots |
-| `web/` | Embedded administration page, read-only settings/status JSON and application restart |
+| `web/` | Embedded administration page, settings/status, detector/rule editing, journal and application restart |
+| `utility/DetectorControls.*` | Runtime detector/type/rule notification gates shared by all consumers |
 | `utility/SystemJournal.*` | Bounded internal operational history, cursors, filtering and detector summaries |
 | `utility/ApplicationReboot.*` | Shared response completion and pending restart guard for SOAP and WebUI |
 | `RtspServer.h`, `RtspServer.cpp` | GStreamer RTSP server, live streams, synthetic replay |
@@ -121,7 +122,10 @@ currently have no authorization, including in SOAP Digest mode. A separate
 `SystemJournal` records structured lifecycle/client events and detector summaries
 directly from the publication path, ahead of external consumer queues. The WebUI
 reads this bounded history by cursor over its own JSON API, without an ONVIF
-subscription or metadata bridge. See
+subscription or metadata bridge. The detector panel uses the shared AnalyticsRules
+model for persisted rule CRUD and separate runtime notification gates before
+journal/subscriber enqueueing. Canvas geometry editing uses canonical source
+bounds and native rule parameters; see [Detector administration](DETECTORS_UI.md). See
 [Administration WebUI](WEB_UI.md) for endpoints, access, assets and validation.
 
 ## SOAP Request Handling

@@ -13,6 +13,8 @@
 #include <stdexcept>
 #include <tuple>
 
+namespace osrv { class DetectorControls; }
+
 namespace utility
 {
 class RuleFault : public std::runtime_error
@@ -37,6 +39,9 @@ public:
 	AnalyticsRules(const Tree& profiles, SaveRules save, Clock clock = std::chrono::system_clock::now,
 			lpr::Images images = {}, face::Images faces = {});
 	Tree Execute(const std::string& operation, const std::string& xml);
+	Tree Snapshot() const;
+	Tree DefaultRule(const std::string& token, const std::string& type) const;
+	void BindControls(std::shared_ptr<osrv::DetectorControls> controls);
 	std::deque<Message> Synchronize() const;
 	std::deque<Message> Sample(double x, double y, double strength);
 	std::deque<Message> SampleObject(const std::string& videoSource, const std::string& objectId, double x, double y,
@@ -67,6 +72,7 @@ private:
 		std::optional<counting::Time> last;
 	};
 	std::map<std::tuple<std::string, std::string, std::string, std::string>, PlateState> plates_;
+	std::shared_ptr<osrv::DetectorControls> controls_;
 	Tree profiles_;
 	SaveRules save_;
 	Clock clock_;

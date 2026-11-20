@@ -23,6 +23,8 @@ struct NotificationMessage
 	std::string data_value;
 	std::vector<std::pair<std::string, std::string>> data_simple_items;
 	std::vector<boost::property_tree::ptree> data_element_items;
+	// Internal routing context; never serialized into ONVIF notifications.
+	std::string analytics_configuration;
 };
 
 using NotificationPtr = std::shared_ptr<const NotificationMessage>;

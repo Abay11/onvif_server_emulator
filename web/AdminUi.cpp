@@ -3,9 +3,11 @@
 #include "../Simple-Web-Server/server_http.hpp"
 #include "../include/onvif_services/service_configs.h"
 #include "../onvif_services/IOnvifService.h"
+#include "../utility/AnalyticsRules.h"
 #include "../utility/ApplicationReboot.h"
 #include "../utility/MediaProfilesManager.h"
 #include "AdminAssets.h"
+#include "DetectorUi.h"
 
 #include <boost/property_tree/json_parser.hpp>
 #include <boost/uuid/random_generator.hpp>
@@ -205,11 +207,11 @@ std::string JournalPage(const SystemJournal& journal, const Request& request)
 	return result + "]}";
 }
 
-bool SameOrigin(const Request& request)
+bool SameOrigin(const Request& request, const std::string& action = "reboot")
 {
 	// A custom header prevents cross-site HTML forms from triggering a reboot.
 	const auto marker = request->header.find("X-ONVIF-Admin");
-	if (marker == request->header.end() || marker->second != "reboot")
+	if (marker == request->header.end() || marker->second != action)
 		return false;
 	const auto site = request->header.find("Sec-Fetch-Site");
 	if (site != request->header.end() && site->second != "same-origin" && site->second != "none")
@@ -260,6 +262,52 @@ void RegisterAdminUi(IOnvifServer& server)
 	asset("^/admin/$", admin_assets::Html, "text/html; charset=utf-8");
 	asset(R"(^/admin/app\.css$)", admin_assets::Css, "text/css; charset=utf-8");
 	asset(R"(^/admin/app\.js$)", admin_assets::Js, "text/javascript; charset=utf-8");
+	asset(R"(^/admin/detectors\.js$)", admin_assets::Detectors, "text/javascript; charset=utf-8");
+	auto detector_ui = std::make_shared<DetectorUi>(server);
+	http->resource["^/admin/api/detectors$"]["GET"] = [detector_ui](Response response, Request) {
+		try
+		{
+			Json(response, Status::success_ok, detector_ui->Read());
+		}
+		catch (const std::exception&)
+		{
+			Json(response, Status::server_error_internal_server_error, "{\"error\":\"Detector settings unavailable\"}");
+		}
+	};
+	http->resource["^/admin/api/detectors$"]["POST"] = [detector_ui](Response response, Request request) {
+		if (!SameOrigin(request, "detectors"))
+		{
+			Json(response, Status::client_error_forbidden, "{\"error\":\"Same-origin admin request required\"}");
+			return;
+		}
+		auto type = request->header.find("Content-Type");
+		if (type == request->header.end() || type->second != "application/json")
+		{
+			Json(response, Status::client_error_unsupported_media_type, "{\"error\":\"Expected application/json\"}");
+			return;
+		}
+		try
+		{
+			const auto body = request->content.string();
+			if (body.size() > 32768)
+				throw std::invalid_argument("Request too large");
+			Tree command;
+			std::istringstream input(body);
+			boost::property_tree::read_json(input, command);
+			detector_ui->Change(command);
+			Json(response, Status::success_ok, "{\"status\":\"updated\"}");
+		}
+		catch (const utility::RuleFault& e)
+		{
+			Tree error;
+			error.put("error", e.detail);
+			Json(response, e.receiver ? Status::client_error_conflict : Status::client_error_bad_request, Encode(error));
+		}
+		catch (const std::exception&)
+		{
+			Json(response, Status::client_error_bad_request, "{\"error\":\"Invalid detector settings\"}");
+		}
+	};
 	http->resource["^/admin/api/journal$"]["GET"] = [journal = cfg->journal](Response response, Request request) {
 		try
 		{
