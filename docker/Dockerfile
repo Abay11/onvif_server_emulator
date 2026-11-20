@@ -21,7 +21,7 @@ RUN apt-get update \
         libgstrtspserver-1.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
-FROM base AS dev
+FROM base AS toolchain
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
@@ -45,8 +45,8 @@ RUN apt-get update \
 WORKDIR /workspace
 CMD ["bash"]
 
-# Pinned metadata plugin, shared by the runtime and metadata development image.
-FROM dev AS metadata-plugin-build
+# Pinned metadata plugin, shared by the runtime and development images.
+FROM toolchain AS metadata-plugin-build
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends cargo rustc libpango1.0-dev \
@@ -81,16 +81,16 @@ COPY --from=metadata-plugin-build /opt/metadata/LICENSE-MPL-2.0 /opt/metadata/gs
 COPY --from=metadata-plugin-build /opt/metadata/dependency-notices/ /usr/local/share/osrv-metadata/dependency-notices/
 ENV GST_PLUGIN_PATH=/usr/local/lib/gstreamer-1.0
 
-FROM dev AS metadata-dev
+FROM toolchain AS dev
 COPY --from=metadata-runtime /usr/local/ /usr/local/
 ENV GST_PLUGIN_PATH=/usr/local/lib/gstreamer-1.0
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends python3-lxml python3-gi gir1.2-gst-rtsp-server-1.0 \
+    && apt-get install -y --no-install-recommends python3-lxml python3-xmlschema python3-gi gir1.2-gst-rtsp-server-1.0 \
     && rm -rf /var/lib/apt/lists/* \
     && gst-inspect-1.0 appsrc \
     && gst-inspect-1.0 rtponvifmetadatapay
 
-FROM dev AS build
+FROM toolchain AS build
 
 ARG CMAKE_BUILD_TYPE=Debug
 ARG BUILD_JOBS

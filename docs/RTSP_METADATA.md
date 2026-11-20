@@ -18,16 +18,16 @@ The optional `common.config` setting is:
 The default is also true when the setting is omitted. Restart the server after
 changing it. Set it to false to disable the feature. Enabled startup requires the
 `rtponvifmetadatapay` GStreamer plugin; a missing plugin produces a startup error.
-Normal Docker runtime builds include the pinned plugin, source and notices from
-Stage 1. For source builds/tests use the `metadata-dev` target:
+Normal Docker runtime builds include the pinned plugin, source and
+[dependency notices](../experiments/rtsp_metadata/README.md#plugin-provenance-and-notices). For source builds/tests use the `dev` target:
 
 ```bash
-docker build -f docker/Dockerfile --target metadata-dev -t osrv-metadata-dev:stage3 .
+docker build -f docker/Dockerfile --target dev -t osrv-dev:latest .
 ```
 
 Follow [BUILD.md](../BUILD.md) for repository/build mounts, CMake and network
-settings. The ordinary `dev` target still supports builds and runs with metadata
-disabled; it does not include the optional payloader.
+settings. The `dev` image includes the payloader and supports the default metadata
+setting without configuration changes.
 
 ## Configure a profile through SOAP
 
@@ -63,15 +63,14 @@ Metadata in ConfigurationsSupported only when the transport is enabled.
 
 The fixed `/Live&HighStream` and `/Live&LowStream` mounts remain available for
 legacy video/audio clients; metadata clients must use the profile URI returned
-by SOAP. Replay at `/Recording0` has no historical metadata track. This replaces
-the temporary Stage 3 behavior that added metadata to both fixed mounts.
+by SOAP. Replay at `/Recording0` has no historical metadata track.
 
 ### Supported settings and filters
 
 The Events element controls event delivery: include an empty Events element for
 all events, omit it for no events, or include Events/Filter for selected events.
-An attached, events-disabled configuration retains the application track and
-sends empty metadata documents. This is different from removing its association,
+An attached configuration with both events and analytics disabled retains the
+application track and sends empty metadata documents. This is different from removing its association,
 which removes the metadata track from newly prepared streams. Media2 CreateProfile,
 AddConfiguration and RemoveConfiguration process their configuration references
 as a batch, validating metadata/source dependencies on the final profile.
@@ -256,12 +255,12 @@ RTSP session sections, Core event filtering/property synchronization, Media
 metadata configuration and synchronization sections, Media2 generic configuration
 operations, `wsdl/ver10/media/wsdl/media.wsdl`,
 `wsdl/ver20/media/wsdl/media.wsdl`, `metadatastream.xsd`,
-`common.xsd`, `onvif.xsd` and imported definitions. Stage 5 uses the same release's
+`common.xsd`, `onvif.xsd` and imported definitions. Scene descriptions use the same release's
 Analytics specification, Analytics WSDL 20.12 at
 `wsdl/ver20/analytics/wsdl/analytics.wsdl` (module queries and supported metadata),
 and the scene Frame/Object/Appearance/ObjectTree types in `metadatastream.xsd`.
 See
-[the Stage 1 references/cache instructions](../experiments/rtsp_metadata/README.md)
+[the contract references/cache instructions](../experiments/rtsp_metadata/README.md)
 and [the immutable release](https://github.com/onvif/specs/tree/d7f3684501c4a6d58f879e72e1e3322c120f95e6).
 GStreamer API references are [appsrc](https://gstreamer.freedesktop.org/documentation/app/appsrc.html),
 [RTSP client](https://gstreamer.freedesktop.org/documentation/gst-rtsp-server/rtsp-client.html)
@@ -279,7 +278,7 @@ ctest --test-dir build --output-on-failure
 
 The RTSP lifecycle test covers disabled/enabled SDP, quiet preparation, metadata
 playback, active-client shutdown and immediate start/stop. Its enabled case reports
-a skip in an environment without the metadata plugin; run it in `metadata-dev`
+a skip in an environment without the metadata plugin; run it in `dev`
 for positive coverage.
 
 Against a source-built server with this switch enabled, default event settings
@@ -291,23 +290,26 @@ python3 unit_tests/event_delivery_smoke.py
 python3 unit_tests/rtsp_metadata_smoke.py --contract /contract
 python3 unit_tests/metadata_configuration_smoke.py --contract /contract
 python3 unit_tests/scene_metadata_smoke.py --contract /contract
-python3 unit_tests/metadata_restart_smoke.py
 ```
 
-`/contract` is the Stage 1 pinned schema cache mounted into the test container.
+`/contract` is the pinned schema cache mounted into the test container.
 Omit that argument for a standard-library-only receiver without XSD validation.
-The configuration and scene scripts additionally use the optional validation-only `xmlschema`
-Python package (tested with Debian python3-xmlschema 3.4.5). It uses XSD 1.1
-priority rules for the unchanged upstream schema: libxml2's XSD 1.0 checker rejects
-VideoSourceConfigurationOptionsExtension2 because of its element/wildcard model.
+The configuration and scene scripts additionally use the validation-only
+`xmlschema` Python package (tested with Debian python3-xmlschema 3.4.5). The `dev`
+image includes this package together with `lxml` and GObject bindings. The validator
+uses XSD 1.1 priority rules for the unchanged upstream schema: libxml2's XSD 1.0
+checker rejects VideoSourceConfigurationOptionsExtension2 because of its
+element/wildcard model.
 The pinned WSDL/XSD files remain unchanged and outside the checkout. Network
 imports are disabled and hash-pinned cached imports are used. This validation
 choice is not a claim of complete ONVIF conformance.
 
-For metadata-enabled `network_smoke.py`, add `--profile-uris`. The configuration
+`network_smoke.py` detects profile URI support from Media2 capabilities;
+`--profile-uris` explicitly selects that mode. The configuration
 smoke script requires writable disposable default configs; it restores the
 settings and associations it changes. The transport smoke script attaches both
 stock profiles, obtains their SOAP URIs and removes its associations afterwards.
+Run scripts that change profiles/rules sequentially against the same instance.
 The scene script also requires disposable default configs. It checks fixed module
 queries and faults, scene-only and mixed streams, module selection, profile and
 active-session isolation, and identical scene/event ObjectId and UTC in RTSP and
@@ -323,80 +325,35 @@ script can exercise a configuration copy with a sufficiently long video/audio
 file input. Use temporary configs and the environment-specific network settings
 from BUILD.md/WSL2.md. Windows/LAN/VMS acceptance remains a separate check.
 
-### Recorded Stage 3 results
+The restart check starts its own source-built server processes on separate
+loopback ports using configuration copies. Run it independently:
 
-Validation ran on the local Debian 13 Docker Engine (`default` context), using
-GStreamer 1.26.2 and the pinned ONVIF plugin 0.13.7:
+```bash
+python3 unit_tests/metadata_restart_smoke.py --binary build/main
+```
 
-- CMake built the affected library, application and tests with two parallel jobs;
-  the full CTest suite passed, including the enabled lifecycle/active playback case.
-- All shipped JSON configurations and twelve configuration-schema tests passed.
-- The existing network smoke script, independent PullPoint script and new metadata
-  script passed against source-built live pipelines. The metadata receiver used
-  the offline pinned schemas for each reconstructed XML document.
-- The same checks passed with file input and in the freshly built standard
-  `osrv-metadata:stage3` runtime image using a generated I420/H.264 plus AAC MP4.
-  The runtime server log contained no ERROR, GStreamer CRITICAL or encoder errors.
-- With metadata disabled, the original development image (without the payloader)
-  passed its network/PullPoint checks. Enabling metadata there failed cleanly with
-  the missing-plugin message. HTTP and RTSP bind failures also exited cleanly.
-- `git diff --check`, Python syntax and local documentation links passed.
-- A custom topic namespace configured in `event.config` was verified in actual
-  received RTP XML, alongside its source-context regression test.
+It verifies URI availability before SOAP requests, custom encoder tokens,
+persistence across process restart, ForcePersistence=false and disabled-transport
+startup rejection. It does not provide full application restart support within
+one process.
 
-All network runs used isolated container namespaces and configuration copies;
-no host listening ports or source configurations were changed by the tests.
-The temporary runtime verification container was stopped and removed. Long-running
-backpressure stress and Windows/LAN/VMS behavior remain outside this validation.
+### Coverage and deployment acceptance
 
-### Recorded Stage 4 results
+Unit coverage includes shared serialization, namespace bindings, filters,
+subscription independence, configuration faults and rollback, immutable scene
+snapshots, object ID lifetime and bounded reader recovery. Network checks cover
+SDP, TCP/UDP fragmentation and MTU/marker behavior, RTCP, late join, silence,
+synchronization, concurrent RTSP/PullPoint consumers, configuration persistence
+and active-session snapshots. The scene check matches ObjectId and UTC across
+scene frames and notifications received through both delivery methods.
 
-The source build and complete CTest suite passed in the documented Linux Docker
-workflow (`osrv-metadata-dev:stage1`, GStreamer 1.26.2, ONVIF plugin 0.13.7).
-Docker context `default` used the WSL Linux Engine on its Unix socket.
-
-- `metadata_configuration_smoke.py --contract /contract` passed Media/Media2
-  request/response and SOAP fault validation against the pinned contract. It
-  covered metadata-first batched profile creation, configuration/profile lookup,
-  capabilities, namespace-aware topic/content filters, stable profile isolation,
-  events disabled, attachment removal, unchanged active sessions, property
-  synchronization and H.264 IDR delivery.
-- `rtsp_metadata_smoke.py --contract /contract`, `event_delivery_smoke.py` and
-  `network_smoke.py --profile-uris` passed: two RTSP receivers plus two PullPoints,
-  TCP/UDP, XML reconstruction, RTCP, late join, pause/resume, reconnect, aggregate
-  and selective track setup, snapshot download and discovery.
-- `metadata_restart_smoke.py` passed metadata-only URI preload before SOAP,
-  configured custom encoder tokens, persistence with ForcePersistence=false,
-  fresh-process restart and disabled-transport startup rejection.
-- The development image without the metadata payloader, with metadata explicitly
-  disabled, passed the network and PullPoint checks. Disabled metadata attachment was rejected, and previously
-  issued profile URI paths remained usable for video/audio.
-- JSON validation passed for all shipped configs and the SOAP-modified config
-  copy. CTest also covered failed-write rollback and atomic metadata/source
-  configuration batches. Python syntax, local documentation links and
-  `git diff --check` passed.
-
-All network tests used isolated container networks and disposable configuration
-copies. The full runtime image was not rebuilt in Stage 4; Windows/LAN/VMS
-acceptance and sustained load/backpressure tests remain outside these results.
-
-### Recorded Stage 5 results
-
-The source build and complete CTest suite passed using the same Linux Docker
-development workflow. Five new scene unit cases cover immutable scoped snapshots,
-independent readers, bounded retention and recovery, object deletion/ID lifetime,
-shared scene/event sample identity and analytics/module selection.
-
-`scene_metadata_smoke.py --contract /contract` passed with real TCP/UDP RTP and
-the pinned metadata, Media, Media2 and Analytics schemas. It verified module
-discovery, sample geometry, module/type faults, scene-only/mixed streams, module
-selection, profile association changes, unchanged active sessions and identical
-ObjectId/UTC across a scene frame, RTSP line event and PullPoint line event.
-The configuration, RTSP transport, event delivery, Analytics and network smoke
-scripts passed as regressions. Shipped and SOAP-modified configurations passed
-JSON schema validation; Python syntax, local documentation links and
-`git diff --check` passed.
-
-Tests used isolated container networking and disposable configuration copies.
-The runtime image was not rebuilt; Windows/LAN/VMS acceptance, sustained load and
-visual or exact video-frame correlation remain outside this validation.
+Container tests do not establish Windows/LAN/VMS interoperability or sustained
+load/backpressure behavior. For a target deployment, follow [WSL2.md](WSL2.md),
+verify both TCP and UDP reception in a metadata-aware client, and compare metadata
+notifications with an independent PullPoint subscriber. Verify unicast and
+multicast discovery on the target host: an isolated container pass does not
+establish host-network discovery behavior. A video player displaying
+video alone is insufficient metadata validation. Synthetic scenes have no visual
+or exact encoded-frame correlation; compression, historical metadata replay and
+multicast metadata remain unsupported. These checks are not an official ONVIF
+conformance claim.

@@ -1,6 +1,6 @@
-# Shared event delivery (metadata Stage 2)
+# Shared event delivery
 
-The emulator now generates each live notification once and distributes immutable
+The emulator generates each live notification once and distributes immutable
 messages to independent consumers. HTTP PullPoint uses this source. The RTSP
 server receives the same `IEventSource` dependency. [RTSP metadata](RTSP_METADATA.md)
 uses that source and is enabled by default. Media/Media2 configuration and profile
@@ -37,8 +37,9 @@ queue. Source destruction disconnects generators, cancels their timers, closes
 remaining queues, stops the worker and joins it. Owners must release the source
 from outside its worker. Event-service teardown releases its PullPoints before
 the server's source dependency is destroyed. Existing global Event-service state,
-the detached optional HTTP listener and RTSP shutdown still prevent claiming
-complete restart or multi-server support.
+the detached optional HTTP listener and incomplete application shutdown prevent
+claiming complete restart or multi-server support. RTSP subsystem cleanup is
+described in [RTSP metadata](RTSP_METADATA.md#lifetime-and-cleanup).
 
 ## Queue limits and recovery
 
@@ -77,12 +78,13 @@ property snapshot and embedded image notifications.
   when its subscription closes. Invalid/removed references also receive this
   typed fault.
 
-The existing simulation still uses `PullPoint.Timeout` instead of the client's
+The simulation uses `PullPoint.Timeout` instead of the client's
 Timeout, does not implement subscription topic/content filters or ChangedOnly,
 and does not honor requested InitialTerminationTime/Renew TerminationTime. The
 fixed lease is an explicit simulation limitation; it is not full ONVIF subscription
-lifetime compliance. Completing these request semantics belongs to later contract
-work. Metadata configuration/filtering is planned in Stage 4.
+lifetime compliance. RTSP event filtering is supported independently through
+[Media/Media2 metadata configuration](RTSP_METADATA.md#supported-settings-and-filters);
+those filters do not change PullPoint subscriptions.
 
 ## XML contract and references
 
@@ -98,7 +100,7 @@ XML escaping and structured ElementItem trees are preserved. An unset legacy
 data_name no longer produces an unnamed SimpleItem.
 
 Use the pinned [ONVIF 24.12 release](https://github.com/onvif/specs/tree/d7f3684501c4a6d58f879e72e1e3322c120f95e6)
-selected in [Stage 1](../experiments/rtsp_metadata/README.md): Core Event Handling
+documented in the [contract cache guide](../experiments/rtsp_metadata/README.md#pinned-contract): Core Event Handling
 (PullMessages and SetSynchronizationPoint), Streaming metadata RTP/container,
 `wsdl/ver10/events/wsdl/event.wsdl`, `wsdl/ver10/schema/metadatastream.xsd`,
 `onvif.xsd`, `common.xsd` and their imports. The typed fault details use imported
@@ -123,14 +125,15 @@ limits, cancellation, subscription expiration, executor isolation, shared messag
 identity and escaped structured XML. CTest also writes representative metadata
 and fault XML into its build fixture directory.
 
-After preparing the Stage 1 schema volume, validate those artifacts offline:
+After [preparing the schema cache](../experiments/rtsp_metadata/README.md#reproduce-in-the-documented-linux-development-environment),
+validate those artifacts offline:
 
 ```bash
 docker run --rm --network none \
   -v "$(pwd)":/workspace:ro \
   -v osrv-dev-build:/workspace/build:ro \
   -v osrv-metadata-contract:/contract:ro \
-  osrv-metadata-dev:stage1 \
+  osrv-dev:latest \
   python3 unit_tests/validate_event_xml.py --contract /contract \
     --artifacts build/unit_tests/fixtures/build/unit_tests
 ```
@@ -151,9 +154,3 @@ Both scripts accept host/port options. The event script creates two subscription
 checks matching live notifications and independent unsubscribe, and removes its
 subscriptions. The network script additionally exercises discovery and TCP/UDP
 video/audio. LAN/Windows/VMS acceptance remains separate from container tests.
-
-Stage 2 validation passed in `osrv-dev:latest` on the local Debian 13 Engine:
-the CMake build, full CTest suite (including ten new SharedEvents cases), pinned
-schema validation of all four generated XML artifacts, and both network scripts.
-Network checks used a source-built server and configuration copies in an isolated
-container; no host listening ports or source configuration files were changed.

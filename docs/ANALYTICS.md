@@ -50,7 +50,7 @@ and `DeleteRules` use a VideoAnalyticsConfiguration token, by default
 `GetAnalyticsConfigurations` return the same persisted rules. Read operations use
 READ_MEDIA access; mutations use ACTUATE under the existing digest authorization.
 
-The device supports up to four rules in total across all five types and all analytics
+The device supports up to four rules in total across all six types and all analytics
 configurations.
 
 ## Motion Region Detector (Annex C.1)
@@ -144,9 +144,9 @@ The topic is also described by `GetEventProperties`.
 ## License Plate Recognition (Annex G.3)
 
 `tt:LicensePlateRecognition` uses the same Rules CRUD, atomic persistence,
-configuration tokens, access levels and shared four-rule limit. The G.1/G.3
-contract was inspected on 2026-11-19 against Analytics 26.06, Analytics WSDL
-20.12, ONVIF schema 25.12 and metadata schema 25.12 linked above. Rule and event
+configuration tokens, access levels and shared four-rule limit. Its G.1/G.3
+contract uses Analytics 26.06, Analytics WSDL 20.12, ONVIF schema 25.12 and
+metadata schema 25.12 linked above. Rule and event
 payloads are independently implemented; no specification material is bundled.
 
 | Parameter | Supported values and creation default |
@@ -387,9 +387,10 @@ all rule types from the media manager's current tree.
 interval in seconds (default 2). A synthetic object with ID `1` moves horizontally
 at y=0 through x positions `-0.75, -0.25, 0.25, 0.75, 0.75, 0.25, -0.25, -0.75`,
 then repeats for each configured video source. This is an intentional simulation
-deviation: no objects are extracted from video, and no RTSP object metadata is
-produced. Lines outside this trajectory do not fire. Detection interpolates
-between successive off-line positions and emits at most one event per rule and
+deviation: no objects are extracted from video. The same samples can produce
+[synthetic RTSP scene frames](RTSP_METADATA.md#synthetic-scene-description)
+when analytics metadata is enabled. Lines outside this trajectory do not fire.
+Detection interpolates between successive off-line positions and emits at most one event per rule and
 object per sample. Touching and returning to the same side, travelling along a
 line and passing its outer endpoint do not count. Landing on the line defers
 evaluation until the object leaves it; interior vertices are checked to distinguish
@@ -492,167 +493,10 @@ The corresponding `Analytics[].rules` JSON entry has `Name`,
 For example, `Segments: [[{"x": 0, "y": -1}, {"x": 0, "y": 1}]]` defines one line.
 Use an empty `ResetTime` array for a persisted configuration without resets.
 
-The former branch's experimental MotionRegionDetector AnalyticsModule and sample
-vehicle metadata are no longer exposed: MotionRegionDetector is a rule. Cell scene
-description remains unsupported. Stage 5 adds a separate fixed, read-only
-`SyntheticObjectTracker` module, documented in [RTSP metadata](RTSP_METADATA.md#synthetic-scene-description).
-`GetAnalyticsModules`, `GetSupportedAnalyticsModules` and `GetSupportedMetadata`
-expose this module and its sample frame. `SupportedMetadata=true` advertises the
-last operation; module creation/modification and module options remain unsupported
-and their capabilities remain false.
-Legacy module utilities remain covered by isolated fixtures. When migrating an
-old configuration, remove the experimental `analyticsModules` entries and use
-`rules` instead. RTSP metadata support does not establish the other features
-needed for a complete Profile M product. Existing Event service
-restart and shutdown limitations described in the architecture still apply.
-
-## Validation
-
-Build and run CTest as described in [BUILD.md](../BUILD.md). The motion suites
-cover defaults, persistence/reload, atomic failures, QName namespaces, polygon
-geometry, sensitivity, arming, synchronization, limits and save failures.
-
-Against a running instance with a disposable configuration copy and disabled
-authentication, run:
-
-```bash
-python3 unit_tests/analytics_smoke.py --host 127.0.0.1 --capture /tmp/analytics-responses
-python3 unit_tests/network_smoke.py --host 127.0.0.1 --advertised-ip 127.0.0.1 --multicast-interface LOCAL_IPV4
-```
-
-The Analytics smoke test creates two Motion Region rules, one Line Detector and
-one LineCounting rule, then replaces one Motion Region rule with a Field Detector.
-It checks SOAP faults, Media/Media2, PullPoint motion/crossing and zone occupancy
-events, aggregated counts and a scheduled reset, and deletes its rules.
-It needs four free rule slots
-and the default synthetic tick interval. Optional response capture supports
-external schema validation without adding a runtime XML library dependency.
-
-The Line Detector suite additionally checks defaults and reload, option filtering,
-direction and vertex order, horizontal/diagonal segments, tangencies, vertex
-crossings, object/source isolation, history reset, mixed-type atomic batches,
-resource limits and persistence failures. Builds and CTest can run in the Docker
-`dev` environment documented in BUILD.md; use a separate build volume and a
-disposable configuration copy for network checks.
-
-The LineCounting suite uses an injected clock to test per-line counts, direction,
-PassAllPolylines object isolation, aggregation without new samples, report-boundary
-crossings, repeated/local/offset reset times, skipped days, atomic failures,
-reload, lifecycle notifications and integer saturation. Its Docker Debug build
-and all 119 Boost test cases passed through CTest. The combined Analytics smoke
-test and the complete network smoke test passed against a configuration copy in
-an isolated Docker network, including unicast/multicast discovery and RTP/TCP/UDP.
-
-Field Detector validation on 2026-11-19 used the documented `osrv-dev:latest`
-container and `osrv-analytics-build` volume: CMake Debug with unit tests enabled,
-`cmake --build build --parallel 2`, and `ctest --test-dir build --output-on-failure`
-passed. The extended Analytics smoke test and network smoke test passed against
-that build with a disposable configuration in the container network namespace,
-including multicast discovery and RTP over TCP/UDP. JSON Schema regression tests
-passed (10 cases). With `xmlschema` 4.3.2 in XSD 1.1 mode and the linked official
-imports, 64 captured Analytics responses, SOAP faults, Media/Media2 analytics
-configuration payloads and notification messages passed schema validation.
-These checks do not validate a Windows/VMS deployment or constitute certification.
-
-For LineCounting, 71 captured response, fault and payload documents passed XSD 1.1
-validation with the same WSDL/XSD imports and `xmlschema` 4.3.2, including
-DurationRange options, Media/Media2 analytics configurations and PullPoint messages.
-
-For the Line Detector integration, the Docker Debug build and all 110 Boost test
-cases passed through CTest. The combined Analytics smoke test passed against a
-disposable configuration. Using `xmlschema` 4.3.2 in XSD 1.1 mode with the above
-WSDL/XSD imports, 41 captured response, fault and payload documents passed
-validation, including Analytics operations, Media/Media2 analytics configuration
-payloads and PullPoint messages. Both ONVIF schema imports (`onvif.xsd` and
-`metadatastream.xsd`) must be loaded when compiling the Analytics WSDL schema.
-
-During the Motion Region implementation, nine Analytics response bodies and the MotionRegion
-payloads returned through Media/Media2 were validated against the above WSDL/XSD
-with imports; three complete SOAP fault envelopes were also validated, using `xmlschema` 4.3.2 in XSD 1.1 mode. XSD 1.0 validation with
-libxml2 could not compile the upstream wildcard content models (including
-MotionRegionConfigOptions); the schemas were not patched. This is a validation
-tool limitation, not a claim of complete protocol or product conformance.
-
-
-License Plate Recognition validation on 2026-11-19 used `osrv-dev:latest`, the
-local WSL Docker Engine (`default` context), and the documented `osrv-dev-build`
-and `osrv-dev-ccache` volumes. Commands inside the development container:
-
-```bash
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug -DENABLE_UNIT_TESTS=ON \
-  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
-cmake --build build --parallel 2
-ctest --test-dir build --output-on-failure
-```
-
-All 129 Boost test cases passed. The JSON configuration checker and all 11 schema
-regression checks passed. `python3 unit_tests/analytics_smoke.py --capture <directory>`
-and `python3 unit_tests/network_smoke.py --multicast-interface 127.0.0.1` passed
-against the newly built server with a disposable configuration. Both clients shared
-the isolated server container's network namespace; the existing host deployment
-was left running. The analytics check includes LPR advertisement, options, Media/
-Media2 serialization, structured PullPoint events and the repeat interval. Network
-checks include multicast discovery and video/audio RTP over TCP and UDP.
-Using `xmlschema` 4.3.2 in XSD 1.1 mode with the unmodified published imports,
-76 captured Analytics responses/faults, media configuration payloads, notifications
-and explicitly typed LicensePlateInfo payloads passed validation. This does not
-validate OCR accuracy, Windows/VMS clients or WSL LAN/firewall behavior.
-
-After the existing deployment was stopped, the final build was also tested with
-Docker `--network host` in WSL mirrored mode. The complete Analytics smoke test,
-including LPR/PullPoint, passed from the WSL host. SOAP URLs/snapshots and independent
-video/audio RTP checks passed over TCP and UDP. The full network smoke test timed
-out waiting for the first unicast discovery reply, both through loopback and the
-selected WSL interface; it therefore did not reach multicast discovery. The cause
-was not established. The isolated-network discovery pass above does not establish
-host-network discovery functionality. All tests used disposable configuration;
-the temporary host-network server was stopped afterward.
-
-The image/vehicle extension was validated on 2026-11-19 with the same dev image
-and CMake/CTest commands above: all 130 executed Boost cases passed, along with
-all 11 JSON schema checks and the shipped configuration checker. The extended
-Analytics smoke test passed all image modes, fetched both image URLs over HTTP,
-checked PNG content type, and compared downloaded bytes with decoded embedded
-images. The ImageSendingType capability was checked on the running server.
-The complete network smoke test passed in the isolated Docker network, including
-unicast/multicast discovery and audio/video RTP over TCP and UDP. WSDL/XSD checks
-validated 92 captured responses and typed payloads, including VehicleInfo,
-BoundingBox, LicensePlateInfo and base64 image values. These checks do not change
-the host-network discovery limitation recorded above. The temporary test server
-was stopped after validation. The generated resource's exact prompt and provenance
-are recorded in [the resource README](../server_configs/rs/README.md).
-
-The plate/vehicle separation was checked on 2026-11-19 using the same dev-container
-build and CTest workflow: all 130 Boost cases passed. The Analytics smoke test
-confirmed that Image and VehicleImage differ and that each decoded payload matches
-its corresponding HTTP download. The complete isolated-network smoke test passed;
-93 captured responses and typed payloads passed the same WSDL/XSD validation.
-Both synthetic assets and their generation prompts are recorded in the resource
-README. The temporary validation server was stopped afterward.
-
-The four-vehicle extension was validated on 2026-11-19 with the same dev-container
-CMake build and CTest workflow: all 131 executed Boost cases passed. All 11 JSON
-schema checks and the shipped configuration validator passed. The extended
-Analytics smoke test captured TEST123/TEST456/TEST789/TEST321 with their respective
-countries, types, brands and models, downloaded all eight distinct image URIs,
-compared each download with its embedded bytes, and checked EventInterval on a
-repeated plate. The isolated-network smoke test passed discovery and TCP/UDP media.
-The same WSDL/XSD validator accepted 105 captured responses and typed payloads.
-Windows/VMS and host-network discovery were not revalidated by these isolated
-container checks. The disposable validation server was stopped afterward.
-
-The motorcycle addition was validated on 2026-11-19 using the same dev-container
-build and CTest commands: all 131 Boost cases passed, including the five-vehicle
-cycle and Rear/Front filtering. Analytics smoke verified all five vehicle datasets
-and their ten image downloads; the isolated-network smoke test passed discovery
-and TCP/UDP media. WSDL/XSD validation accepted 110 captured responses and typed
-payloads, including Motorcycle vehicle information. The temporary test server was
-stopped after validation; Windows/VMS and host-network discovery were not retested.
-
 ## Face Recognition (Annex G.2)
 
 `tt:FaceRecognition` uses topic `tns1:RuleEngine/Recognition/Face`. Its contract
-was checked on 2026-11-19 against Analytics 26.06 Annex G.1/G.2 and the WSDL,
+uses Analytics 26.06 Annex G.1/G.2 and the WSDL,
 ONVIF/common and metadata schema versions linked above. `ObjectId` and
 `ParentObjectId` are ElementItems of metadata type `tt:ObjectId`, with an integer
 `ObjectId` attribute; `BoundingBox` uses the four required `tt:Rectangle`
@@ -687,9 +531,10 @@ likelihood 0.98. Every event includes `VideoSource`, `Rule`, `Likelihood`,
 `ParentObjectId`. Recognition events are not properties: they have no
 `PropertyOperation` or synchronization/lifecycle notifications.
 
-Simulation scope: no actual detection, biometric comparison, enrollment API or
-RTSP metadata is implemented. Each synthetic face is treated as an exact match
-to its own reference test card; `ImageUri` and `RefImageUri` deliberately point
+Simulation scope: no actual detection, biometric comparison or enrollment API
+is implemented. Face notifications can be carried by RTSP event metadata, but
+the scene module does not produce face scene frames. Each synthetic face is
+treated as an exact match to its own reference test card; `ImageUri` and `RefImageUri` deliberately point
 to the same PNG. The rectangle and face/person object IDs are fixed synthetic
 scene data, independent of the RTSP test pattern. The reference cards are loaded
 once from `rs/face-test-001.png` through `003.png` and served at
@@ -705,27 +550,68 @@ transaction rollback, deletion, source filtering and invalid requests/samples.
 PullPoint wire format, all image downloads, advertised descriptions and image
 modes against a running server with disposable configuration and auth disabled.
 
-Face Recognition validation on 2026-11-19 used the documented `osrv-dev:latest`
-image with GCC 14.2, Boost 1.83 and GStreamer 1.26.2, building local source in a
-separate `osrv-face-build` volume. Commands run inside the dev container:
+## Scene module and metadata delivery
+
+MotionRegionDetector is a rule, not an analytics module. Cell scene descriptions
+are unsupported. The fixed read-only `SyntheticObjectTracker` module describes
+Line Detector simulator samples; see
+[RTSP metadata](RTSP_METADATA.md#synthetic-scene-description) for configuration,
+module selection, scene/event correlation and simulation limits.
+`GetAnalyticsModules`, `GetSupportedAnalyticsModules` and `GetSupportedMetadata`
+expose this module and its sample frame. `SupportedMetadata=true` advertises the
+last operation. Module creation/modification and module options remain unsupported
+and their capabilities remain false. The scene module uses the pinned ONVIF 24.12
+contract set documented in the metadata guide; the rule references above apply
+to the rule interface.
+
+Rule notifications can be delivered independently through PullPoint and RTSP event
+metadata. Scene frames are selected separately and do not include LPR, face or
+motion-region scene analysis. RTSP metadata support does not establish all features
+needed for a complete Profile M product. Event-service restart and shutdown
+limitations are described in the architecture.
+
+## Validation
+
+Build and run CTest as described in [BUILD.md](../BUILD.md). The motion suites
+cover defaults, persistence/reload, atomic failures, QName namespaces, polygon
+geometry, sensitivity, arming, synchronization, limits and save failures.
+
+Against a running instance with a disposable configuration copy and disabled
+authentication, run:
 
 ```bash
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug -DENABLE_UNIT_TESTS=ON
-cmake --build build --parallel 2
-ctest --test-dir build --output-on-failure
-python3 unit_tests/face_recognition_smoke.py --capture /tmp/face-responses-final
-python3 unit_tests/analytics_smoke.py
-python3 unit_tests/network_smoke.py --multicast-interface 172.17.0.2
+python3 unit_tests/analytics_smoke.py --host 127.0.0.1 --capture /tmp/analytics-responses
+python3 unit_tests/network_smoke.py --host 127.0.0.1 --advertised-ip 127.0.0.1 --multicast-interface LOCAL_IPV4
 ```
 
-All passed. Network checks used a disposable configuration copy in an isolated
-Docker network namespace; `172.17.0.2` was that container's interface, not a
-recommended client address. PullPoint smoke tests ran sequentially because the
-existing Event service only reliably supports one subscriber. The network test
-covered unicast/multicast discovery and audio/video RTP over TCP/UDP. The optional
-configuration checker and its 12 schema regression tests also passed. Using
-`xmlschema` 4.3.2 in XSD 1.1 mode with the above official WSDL and imported schemas,
-57 captured Analytics responses, faults, notifications and typed ElementItems
-passed validation, including `tt:ObjectId`, `tt:Rectangle` and base64 payloads.
-These Linux/container checks do not validate Windows/VMS behavior or establish
-ONVIF conformance.
+The Analytics smoke test creates two Motion Region rules, one Line Detector and
+one LineCounting rule, then replaces one Motion Region rule with a Field Detector.
+It checks SOAP faults, Media/Media2, PullPoint motion/crossing and zone occupancy
+events, aggregated counts and a scheduled reset, and deletes its rules.
+It needs four free rule slots
+and the default synthetic tick interval. Optional response capture supports
+external schema validation without adding a runtime XML library dependency.
+
+The Line Detector suite additionally checks defaults and reload, option filtering,
+direction and vertex order, horizontal/diagonal segments, tangencies, vertex
+crossings, object/source isolation, history reset, mixed-type atomic batches,
+resource limits and persistence failures. Use the Docker development workflow in
+BUILD.md and the `dev` image described in
+[RTSP metadata](RTSP_METADATA.md#enable-the-transport) for positive metadata
+transport coverage. Use a separate build volume and a disposable configuration
+copy for network checks.
+
+The LineCounting suite uses an injected clock to test per-line counts, direction,
+object isolation, aggregation, report boundaries, reset schedules, reload and
+integer saturation. Field Detector tests cover polygon geometry, occupancy,
+object/source isolation and lifecycle transitions. License Plate Recognition tests
+cover plate trajectories, repeat intervals, image modes and per-vehicle fields.
+
+For schema validation, load both `onvif.xsd` and `metadatastream.xsd` when compiling
+the Analytics WSDL: they share a target namespace and supply different types.
+The configuration and scene smoke checks support an offline pinned schema cache;
+see [RTSP metadata validation](RTSP_METADATA.md#contract-and-validation).
+Some upstream wildcard models require XSD 1.1 element/wildcard priority; the
+validation tools do not patch upstream schemas. Validate semantics separately
+from XML syntax. Container checks do not establish Windows/VMS interoperability
+or official ONVIF conformance.

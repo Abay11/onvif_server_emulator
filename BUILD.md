@@ -215,7 +215,8 @@ the same build tree. Clearing the builder cache removes these accelerators.
 #### Reusable development environment
 
 Build the `dev` target once. It includes the compiler, CMake, Git, ccache, and
-`gst-inspect-1.0` / `gst-launch-1.0`, and does not copy or compile the project:
+`gst-inspect-1.0` / `gst-launch-1.0`, the metadata payloader and Python metadata
+validation tools. It does not copy or compile the application:
 
 ```bash
 docker build -f docker/Dockerfile --target dev -t osrv-dev:latest .
@@ -232,11 +233,9 @@ docker run --rm -it \
     osrv-dev:latest
 ```
 
-The ordinary `dev` image omits the metadata payloader. Before running the
-application in this image, explicitly set `rtsp_metadata.enabled=false` in the
-configuration you pass to it. The default is now true; the normal runtime image
-includes the required plugin. See [RTSP metadata](docs/RTSP_METADATA.md) for its
-dependency requirements.
+The `dev` image includes the same pinned metadata payloader as the runtime image.
+The application runs with the default `rtsp_metadata.enabled=true` setting. See
+[RTSP metadata](docs/RTSP_METADATA.md) for configuration and receiver checks.
 
 Inside the container:
 
@@ -268,13 +267,12 @@ a local Docker build does not upload an image.
 
 ### Network smoke test
 
-For the optional Stage 1 RTSP metadata experiment, including the pinned upstream
+For the isolated RTSP metadata transport checks, including the pinned upstream
 payloader build, runtime dependency probe and offline TCP/UDP receiver checks,
 see [the metadata experiment](experiments/rtsp_metadata/README.md).
-The normal application runtime now includes that pinned plugin. Use the
-`metadata-dev` target to build/test with `rtsp_metadata.enabled=true`; the ordinary
-`dev` target does not contain the payloader. The plugin requires GStreamer 1.20+;
-the documented Trixie environment uses GStreamer 1.26.2. See
+The `dev` and normal application runtime images include the same pinned plugin.
+The plugin requires GStreamer 1.20+; the documented Trixie environment uses
+GStreamer 1.26.2. See
 [live RTSP metadata](docs/RTSP_METADATA.md) for configuration/profile control and the
 `unit_tests/rtsp_metadata_smoke.py` receiver checks.
 

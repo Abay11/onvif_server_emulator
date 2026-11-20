@@ -279,7 +279,7 @@ The `PullPoint` section contains the following settings:
 - `Port`: sets the separate listener's port when `UseHttpServerPort` is `false`.
   The default is `5550`.
 
-### RTSP event metadata (`common.config`)
+### RTSP metadata (`common.config`)
 
 ONVIF event metadata configuration and streaming are enabled by default
 (`rtsp_metadata.enabled=true`, including when the setting is omitted). Set it to

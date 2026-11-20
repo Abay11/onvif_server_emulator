@@ -51,8 +51,9 @@ an official conformance claim; see the
 | `Server.h`, `Server.cpp` | Shared settings, HTTP server, subsystem initialization, base URLs |
 | `include/IOnvifServer.h`, `src/IOnvifServer.cpp` | Shared context, factory and lazy SOAP service creation, media profile manager |
 | `onvif_services/` | SOAP services, operation handlers, discovery, and events |
-| `onvif/` | Base ONVIF request handler, recording and search session models |
+| `onvif/` | Base ONVIF request handler, recording/search models, notification serialization and scene snapshots |
 | `RtspServer.h`, `RtspServer.cpp` | GStreamer RTSP server, live streams, synthetic replay |
+| `rtsp/` | Metadata appsrc bridge, subscriptions, scene readers and media lifecycle |
 | `utility/` | XML/SOAP/HTTP, authorization, media profiles, audio/video/PTZ configuration readers, date and time |
 | `include/`, `src/onvif_services/` | Logging interfaces and service configuration loader |
 | `server_configs/` | JSON `.config` files, XML response templates, snapshot JPEG |
@@ -311,7 +312,13 @@ URLs, snapshots, unicast/multicast discovery, and video/audio RTP over TCP/UDP.
 It does not start the server or configure the network. Windows/VMS acceptance
 checks on the actual environment are described in [WSL2.md](WSL2.md).
 
-The Dockerfile has `base`, `dev`, `build`, and `runtime` stages. The final image
-contains the application, configuration, and runtime dependencies, including
-GStreamer plugins. Compose uses host networking for mirrored WSL2; Docker Engine
-must run inside WSL as described in the networking guide.
+The Dockerfile provides a `dev` development target and a final `runtime` image.
+Both include the same pinned GStreamer metadata payloader, so the development
+image supports the application's default metadata setting. The development image
+also includes the compiler, build tools and Python metadata validation tools;
+the runtime contains the application, configuration and runtime dependencies.
+Plugin packaging and isolated transport checks are documented in the
+[metadata development guide](../experiments/rtsp_metadata/README.md).
+The mirrored WSL2 development Compose configuration uses host networking and
+requires Docker Engine inside WSL; the root Compose file runs the published image.
+See [BUILD.md](../BUILD.md) and the networking guide for these workflows.
