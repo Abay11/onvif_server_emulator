@@ -542,16 +542,29 @@ std::deque<AnalyticsRules::Message> AnalyticsRules::Sample(double x, double y, d
 }
 
 std::deque<AnalyticsRules::Message> AnalyticsRules::SampleObject(const std::string& videoSource,
-																																 const std::string& objectId, double x, double y)
+																																 const std::string& objectId, double x, double y,
+																																 const std::string& classification)
 {
 	std::lock_guard lock(mutex_);
 	std::deque<Message> result;
 	if (objectId.empty() || objectId.find_first_of(" \t\r\n") != std::string::npos || !std::isfinite(x) ||
 			!std::isfinite(y) || x < -1 || x > 1 || y < -1 || y > 1)
 		return result;
+	auto now = clock_();
+	auto micros = std::chrono::duration_cast<std::chrono::microseconds>(now.time_since_epoch()).count();
+	auto utc = datetime::posix_datetime_to_utc(boost::posix_time::ptime(boost::gregorian::date(1970, 1, 1)) +
+																						 boost::posix_time::microseconds(micros));
+	std::vector<std::string> configurations;
+	for (const auto& [_, cfg] : profiles_.get_child("Analytics"))
+		if (source(profiles_, cfg.get<std::string>("token")).get<std::string>("SourceToken") == videoSource)
+			configurations.push_back(cfg.get<std::string>("token"));
+	auto sceneId = configurations.empty()
+										 ? objectId
+										 : scenes_->Sample(videoSource, configurations, objectId, x, y, utc, classification);
 	result.swap(pending_counts_);
 	result.insert(result.end(), pending_fields_.begin(), pending_fields_.end());
 	pending_fields_.clear();
+	const auto sampleEvents = result.size();
 	for (const auto& [_, cfg] : profiles_.get_child("Analytics"))
 	{
 		auto token = cfg.get<std::string>("token");
@@ -574,7 +587,7 @@ std::deque<AnalyticsRules::Message> AnalyticsRules::SampleObject(const std::stri
 			if (rule.get<std::string>("Type") == counting::Type)
 			{
 				auto& counter = counters_.at({token, rule.get<std::string>("Name")});
-				if (counter.Sample(rule, objectId, {x, y}, clock_()))
+				if (counter.Sample(rule, objectId, {x, y}, now))
 					result.push_back(CountNotification(token, rule, "Changed", counter.count));
 				continue;
 			}
@@ -590,18 +603,30 @@ std::deque<AnalyticsRules::Message> AnalyticsRules::SampleObject(const std::stri
 				msg.source_item_descriptions = {
 						{"VideoSource", videoSource}, {"AnalyticsConfiguration", token}, {"Rule", rule.get<std::string>("Name")}};
 				msg.data_name = "ObjectId";
-				msg.data_value = objectId;
+				msg.data_value = sceneId;
 				result.push_back(std::move(msg));
 			}
 			tracks_[key] = {x, y};
 		}
 	}
+	for (auto index = sampleEvents; index < result.size(); ++index)
+		result[index].utc_time = utc;
 	return result;
 }
 
 void AnalyticsRules::ForgetObject(const std::string& videoSource, const std::string& objectId)
 {
 	std::lock_guard lock(mutex_);
+	auto now = clock_();
+	auto micros = std::chrono::duration_cast<std::chrono::microseconds>(now.time_since_epoch()).count();
+	auto utc = datetime::posix_datetime_to_utc(boost::posix_time::ptime(boost::gregorian::date(1970, 1, 1)) +
+																						 boost::posix_time::microseconds(micros));
+	const auto pendingStart = pending_fields_.size();
+	std::vector<std::string> configurations;
+	for (const auto& [_, cfg] : profiles_.get_child("Analytics"))
+		if (source(profiles_, cfg.get<std::string>("token")).get<std::string>("SourceToken") == videoSource)
+			configurations.push_back(cfg.get<std::string>("token"));
+	scenes_->Forget(videoSource, configurations, objectId, utc);
 	for (const auto& [_, cfg] : profiles_.get_child("Analytics"))
 	{
 		auto token = cfg.get<std::string>("token");
@@ -615,6 +640,8 @@ void AnalyticsRules::ForgetObject(const std::string& videoSource, const std::str
 					pending_fields_.push_back(FieldNotification(token, rule, "Changed", false));
 			}
 	}
+	for (auto index = pendingStart; index < pending_fields_.size(); ++index)
+		pending_fields_[index].utc_time = utc;
 	for (auto& [key, counter] : counters_)
 		if (source(profiles_, key.first).get<std::string>("SourceToken") == videoSource)
 			counter.Forget(objectId);

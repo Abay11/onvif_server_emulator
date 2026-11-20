@@ -1,3 +1,4 @@
+#include "../onvif_services/pullpoint/pull_point.h"
 #include "../utility/AnalyticsRules.h"
 #include "../utility/EventService.h"
 #include "../utility/LineDetector.h"

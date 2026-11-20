@@ -3,6 +3,7 @@
 #include "../onvif_services/discovery_service.h"
 #include "../onvif_services/event_service.h"
 #include "../onvif_services/pullpoint/pull_point.h"
+#include "../onvif_services/pullpoint/event_generators.h"
 #include "../onvif_services/imaging_service.h"
 #include "../onvif_services/media2_service.h"
 #include "../onvif_services/media_service.h"
@@ -19,6 +20,8 @@
 #include "utility/XmlParser.h"
 
 #include "MediaFormats.h"
+#include "utility/MetadataConfiguration.h"
+#include "utility/MediaProfilesManager.h"
 
 #include "Simple-Web-Server/server_http.hpp"
 
@@ -43,6 +46,7 @@ Server::Server(const std::string& configs_dir, std::shared_ptr<ILogger> log) : I
 Server::~Server()
 {
 	discovery::stop();
+	event::stop_service();
 
 	io_context_work_.reset();
 	try
@@ -97,7 +101,14 @@ void Server::init()
 	// TODO: here is the same list is copied into digest_session, although it's already stored in server_configs
 	server_configs_->digest_session_->set_users_list(server_configs_->system_users_);
 
-	profiles_config_ = osrv::ServiceConfigs("media_profiles", configs_dir);
+	// Both SOAP services share the manager's authoritative tree. Streaming receives copies.
+	profiles_config_ = MediaProfilesManager()->SharedConfigs();
+	MediaProfilesManager()->MetadataAvailable(server_configs_->rtsp_metadata_enabled_);
+	if (!server_configs_->rtsp_metadata_enabled_)
+		for (const auto& [_, profile] : profiles_config_->get_child("MediaProfiles"))
+			if (!profile.get<std::string>("Metadata", "").empty())
+				throw std::runtime_error("Profiles reference metadata but rtsp_metadata.enabled is false; enable the transport "
+																 "or remove the metadata associations");
 
 	// Validate and join discovery before event generators create background threads.
 	// A wrong mirrored interface must fail startup cleanly.
@@ -170,7 +181,8 @@ void Server::init()
 			 {utility::field::Topic,
 				{{"VideoSource", "tt:ReferenceToken"}, {"AnalyticsConfiguration", "tt:ReferenceToken"}, {"Rule", "xsd:string"}},
 				{{"IsInside", "xsd:boolean"}}}}};
-	event::init_service(*http_server_, *server_configs_, configs_dir, *logger_, event_generators);
+	event_source_ = std::make_shared<event::EventSource>(*logger_);
+	event::init_service(*http_server_, *server_configs_, configs_dir, *logger_, event_source_, event_generators);
 
 	// TODO: impl. logic for multichannel cannel
 	auto audio_node = profiles_config_->get_child(CONFIGURATION_ENUMERATION[CONFIGURATION_TYPE::AUDIOENCODER]).front();
@@ -183,7 +195,15 @@ void Server::init()
 			audio_node.second.get<unsigned int>("SampleRate") * 1000,
 	};
 
-	rtspServer_ = new rtsp::Server(&*logger_, *server_configs_, std::move(ainfo));
+	rtspServer_ = new rtsp::Server(&*logger_, *server_configs_, std::move(ainfo), event_source_, Rules()->Scenes());
+	// Keep profile URIs valid after disabling metadata, without requiring its payloader.
+	Metadata()->Bind(
+			[this](const auto& path, const auto& encoder, bool audio, auto settings) {
+				rtspServer_->ConfigureProfile(path, encoder, std::move(settings), audio);
+			},
+			[this](const auto& path) { rtspServer_->SynchronizeProfile(path); },
+			[this](const auto& paths) { rtspServer_->RetainProfiles(paths); });
+	Metadata()->Refresh();
 
 	if (auto delay = server_configs_->network_delay_simulation_; delay > 0)
 	{
@@ -206,25 +226,37 @@ void Server::run()
 
 	// Start server and receive assigned port when server is listening for requests
 	promise<unsigned short> server_port;
+	auto listening = server_port.get_future();
 	thread server_thread([this, &server_port]() {
+		bool announced = false;
 		// Start HTTP server
 		try
 		{
-			http_server_->start([&server_port](unsigned short port) { server_port.set_value(port); });
+			http_server_->start([&server_port, &announced](unsigned short port) {
+				announced = true;
+				server_port.set_value(port);
+			});
 		}
 		catch (const std::exception& e)
 		{
 			logger_->Error(std::string("HTTP server finished with a critical erroe: ") + e.what());
+			if (!announced) server_port.set_exception(std::current_exception());
 		}
 	});
 
-	rtspServer_->run();
-
-	std::string msg("Server is successfully started on port: ");
-	msg += std::to_string(server_port.get_future().get());
-	logger_->Info(msg);
-
-	server_thread.join();
+	try
+	{
+		auto port = listening.get();
+		rtspServer_->run();
+		logger_->Info("Server is successfully started on port: " + std::to_string(port));
+		server_thread.join();
+	}
+	catch (...)
+	{
+		http_server_->stop();
+		if (server_thread.joinable()) server_thread.join();
+		throw;
+	}
 }
 
 std::shared_ptr<ServerConfigs> read_server_configs(const std::string& config_path)
@@ -254,6 +286,7 @@ std::shared_ptr<ServerConfigs> read_server_configs(const std::string& config_pat
 	read_configs->advertised_pullpoint_port_ = configs_tree.get<unsigned short>("advertised.pullpoint_port", 0);
 	read_configs->rtp_port_min_ = configs_tree.get<unsigned short>("rtp.port_min", 50000);
 	read_configs->rtp_port_max_ = configs_tree.get<unsigned short>("rtp.port_max", 50199);
+	read_configs->rtsp_metadata_enabled_ = configs_tree.get<bool>("rtsp_metadata.enabled", true);
 	if (read_configs->rtp_port_min_ == 0 || read_configs->rtp_port_min_ % 2 != 0 ||
 		read_configs->rtp_port_max_ <= read_configs->rtp_port_min_ || read_configs->rtp_port_max_ % 2 != 1)
 		throw std::runtime_error("RTP range must start at a positive even port and end at a larger odd port");

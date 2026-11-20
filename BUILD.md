@@ -215,7 +215,8 @@ the same build tree. Clearing the builder cache removes these accelerators.
 #### Reusable development environment
 
 Build the `dev` target once. It includes the compiler, CMake, Git, ccache, and
-`gst-inspect-1.0` / `gst-launch-1.0`, and does not copy or compile the project:
+`gst-inspect-1.0` / `gst-launch-1.0`, the metadata payloader and Python metadata
+validation tools. It does not copy or compile the application:
 
 ```bash
 docker build -f docker/Dockerfile --target dev -t osrv-dev:latest .
@@ -231,6 +232,10 @@ docker run --rm -it \
     -v osrv-dev-ccache:/root/.cache/ccache \
     osrv-dev:latest
 ```
+
+The `dev` image includes the same pinned metadata payloader as the runtime image.
+The application runs with the default `rtsp_metadata.enabled=true` setting. See
+[RTSP metadata](docs/RTSP_METADATA.md) for configuration and receiver checks.
 
 Inside the container:
 
@@ -262,6 +267,15 @@ a local Docker build does not upload an image.
 
 ### Network smoke test
 
+For the isolated RTSP metadata transport checks, including the pinned upstream
+payloader build, runtime dependency probe and offline TCP/UDP receiver checks,
+see [the metadata experiment](experiments/rtsp_metadata/README.md).
+The `dev` and normal application runtime images include the same pinned plugin.
+The plugin requires GStreamer 1.20+; the documented Trixie environment uses
+GStreamer 1.26.2. See
+[live RTSP metadata](docs/RTSP_METADATA.md) for configuration/profile control and the
+`unit_tests/rtsp_metadata_smoke.py` receiver checks.
+
 With a running emulator, Python 3 can check the default SOAP service configuration,
 returned URLs, snapshot retrieval, unicast and multicast discovery, and live video
 and audio RTP over both TCP and UDP:
@@ -279,3 +293,9 @@ interface joined by discovery. This automated test complements the Windows/VMS
 acceptance steps in [the mirrored guide](docs/WSL2.md); it does not configure
 firewalls. The test assumes authentication is disabled and creates a short-lived
 PullPoint subscription.
+
+After changing event delivery, also run `python3 unit_tests/event_delivery_smoke.py`
+against the same source-built server. It checks two independent PullPoints,
+matching live notifications, message limits, synchronization and unsubscribe.
+See [shared event delivery](docs/EVENT_DELIVERY.md) for the pinned XML validation
+command and subscription simulation limits.

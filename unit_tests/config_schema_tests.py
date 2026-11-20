@@ -47,6 +47,7 @@ class ConfigSchemaTests(unittest.TestCase):
             ("rtp", "port_max", 50200), ("networkDelaySimulation", "milliseconds", 65536),
             ("multichannelSimulation", "channelCount", 256), ("fileStreaming", "enabled", "yes"),
             ("users", None, []), ("loggingLevel", None, "DEBIG"),
+            ("rtsp_metadata", "enabled", "yes"),
         ]
         for section, key, value in cases:
             with self.subTest(section=section, key=key, value=value):

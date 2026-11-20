@@ -7,6 +7,7 @@
 #include "../utility/XmlParser.h"
 #include "device_service.h"
 #include "pullpoint/pull_point.h"
+#include "pullpoint/event_generators.h"
 
 #include "../utility/EventService.h"
 
@@ -96,7 +97,7 @@ struct CreatePullPointSubscriptionHandler : public utility::http::RequestHandler
 };
 
 // PullPoint port entrance handler
-void PullPointPortDefaultHandler(std::shared_ptr<HttpServer::Response> response,
+void HandlePullPointRequest(std::shared_ptr<HttpServer::Response> response,
 																 std::shared_ptr<HttpServer::Request> request)
 {
 	// osrv::auth::SECURITY_LEVELS::READ_MEDIA
@@ -135,31 +136,24 @@ void PullPointPortDefaultHandler(std::shared_ptr<HttpServer::Response> response,
 	}
 	else if (header_action == ACTION_SETSYNCHRONIZATIONPOINT)
 	{
-		try
-		{
-			notifications_manager->SetSynchronizationPoint(header_to);
+		notifications_manager->SetSynchronizationPoint(header_to);
 
-			namespace pt = boost::property_tree;
-			auto envelope_tree = utility::soap::getEnvelopeTree(XML_NAMESPACES);
-			envelope_tree.add("s:Header.wsa:MessageID", header_message_id);
-			envelope_tree.add("s:Header.wsa:To", "http://www.w3.org/2005/08/addressing/anonymous");
-			envelope_tree.add("s:Header.wsa:Action",
-												"http://www.onvif.org/ver10/events/wsdl/PullPointSubscription/SetSynchronizationPointResponse");
+		namespace pt = boost::property_tree;
+		auto envelope_tree = utility::soap::getEnvelopeTree(XML_NAMESPACES);
+		envelope_tree.add("s:Header.wsa:MessageID", header_message_id);
+		envelope_tree.add("s:Header.wsa:To", "http://www.w3.org/2005/08/addressing/anonymous");
+		envelope_tree.add("s:Header.wsa:Action",
+											"http://www.onvif.org/ver10/events/wsdl/PullPointSubscription/SetSynchronizationPointResponse");
 
-			envelope_tree.add("s:Body.tet:SetSynchronizationPointResponse", "");
+		envelope_tree.add("s:Body.tet:SetSynchronizationPointResponse", "");
 
-			pt::ptree root_tree;
-			root_tree.put_child("s:Envelope", envelope_tree);
+		pt::ptree root_tree;
+		root_tree.put_child("s:Envelope", envelope_tree);
 
-			std::ostringstream os;
-			pt::write_xml(os, root_tree);
+		std::ostringstream os;
+		pt::write_xml(os, root_tree);
 
-			utility::http::fillResponseWithHeaders(*response, os.str());
-		}
-		catch (const std::exception& e)
-		{
-			utility::http::fillResponseWithHeaders(*response, e.what(), utility::http::ClientErrorDefaultWriter);
-		}
+		utility::http::fillResponseWithHeaders(*response, os.str());
 	}
 	else if (header_action == ACTION_UNSUBSCRIBE)
 	{
@@ -186,6 +180,34 @@ void PullPointPortDefaultHandler(std::shared_ptr<HttpServer::Response> response,
 	{
 		// TODO: send something
 		// *response << "HTTP/1.1 400 Bad request\r\n" << "Content-Length: 0\r\n" << "Connection: close\r\n" << "\r\n";
+	}
+}
+
+void PullPointPortDefaultHandler(std::shared_ptr<HttpServer::Response> response,
+		std::shared_ptr<HttpServer::Request> request)
+{
+	try
+	{
+		HandlePullPointRequest(response, request);
+	}
+	catch (const SubscriptionFault& fault)
+	{
+		response->write(SimpleWeb::StatusCode::server_error_internal_server_error, serialize_subscription_fault(fault),
+				{{"Content-Type", "application/soap+xml; charset=utf-8"}});
+	}
+	catch (const std::exception& error)
+	{
+		log_->Warn(std::string("Invalid PullPoint request: ") + error.what());
+		auto envelope = utility::soap::getEnvelopeTree(XML_NAMESPACES);
+		envelope.put("s:Body.s:Fault.s:Code.s:Value", "s:Sender");
+		envelope.put("s:Body.s:Fault.s:Reason.s:Text", "Invalid PullPoint request");
+		envelope.put("s:Body.s:Fault.s:Reason.s:Text.<xmlattr>.xml:lang", "en");
+		pt::ptree root;
+		root.add_child("s:Envelope", envelope);
+		std::ostringstream xml;
+		pt::write_xml(xml, root);
+		response->write(SimpleWeb::StatusCode::server_error_internal_server_error, xml.str(),
+				{{"Content-Type", "application/soap+xml; charset=utf-8"}});
 	}
 }
 
@@ -427,7 +449,8 @@ void do_handler_request(std::shared_ptr<HttpServer::Response> response, std::sha
 };
 
 void init_service(HttpServer& srv, const osrv::ServerConfigs& server_configs_instance, const std::string& configs_path,
-									ILogger& logger, const std::vector<EventGeneratorRegistration>& generators)
+									ILogger& logger, const std::shared_ptr<EventSource>& source,
+									const std::vector<EventGeneratorRegistration>& generators)
 {
 	if (log_ != nullptr)
 		return log_->Error("EventService is already inited!");
@@ -450,9 +473,10 @@ void init_service(HttpServer& srv, const osrv::ServerConfigs& server_configs_ins
 	auto namespaces_tree = EVENT_CONFIGS_TREE.get_child("Namespaces");
 	for (const auto& n : namespaces_tree)
 		XML_NAMESPACES.insert({n.first, n.second.get_value<std::string>()});
+	source->SetNamespaces(XML_NAMESPACES);
 
 	notifications_manager =
-			std::unique_ptr<osrv::event::NotificationsManager>(new osrv::event::NotificationsManager(logger, XML_NAMESPACES));
+			std::make_unique<osrv::event::NotificationsManager>(logger, XML_NAMESPACES, source);
 
 	// TODO: reading events generating interval from configs
 	// add event generators
@@ -555,6 +579,11 @@ void init_service(HttpServer& srv, const osrv::ServerConfigs& server_configs_ins
 	}
 
 } // init service
+
+void stop_service()
+{
+	notifications_manager.reset();
+}
 
 } // namespace event
 } // namespace osrv

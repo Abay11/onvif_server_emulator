@@ -109,8 +109,8 @@ The shipped examples retain existing simulation limitations and inconsistencies.
 For example, event source labels need not resolve to the configured media source
 tokens. A future topology configurator needs a separate semantic validation layer
 for relationships, uniqueness, capability consistency, and runtime resources.
-Profile changes also require accounting for the separate `ProfilesConfig()` and
-`MediaProfilesManager` views described in the
+Profile changes share an authoritative `ProfilesConfig()` /
+`MediaProfilesManager` tree, with immutable snapshots published to RTSP as described in the
 [architecture overview](../docs/architecture.md#configuration-and-state).
 
 When changing configuration, update the corresponding schema, consumers,

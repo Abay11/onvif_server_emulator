@@ -51,8 +51,9 @@ an official conformance claim; see the
 | `Server.h`, `Server.cpp` | Shared settings, HTTP server, subsystem initialization, base URLs |
 | `include/IOnvifServer.h`, `src/IOnvifServer.cpp` | Shared context, factory and lazy SOAP service creation, media profile manager |
 | `onvif_services/` | SOAP services, operation handlers, discovery, and events |
-| `onvif/` | Base ONVIF request handler, recording and search session models |
+| `onvif/` | Base ONVIF request handler, recording/search models, notification serialization and scene snapshots |
 | `RtspServer.h`, `RtspServer.cpp` | GStreamer RTSP server, live streams, synthetic replay |
+| `rtsp/` | Metadata appsrc bridge, subscriptions, scene readers and media lifecycle |
 | `utility/` | XML/SOAP/HTTP, authorization, media profiles, audio/video/PTZ configuration readers, date and time |
 | `include/`, `src/onvif_services/` | Logging interfaces and service configuration loader |
 | `server_configs/` | JSON `.config` files, XML response templates, snapshot JPEG |
@@ -72,6 +73,9 @@ flowchart TD
     Context --> Profiles[MediaProfilesManager]
     Profiles --> JSON[media_profiles.config]
     Server --> Events[Event service / NotificationsManager / PullPoint]
+    Server --> EventSource[Shared event source]
+    EventSource --> Events
+    EventSource --> RTSP
     Events --> HTTP
     Server --> Discovery[IPv4 WS-Discovery / UDP]
     Server --> RTSP[GStreamer / RTSP / RTP]
@@ -85,7 +89,7 @@ flowchart TD
    shared HTTP server and `MediaProfilesManager`, which reads `media_profiles.config`.
    The service factory uses `shared_from_this()`.
 3. `Server::init()` loads shared settings, sets the HTTP bind address and port,
-   creates a digest session, and reads a separate media profile tree.
+   creates a digest session, and shares the manager's authoritative profile tree.
 4. Discovery is initialized and started before event generators: a bind or
    multicast interface join failure must abort startup at this stage.
 5. `Run()` is called on nine SOAP services. The Event service is then initialized
@@ -95,8 +99,9 @@ flowchart TD
    the HTTP thread to finish.
 
 HTTP, discovery, events, and RTSP use separate event loops. Discovery has its own
-Asio context and worker thread; `NotificationsManager` has its own context, timers,
-and thread; RTSP runs a GLib main loop in a separate thread. An additional Asio
+Asio context and worker thread; `EventSource` owns the event context and worker,
+with PullPoint timers on that context. RTSP runs a GLib main loop in a separate
+thread. An additional Asio
 context in `Server` handles simulated network delays in the Event service.
 
 ## SOAP Request Handling
@@ -142,8 +147,8 @@ shared hot-reload mechanism.
   inputs. `Enabled` in `GetServices` controls service advertisement;
   `Server::init()` still calls `Run()` on all nine services.
 - `media_profiles.config`: profiles and associated source/encoder configurations.
-  `ProfilesConfig()` and `MediaProfilesManager` hold separate views of this data;
-  changing one tree does not automatically update the other.
+  `ProfilesConfig()` shares the manager's authoritative tree; metadata factories
+  receive immutable copies of settings and compiled filters.
 - `event.config`: namespaces, event properties, generators, and PullPoint settings.
 - `discovery.config`: discovery enablement and local multicast interface selection.
 - Other service `.config` files: data for the corresponding SOAP operations.
@@ -194,6 +199,16 @@ clients can use RTP/RTCP over UDP or interleaved RTSP/TCP. Many pipeline paramet
 are hardcoded, so changing codec or resolution settings through SOAP does not
 guarantee a change to the actual stream.
 
+Metadata configuration/streaming is enabled by default through
+`common.config` (`rtsp_metadata.enabled=true`); an explicit false disables it. Media/Media2 expose event metadata configurations
+and profile associations. Profile-specific stable RTSP URIs have an application
+track only when metadata is attached; per-profile factories retain immutable
+settings. Persisted changes replace factories for new connections while active
+sessions retain their snapshots. Startup installs profile URIs, and deletion
+removes obsolete mounts. The bridge polls independent bounded source queues on
+the RTSP GLib context and requests fresh filtered property state for metadata
+PLAY and media synchronization points. See [RTSP Metadata](RTSP_METADATA.md).
+
 `onvif/Recording.*` models recording descriptions, time ranges, and search sessions
 for Recording Search. Replay Control returns an RTSP URI. This emulates an archive;
 it does not record live video to disk.
@@ -206,8 +221,12 @@ validates and stores rule snapshots, alarm state and object history under a mute
 `utility::line` handles Line Detector parameters and geometry. SOAP mutations persist rules
 through the media manager; synthetic event generators read the shared snapshot
 without accessing the manager from the event thread. Media and Media2 serialize
-rules from the manager's current tree. Scene analytics modules and RTSP metadata
-are not advertised. Line crossing notifications are non-property events and have no
+rules from the manager's current tree. A fixed `SyntheticObjectTracker` module
+publishes immutable scene snapshots from the same samples used by Line Detector,
+Line Counting and Field Detector. `onvif/SceneDescription` bounds retained frames
+and objects; each RTSP bridge reads independently by video source and analytics
+configuration, without accessing the media manager. Metadata settings separately
+select events and analytics. Line crossing notifications are non-property events and have no
 synchronization state. `utility::counting::State` tracks counts, per-object passages,
 report deadlines and daily resets; only its rule configuration is persisted.
 Counting reuses the Line Detector synthetic object samples. A separate one-second
@@ -232,20 +251,31 @@ references, configuration, simulation deviations, and validation commands.
 
 ## Events and Lifecycle
 
-`NotificationsManager` connects generators to subscribers. `Server::init()` supplies
+`Server` owns a shared `EventSource` and injects it into the Event service and
+RTSP server. `NotificationsManager` adapts that source to HTTP PullPoint;
+the opt-in RTSP bridge delivers the same events as metadata. `Server::init()` supplies
 registrations for additional `IEventGenerator` implementations, pairing a factory
 with its topic and Source/Data field descriptions for `GetEventProperties`.
 Event service invokes these factories with its
-configuration, the manager's Asio context and logger before starting the event
-loop, and the manager owns the resulting generators. Factories capture shared
+configuration, the source's Asio context and logger before starting generator
+timers, and the source owns the resulting generators. Its worker serializes
+generator and PullPoint operations. Factories capture shared
 dependencies by value; each generator retains the dependencies needed by its
 callbacks. Concrete analytics detectors are assembled in `Server`, so another
 rule event generator can be registered without changing the Event service API.
 
-Each `PullPoint` holds a notification queue and a wait timer. Digital input, motion, cell motion, and
-audio generators deliver notifications through Boost.Signals2. Subscription paths
+Each consumer owns a bounded queue of immutable notifications. `PullPoint` adds
+wait and expiration timers. Digital input, motion, cell motion, and
+audio generators publish through Boost.Signals2 into the shared source. Subscription paths
 have the form `/onvif/event_service/sN`; supported operations include PullMessages,
 Renew, SetSynchronizationPoint, and Unsubscribe.
+
+Subscriptions receive distinct paths and initial property states. Connecting a
+subscriber does not reset generator timers. MessageLimit preserves the unsent
+remainder; synchronization appends property states without clearing pending
+transient events. Queue overflow records loss and permits property resynchronization.
+See [Shared Event Delivery](EVENT_DELIVERY.md) for ownership, queue limits,
+contract references, validation and the fixed subscription-lease simulation.
 
 PullMessages responds when an event is available or the timer expires. It uses
 `PullPoint.Timeout` from configuration and ignores the client's Timeout value.
@@ -253,9 +283,10 @@ PullMessages responds when an event is available or the timer expires. It uses
 separate listener on `PullPoint.Port` (default: `5550`).
 
 Shutdown is partially implemented: `Server` stops discovery, releases the work
-guard of its own Asio context, and joins that context's thread. Stopping the RTSP
-GLib loop on a signal remains a TODO, and the separate PullPoint HTTP listener
-runs in a detached thread. The Event service keeps file-level state and rejects
+guard of its own Asio context, and joins that context's thread. RTSP destruction
+closes clients/sessions, stops metadata subscriptions, quits its private GLib loop
+and joins its worker. A complete application signal shutdown remains unfinished,
+and the separate PullPoint HTTP listener runs in a detached thread. The Event service keeps file-level state and rejects
 reinitialization. Correct restart of all subsystems and independence of multiple
 servers in a single process cannot currently be assumed.
 
@@ -281,7 +312,13 @@ URLs, snapshots, unicast/multicast discovery, and video/audio RTP over TCP/UDP.
 It does not start the server or configure the network. Windows/VMS acceptance
 checks on the actual environment are described in [WSL2.md](WSL2.md).
 
-The Dockerfile has `base`, `dev`, `build`, and `runtime` stages. The final image
-contains the application, configuration, and runtime dependencies, including
-GStreamer plugins. Compose uses host networking for mirrored WSL2; Docker Engine
-must run inside WSL as described in the networking guide.
+The Dockerfile provides a `dev` development target and a final `runtime` image.
+Both include the same pinned GStreamer metadata payloader, so the development
+image supports the application's default metadata setting. The development image
+also includes the compiler, build tools and Python metadata validation tools;
+the runtime contains the application, configuration and runtime dependencies.
+Plugin packaging and isolated transport checks are documented in the
+[metadata development guide](../experiments/rtsp_metadata/README.md).
+The mirrored WSL2 development Compose configuration uses host networking and
+requires Docker Engine inside WSL; the root Compose file runs the published image.
+See [BUILD.md](../BUILD.md) and the networking guide for these workflows.

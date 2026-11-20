@@ -20,6 +20,7 @@ struct ServerConfigs;
 namespace event
 {
 class IEventGenerator;
+class EventSource;
 
 // Factories run before the notification loop starts. Generators retain their own dependencies.
 using EventGeneratorFactory = std::function<std::shared_ptr<IEventGenerator>(const boost::property_tree::ptree&,
@@ -41,6 +42,8 @@ struct EventGeneratorRegistration
 };
 
 void init_service(HttpServer& /*srv*/, const osrv::ServerConfigs& /*configs*/, const std::string& /*configs_path*/,
-									ILogger& /*logger*/, const std::vector<EventGeneratorRegistration>& generators = {});
+									ILogger& /*logger*/, const std::shared_ptr<EventSource>& source,
+									const std::vector<EventGeneratorRegistration>& generators = {});
+void stop_service();
 } // namespace event
 } // namespace osrv

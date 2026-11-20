@@ -1,3 +1,5 @@
+#include "metadata_handlers.h"
+#include "../utility/MetadataConfiguration.h"
 #include "media2_service.h"
 #include "media_service.h" // to use some util functions
 #include "analytics_service.h" // to use some util functions
@@ -71,17 +73,24 @@ struct AddConfigurationHandler : public OnvifRequestBase
 		pt::xml_parser::read_xml(is, xml_tree);
 
 		auto profile_token = exns::find_hierarchy("Envelope.Body.AddConfiguration.ProfileToken", xml_tree);
-		for (auto configsToAdd = exns::find_hierarchy_elements("Envelope.Body.AddConfiguration.Configuration", xml_tree);
-				 auto c : configsToAdd)
+		std::vector<std::pair<std::string, std::string>> configurations;
+		for (auto item : exns::find_hierarchy_elements("Envelope.Body.AddConfiguration.Configuration", xml_tree))
 		{
-			auto cfg_type = c->second.get<std::string>("Type");
-			auto cfg_token = c->second.get<std::string>("Token");
-			if (cfg_type.empty() || cfg_token.empty())
-				continue;
-
-			auto profileTree = profiles_mgr_->GetProfileByToken(profile_token);
-			profiles_mgr_->AddConfiguration(utility::media::ProfileConfigsHelper(profileTree).ProfileToken(), cfg_type,
-																			cfg_token);
+			auto type = exns::find_hierarchy("Type", item->second);
+			auto token = exns::find_hierarchy("Token", item->second);
+			if (type.empty() || token.empty())
+				throw no_config();
+			configurations.emplace_back(type, token);
+		}
+		if (configurations.empty())
+			throw no_config();
+		try
+		{
+			profiles_mgr_->AddConfigurations(profile_token, configurations);
+		}
+		catch (const invalid_config_type&)
+		{
+			throw no_config();
 		}
 
 		envelope_tree.add("s:Body.tr2:AddConfigurationResponse", "");
@@ -111,23 +120,30 @@ struct CreateProfileHandler : public OnvifRequestBase
 		auto envelope_tree = utility::soap::getEnvelopeTree(ns_);
 
 		std::string profile_name;
-		std::string cfg_token;
-		std::string cfg_type;
 
 		auto request_str = request->content.string();
 		std::istringstream is(request_str);
 		pt::ptree xml_tree;
 		pt::xml_parser::read_xml(is, xml_tree);
 		profile_name = exns::find_hierarchy("Envelope.Body.CreateProfile.Name", xml_tree);
-		cfg_type = exns::find_hierarchy("Envelope.Body.CreateProfile.Configuration.Type", xml_tree);
-		cfg_token = exns::find_hierarchy("Envelope.Body.CreateProfile.Configuration.Token", xml_tree);
-
-		profiles_mgr_->Create(profile_name);
-
+		std::vector<std::pair<std::string, std::string>> configurations;
+		for (auto item : exns::find_hierarchy_elements("Envelope.Body.CreateProfile.Configuration", xml_tree))
+		{
+			auto type = exns::find_hierarchy("Type", item->second);
+			auto token = exns::find_hierarchy("Token", item->second);
+			if (type.empty() || token.empty())
+				throw no_config();
+			configurations.emplace_back(type, token);
+		}
+		try
+		{
+			profiles_mgr_->Create(profile_name, configurations);
+		}
+		catch (const invalid_config_type&)
+		{
+			throw no_config();
+		}
 		auto created_profile_token = profiles_mgr_->Back().get<std::string>(CONFIG_PROP_TOKEN);
-
-		if (!cfg_type.empty() && !cfg_token.empty())
-			profiles_mgr_->AddConfiguration(created_profile_token, cfg_type, cfg_token);
 
 		envelope_tree.add("s:Body.tr2:CreateProfileResponse.tr2:Token", created_profile_token);
 
@@ -814,20 +830,30 @@ public:
 		auto envelope_tree = utility::soap::getEnvelopeTree(ns_);
 
 		std::string profile_token;
-		std::string cfg_token;
-		std::string cfg_type;
 
 		auto request_str = request->content.string();
 		std::istringstream is(request_str);
 		pt::ptree xml_tree;
 		pt::xml_parser::read_xml(is, xml_tree);
 		profile_token = exns::find_hierarchy("Envelope.Body.RemoveConfiguration.ProfileToken", xml_tree);
-		cfg_type = exns::find_hierarchy("Envelope.Body.RemoveConfiguration.Configuration.Type", xml_tree);
-		cfg_token = exns::find_hierarchy("Envelope.Body.RemoveConfiguration.Configuration.Token", xml_tree);
-
-		auto profileTree = profiles_mgr_->GetProfileByToken(profile_token);
-		profiles_mgr_->RemoveConfiguration(utility::media::ProfileConfigsHelper(profileTree).ProfileToken(), cfg_type,
-																			 cfg_token);
+		std::vector<std::pair<std::string, std::string>> configurations;
+		for (auto item : exns::find_hierarchy_elements("Envelope.Body.RemoveConfiguration.Configuration", xml_tree))
+		{
+			auto type = exns::find_hierarchy("Type", item->second);
+			if (type.empty())
+				throw no_config();
+			configurations.emplace_back(type, exns::find_hierarchy("Token", item->second));
+		}
+		if (configurations.empty())
+			throw no_config();
+		try
+		{
+			profiles_mgr_->RemoveConfigurations(profile_token, configurations);
+		}
+		catch (const invalid_config_type&)
+		{
+			throw no_config();
+		}
 
 		envelope_tree.add("s:Body.tr2:RemoveConfigurationResponse", "");
 		pt::ptree root_tree;
@@ -949,6 +975,8 @@ public:
 		capabilities_node.add("tr2:StreamingCapabilities.<xmlattr>.AutoStartMulticast",
 													capabilities_config.get<bool>("StreamingCapabilities.AutoStartMulticast"));
 
+		// Required by the pinned Media2 24.12 schema; media signing is not implemented.
+		capabilities_node.add("tr2:MediaSigningCapabilities.<xmlattr>.MediaSigningSupported", false);
 		auto env_tree = utility::soap::getEnvelopeTree(ns_);
 		env_tree.put_child("s:Body.tr2:GetServiceCapabilitiesResponse.tr2:Capabilities", capabilities_node);
 		pt::ptree root_tree;
@@ -1251,6 +1279,14 @@ void profile_to_soap(const ptree& profile_config, const ptree& configs_file, ptr
 
 		result.put_child("tr2:Configurations.tr2:AudioEncoder", ae_node);
 	}
+	if (auto token = profile_config.get<std::string>("Metadata", ""); !token.empty())
+		result.put_child("tr2:Configurations.tr2:Metadata", metadata::ConfigurationXml(profilesMgr.GetConfigByToken(token, "Metadata"), configs_file));
+	if (auto configurations = result.get_child_optional("tr2:Configurations"))
+	{
+		const std::vector<std::string> order{"tr2:VideoSource", "tr2:AudioSource", "tr2:VideoEncoder", "tr2:AudioEncoder", "tr2:Analytics", "tr2:PTZ", "tr2:Metadata", "tr2:AudioOutput", "tr2:AudioDecoder", "tr2:Receiver"};
+		configurations->sort([&](const auto& a, const auto& b) { return std::ranges::find(order, a.first) < std::ranges::find(order, b.first); });
+	}
+
 }
 
 void fill_video_encoder(const pt::ptree& config_node, pt::ptree& videoencoder_node)
@@ -1275,6 +1311,10 @@ Media2Service::Media2Service(const std::string& service_uri, const std::string& 
 														 std::shared_ptr<IOnvifServer> srv)
 		: IOnvifService(service_uri, service_name, srv)
 {
+	AddMetadataHandlers(requestHandlers_, xml_namespaces_, configs_ptree_, srv, true);
+	if (srv->GetServerConfigs()->rtsp_metadata_enabled_)
+		configs_ptree_->put("GetServiceCapabilities2.ProfileCapabilities.ConfigurationsSupported",
+			configs_ptree_->get<std::string>("GetServiceCapabilities2.ProfileCapabilities.ConfigurationsSupported") + " Metadata");
 	srv->GetHttpServer()->resource["^/snapshot.jpeg$"]["GET"] =
 			[configsPath = srv->ConfigsPath()](std::shared_ptr<HttpServer::Response> response,
 																				 std::shared_ptr<HttpServer::Request> request) {

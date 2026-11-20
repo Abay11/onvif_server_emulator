@@ -13,6 +13,7 @@
 #include "../utility/SoapHelper.h"
 #include "../utility/XmlParser.h"
 
+#include <boost/algorithm/string/trim.hpp>
 #include <boost/property_tree/json_parser.hpp>
 #include <boost/property_tree/ptree.hpp>
 #include <boost/property_tree/xml_parser.hpp>
@@ -51,16 +52,22 @@ void fillModules(const boost::property_tree::ptree& modules, boost::property_tre
 void fillConfiguration(const pt::ptree& jsonConfigNode, pt::ptree& xmlConfigOut,
 											 const utility::media::MediaProfilesManager& profilesMgr)
 {
+	fillConfiguration(jsonConfigNode, xmlConfigOut, profilesMgr.ReaderWriter()->ConfigsTree());
+}
+void fillConfiguration(const pt::ptree& jsonConfigNode, pt::ptree& xmlConfigOut, const pt::ptree& profiles)
+{
 	auto cfgToken = jsonConfigNode.get<std::string>("token");
 	xmlConfigOut.add("<xmlattr>.token", cfgToken);
 	xmlConfigOut.add("tt:Name", jsonConfigNode.get<std::string>("Name"));
-	xmlConfigOut.add("tt:UseCount", profilesMgr.GetUseCount(
-																			cfgToken, osrv::CONFIGURATION_ENUMERATION[osrv::CONFIGURATION_TYPE::ANALYTICS]));
-
-	utility::AnalyticsModulesReaderByConfigToken reader{cfgToken, profilesMgr.ReaderWriter()->ConfigsTree()};
+	unsigned count = 0;
+	for (const auto& [_, profile] : profiles.get_child("MediaProfiles"))
+		if (profile.get<std::string>("Analytics", "") == cfgToken)
+			++count;
+	xmlConfigOut.add("tt:UseCount", count);
+	utility::AnalyticsModulesReaderByConfigToken reader{cfgToken, profiles};
 	pt::ptree analyticsEngine;
 	analytics::fillModules(reader.Modules(), analyticsEngine, "tt");
-
+	analyticsEngine.add_child("tt:AnalyticsModule", scene::ModuleXml());
 	xmlConfigOut.add_child("tt:AnalyticsEngineConfiguration", analyticsEngine);
 	pt::ptree rules;
 	if (auto configured = jsonConfigNode.get_child_optional("rules"))
@@ -106,6 +113,102 @@ struct RulesHandler : public OnvifRequestBase
 			utility::http::fillResponseWithHeaders(*response, out.str(), utility::http::ClientErrorDefaultWriter);
 		else
 			utility::http::fillResponseWithHeaders(*response, out.str());
+	}
+};
+
+// The synthetic tracker is a fixed module; these operations describe its output,
+// without advertising support for mutable analytics-module management.
+struct SceneDescriptionHandler : public OnvifRequestBase
+{
+	utility::media::MediaProfilesManager& manager;
+	SceneDescriptionHandler(const std::string& operation, const std::map<std::string, std::string>& ns,
+													const std::shared_ptr<pt::ptree>& configs, utility::media::MediaProfilesManager& manager)
+			: OnvifRequestBase(operation, auth::SECURITY_LEVELS::READ_MEDIA, ns, configs), manager(manager)
+	{
+	}
+	void operator()(std::shared_ptr<HttpServer::Response> response, std::shared_ptr<HttpServer::Request> request) override
+	{
+		pt::ptree doc;
+		std::istringstream input(request->content.string());
+		pt::read_xml(input, doc);
+		auto operation = name();
+		auto configuration = exns::find_hierarchy("Envelope.Body." + operation + ".ConfigurationToken", doc);
+		pt::ptree result;
+		if (operation == "GetAnalyticsModules" || operation == "GetSupportedAnalyticsModules")
+			manager.GetConfigByToken(configuration, "Analytics");
+		if (operation == "GetAnalyticsModules")
+		{
+			utility::AnalyticsModulesReaderByConfigToken reader(configuration, manager.ReaderWriter()->ConfigsTree());
+			analytics::fillModules(reader.Modules(), result, "tan");
+			result.add_child("tan:AnalyticsModule", scene::ModuleXml());
+		}
+		else if (operation == "GetSupportedAnalyticsModules")
+		{
+			pt::ptree description;
+			description.put("<xmlattr>.Name", scene::ModuleType);
+			description.put("<xmlattr>.fixed", true);
+			description.put("tt:Parameters", "");
+			result.add_child("tan:SupportedAnalyticsModules.tt:AnalyticsModuleDescription", description);
+		}
+		else
+		{
+			auto elements = exns::find_hierarchy_elements("Envelope.Body." + operation + ".Type", doc);
+			if (!elements.empty())
+			{
+				// QName values use declarations inherited from their own request path.
+				std::map<std::string, std::string> bindings;
+				const pt::ptree* node = &doc;
+				for (const auto& localName : {std::string("Envelope"), std::string("Body"), operation, std::string("Type")})
+				{
+					const pt::ptree* next = nullptr;
+					for (const auto& [key, value] : *node)
+						if (key.substr(key.find(':') == std::string::npos ? 0 : key.find(':') + 1) == localName)
+						{
+							next = &value;
+							break;
+						}
+					if (!next)
+						throw no_config();
+					node = next;
+					if (auto attributes = node->get_child_optional("<xmlattr>"))
+						for (const auto& [attr, uri] : *attributes)
+							if (attr == "xmlns")
+								bindings[""] = uri.data();
+							else if (attr.starts_with("xmlns:"))
+								bindings[attr.substr(6)] = uri.data();
+				}
+				auto type = boost::algorithm::trim_copy(elements.front()->second.data());
+				auto colon = type.find(':');
+				auto prefix = colon == std::string::npos ? "" : type.substr(0, colon);
+				auto local = colon == std::string::npos ? type : type.substr(colon + 1);
+				if (bindings[prefix] != scene::ModuleNamespace || local != "SyntheticObjectTracker")
+				{
+					auto envelope = utility::soap::getEnvelopeTree(ns_);
+					envelope.put("s:Body.s:Fault.s:Code.s:Value", "s:Sender");
+					envelope.put("s:Body.s:Fault.s:Code.s:Subcode.s:Value", "ter:InvalidArgVal");
+					envelope.put("s:Body.s:Fault.s:Code.s:Subcode.s:Subcode.s:Value", "ter:TypeNotExistent");
+					envelope.put("s:Body.s:Fault.s:Reason.s:Text", "Unsupported scene module type");
+					envelope.put("s:Body.s:Fault.s:Reason.s:Text.<xmlattr>.xml:lang", "en");
+					pt::ptree root;
+					root.add_child("s:Envelope", envelope);
+					std::ostringstream out;
+					pt::write_xml(out, root);
+					utility::http::fillResponseWithHeaders(*response, out.str(), utility::http::ClientErrorDefaultWriter);
+					return;
+				}
+			}
+			pt::ptree metadata;
+			metadata.put("<xmlattr>.Type", scene::ModuleType);
+			metadata.add_child("tan:SampleFrame", scene::FrameXml(scene::SampleFrame()));
+			result.add_child("tan:AnalyticsModule", metadata);
+		}
+		auto envelope = utility::soap::getEnvelopeTree(ns_);
+		envelope.add_child("s:Body.tan:" + operation + "Response", result);
+		pt::ptree root;
+		root.add_child("s:Envelope", envelope);
+		std::ostringstream out;
+		pt::write_xml(out, root);
+		utility::http::fillResponseWithHeaders(*response, out.str());
 	}
 };
 
@@ -155,6 +258,9 @@ AnalyticsService::AnalyticsService(const std::string& service_uri, const std::st
 																	 std::shared_ptr<IOnvifServer> srv)
 		: IOnvifService(service_uri, service_name, srv)
 {
+	for (const auto* operation : {"GetAnalyticsModules", "GetSupportedAnalyticsModules", "GetSupportedMetadata"})
+		requestHandlers_.push_back(std::make_shared<analytics::SceneDescriptionHandler>(
+				operation, xml_namespaces_, configs_ptree_, *srv->MediaProfilesManager()));
 	requestHandlers_.push_back(std::make_shared<analytics::GetServiceCapabilitiesHandler>(
 			xml_namespaces_, configs_ptree_, *srv->DeviceService()->Configs()));
 	for (const auto* operation :

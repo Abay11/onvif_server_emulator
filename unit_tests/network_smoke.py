@@ -6,6 +6,7 @@ Example (run in the same network namespace as the emulator):
 Requires Python 3 only. No firewall or host configuration is changed.
 """
 import argparse
+import hashlib
 import http.client
 import re
 import socket
@@ -128,6 +129,7 @@ def check_rtsp(args, transport):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--profile-uris", action="store_true", default=None, help="Force profile URIs (default: detect from Media2 capabilities)")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--http-port", type=int, default=8080)
     parser.add_argument("--rtsp-port", type=int, default=8554)
@@ -147,12 +149,23 @@ def main():
         addresses = values(soap(args.host, args.http_port, "device", device_ns, action, body), "XAddr")
         assert addresses and all(addr.startswith(http_base) for addr in addresses), addresses
         print("PASS", action, "advertised XAddrs")
+    if args.profile_uris is None:
+        capabilities = ET.fromstring(soap(args.host, args.http_port, "media2",
+                                         "http://www.onvif.org/ver20/media/wsdl", "GetServiceCapabilities"))
+        args.profile_uris = any("Metadata" in node.get("ConfigurationsSupported", "").split()
+                                for node in capabilities.iter())
     for service, ns in [("media", "http://www.onvif.org/ver10/media/wsdl"),
                         ("media2", "http://www.onvif.org/ver20/media/wsdl")]:
         body = "<t:ProfileToken>ProfileToken0</t:ProfileToken>"
-        for action, expected in [("GetStreamUri", rtsp_base + "Live&HighStream"),
+        for action, expected in [("GetStreamUri", rtsp_base + ("onvif/profile/" + hashlib.sha256(b"ProfileToken0").hexdigest() if args.profile_uris else "Live&HighStream")),
                                  ("GetSnapshotUri", http_base + "snapshot.jpeg")]:
-            assert values(soap(args.host, args.http_port, service, ns, action, body), "Uri") == [expected]
+            request_body = body
+            if action == "GetStreamUri":
+                setup = '<t:Protocol>RTSP</t:Protocol>' if service == "media2" else (
+                    '<t:StreamSetup xmlns:tt="http://www.onvif.org/ver10/schema"><tt:Stream>RTP-Unicast</tt:Stream>'
+                    '<tt:Transport><tt:Protocol>RTSP</tt:Protocol></tt:Transport></t:StreamSetup>')
+                request_body = setup + body
+            assert values(soap(args.host, args.http_port, service, ns, action, request_body), "Uri") == [expected]
             print("PASS", service, action)
     assert values(soap(args.host, args.http_port, "replay", "http://www.onvif.org/ver10/replay/wsdl",
                        "GetReplayUri", "<t:RecordingToken>RecordingToken0</t:RecordingToken>"), "Uri") == [rtsp_base + "Recording0"]

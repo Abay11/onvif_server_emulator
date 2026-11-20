@@ -2,6 +2,7 @@
 
 #include "../Logger.h"
 #include "../onvif_services/physical_components/IDigitalInput.h"
+#include "../../onvif/Notification.h"
 
 #include <functional>
 #include <deque>

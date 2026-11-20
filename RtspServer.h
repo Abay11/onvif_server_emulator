@@ -5,14 +5,23 @@
 
 #include <string>
 #include <thread>
+#include <memory>
+#include <vector>
 
 class ILogger;
 
 namespace osrv
 {
 struct ServerConfigs;
+namespace scene
+{
+class ISource;
+}
+namespace metadata { struct Settings; }
+namespace event { class IEventSource; }
 namespace rtsp
 {
+class MetadataStreams;
 
 G_BEGIN_DECLS
 
@@ -32,14 +41,21 @@ struct AudioInfo
 class Server
 {
 public:
-	Server(ILogger* /*logger*/, ServerConfigs& /*server_configs*/, const AudioInfo& ainfo);
+	Server(ILogger* /*logger*/, ServerConfigs& /*server_configs*/, const AudioInfo& ainfo,
+				 std::shared_ptr<event::IEventSource> event_source = {}, std::shared_ptr<scene::ISource> scenes = {});
 	~Server();
 	void run();
+	unsigned short Port() const;
+	void ConfigureProfile(const std::string& path, const std::string& encoder, std::shared_ptr<const metadata::Settings> settings, bool audio = false);
+	void SynchronizeProfile(const std::string& path);
+	void RetainProfiles(const std::vector<std::string>& paths);
 
 private:
 	ILogger* logger_;
+	std::shared_ptr<event::IEventSource> event_source_;
 
 	GMainLoop* loop_;
+	GMainContext* context_;
 	GstRTSPServer* server_;
 	GstRTSPMountPoints* mounts_;
 	GstRTSPMediaFactory* factoryHighStream_;
@@ -48,7 +64,14 @@ private:
 
 	ServerConfigs* server_configs_ = nullptr;
 
-	std::thread* worker_thread_ = nullptr;
+	std::thread worker_thread_;
+	guint listener_ = 0;
+	GSource* session_cleanup_ = nullptr;
+	std::unique_ptr<MetadataStreams> metadata_;
+	struct Profiles;
+	std::shared_ptr<Profiles> profiles_;
+	std::string high_pipeline_, low_pipeline_, audio_pipeline_, test_audio_pipeline_;
+	void Shutdown();
 };
 } // namespace rtsp
 } // namespace osrv
