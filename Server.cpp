@@ -65,7 +65,7 @@ Server::~Server()
 		delete rtspServer_;
 }
 
-void Server::init()
+void Server::init(std::function<void()> reboot)
 {
 	http_server_->default_resource["GET"] = [](std::shared_ptr<HttpServer::Response> response,
 																						 std::shared_ptr<HttpServer::Request> request) {
@@ -87,6 +87,7 @@ void Server::init()
 
 	auto configs_dir = configs_path_ + "/";
 	server_configs_ = read_server_configs(configs_dir + COMMON_CONFIGS_NAME);
+	server_configs_->reboot = std::move(reboot);
 
 	http_server_->config.address = server_configs_->ipv4_address_;
 	http_server_->config.port = std::stoi(server_configs_->http_port_);

@@ -11,6 +11,9 @@
 
 #include "../Simple-Web-Server/server_http.hpp"
 
+#include <algorithm>
+#include <atomic>
+
 #include <boost/property_tree/json_parser.hpp>
 #include <boost/property_tree/ptree.hpp>
 #include <boost/property_tree/xml_parser.hpp>
@@ -304,6 +307,132 @@ struct GetSystemDateAndTimeHandler : public OnvifRequestBase
 	}
 };
 
+namespace
+{
+// Resolve the three request elements with their in-scope namespace declarations.
+// SystemReboot has an empty complex type: parameters and attributes are invalid.
+bool IsSystemRebootRequest(const std::string& xml)
+{
+	pt::ptree tree;
+	std::istringstream input(xml);
+	pt::read_xml(input, tree, pt::xml_parser::trim_whitespace | pt::xml_parser::no_comments);
+	std::map<std::string, std::string> namespaces;
+	auto matches = [&](const auto& element, const std::string& local, const std::string& uri) {
+		if (auto attrs = element.second.get_child_optional("<xmlattr>"))
+			for (const auto& [key, value] : *attrs)
+			{
+				if (key == "xmlns")
+					namespaces[""] = value.template get_value<std::string>();
+				else if (key.starts_with("xmlns:"))
+					namespaces[key.substr(6)] = value.template get_value<std::string>();
+			}
+		const auto colon = element.first.find(':');
+		const auto prefix = colon == std::string::npos ? "" : element.first.substr(0, colon);
+		return exns::get_element_without_ns(element.first) == local && namespaces[prefix] == uri;
+	};
+	if (tree.size() != 1 || !matches(tree.front(), "Envelope", "http://www.w3.org/2003/05/soap-envelope"))
+		return false;
+	const auto& envelope = tree.front().second;
+	if (std::count_if(envelope.begin(), envelope.end(),
+										[](const auto& node) { return exns::get_element_without_ns(node.first) == "Body"; }) != 1)
+		return false;
+	for (const auto& body : envelope)
+	{
+		if (exns::get_element_without_ns(body.first) != "Body")
+			continue;
+		if (!matches(body, "Body", "http://www.w3.org/2003/05/soap-envelope"))
+			return false;
+		unsigned operations = 0;
+		for (const auto& operation : body.second)
+		{
+			if (operation.first == "<xmlattr>")
+				continue;
+			if (++operations != 1 || !matches(operation, "SystemReboot", SERVICE_URI::DEVICE) ||
+					!operation.second.data().empty())
+				return false;
+			for (const auto& [key, value] : operation.second)
+			{
+				if (key != "<xmlattr>")
+					return false;
+				for (const auto& [attr, ignored] : value)
+					if (attr != "xmlns" && !attr.starts_with("xmlns:"))
+						return false;
+			}
+		}
+		return operations == 1;
+	}
+	return false;
+}
+} // namespace
+
+struct SystemRebootHandler : public OnvifRequestBase
+{
+	SystemRebootHandler(const std::map<std::string, std::string>& ns, const std::shared_ptr<pt::ptree>& configs,
+											const std::shared_ptr<IOnvifServer>& server)
+			: OnvifRequestBase("SystemReboot", auth::SECURITY_LEVELS::UNRECOVERABLE, ns, configs),
+				reboot_(server->GetServerConfigs()->reboot), logger_(server->Logger())
+	{
+	}
+
+	void operator()(std::shared_ptr<HttpServer::Response> response, std::shared_ptr<HttpServer::Request> request) override
+	{
+		auto envelope = utility::soap::getEnvelopeTree(ns_);
+		bool valid = false;
+		try
+		{
+			valid = IsSystemRebootRequest(request->content.string());
+		}
+		catch (const pt::xml_parser_error&)
+		{
+		}
+		if (!valid || !reboot_)
+		{
+			envelope.put("s:Body.s:Fault.s:Code.s:Value", valid ? "s:Receiver" : "s:Sender");
+			envelope.put("s:Body.s:Fault.s:Code.s:Subcode.s:Value", valid ? "ter:ActionNotSupported" : "ter:InvalidArgVal");
+			envelope.put("s:Body.s:Fault.s:Reason.s:Text",
+									 valid ? "Application reboot is unavailable" : "Expected an empty Device SystemReboot request");
+			envelope.put("s:Body.s:Fault.s:Reason.s:Text.<xmlattr>.xml:lang", "en");
+			pt::ptree root;
+			root.put_child("s:Envelope", envelope);
+			std::ostringstream xml;
+			pt::write_xml(xml, root);
+			response->write(valid ? SimpleWeb::StatusCode::server_error_internal_server_error
+														: SimpleWeb::StatusCode::client_error_bad_request,
+											xml.str(), {{"Content-Type", "application/soap+xml; charset=utf-8"}});
+			return;
+		}
+		envelope.put("s:Body.tds:SystemRebootResponse.tds:Message", "Application is rebooting");
+		pt::ptree root;
+		root.put_child("s:Envelope", envelope);
+		std::ostringstream xml;
+		pt::write_xml(xml, root);
+		response->close_connection_after_response = true;
+		utility::http::fillResponseWithHeaders(*response, xml.str());
+		auto pending = pending_;
+		if (pending->exchange(true))
+			return;
+		response->send([reboot = reboot_, logger = logger_, pending](const SimpleWeb::error_code& ec) {
+			try
+			{
+				if (!ec)
+					reboot();
+				else
+					logger->Error("SystemReboot response failed: " + ec.message());
+			}
+			catch (const std::exception& e)
+			{
+				logger->Error(e.what());
+			}
+			pending->store(false);
+		});
+	}
+
+private:
+	std::function<void()> reboot_;
+	std::shared_ptr<ILogger> logger_;
+	std::shared_ptr<std::atomic_bool> pending_ = std::make_shared<std::atomic_bool>(false);
+};
+
 DeviceService::DeviceService(const std::string& service_uri, const std::string& service_name,
 														 std::shared_ptr<IOnvifServer> srv)
 		: IOnvifService(service_uri, service_name, srv)
@@ -317,5 +446,6 @@ DeviceService::DeviceService(const std::string& service_uri, const std::string& 
 			std::make_shared<GetServicesHandler>(xml_namespaces_, configs_ptree_, srv));
 	requestHandlers_.push_back(std::make_shared<GetScopesHandler>(xml_namespaces_, configs_ptree_));
 	requestHandlers_.push_back(std::make_shared<GetSystemDateAndTimeHandler>(xml_namespaces_, configs_ptree_));
+	requestHandlers_.push_back(std::make_shared<SystemRebootHandler>(xml_namespaces_, configs_ptree_, srv));
 }
 } // namespace osrv

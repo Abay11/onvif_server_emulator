@@ -238,7 +238,9 @@ For a downloaded image, first [extract the bundled configuration](../README.md#c
 without cloning the repository. Mount the **complete** directory to
 `/app/server_configs` when customizing it. Use a writable mount to persist SOAP
 profile changes, or add `:ro` when those operations are not needed. Changes made
-by editing files require restarting the container. Do not edit only the ProbeMatch
+by editing files can be applied through ONVIF
+[`SystemReboot`](SYSTEM_REBOOT.md), which restarts the application inside the same
+container. Do not edit only the ProbeMatch
 XAddr or use a container's `172.x` address as the public endpoint.
 
 For file streaming, mount media separately:

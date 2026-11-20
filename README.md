@@ -116,7 +116,9 @@ image name** in the `docker run` command:
 
 For Compose, uncomment the `volumes` block in `compose.yaml`; its relative path
 is resolved from the Compose file's directory. Mount the complete directory,
-including `responses` and `rs`. Restart the container after editing configuration.
+including `responses` and `rs`. After editing configuration, invoke ONVIF
+[`SystemReboot`](docs/SYSTEM_REBOOT.md) to restart the application and reread the
+files without restarting the container.
 The environment variables in the examples override the corresponding IPv4 settings.
 
 The application must be able to write `media_profiles.config` to persist SOAP

@@ -139,7 +139,9 @@ Names are case-sensitive and use lowercase snake_case without spaces, such as
 `device.config`, `device_io.config`, `media2.config`, `recording_search.config`,
 and `replay_control.config`.
 Settings are read during component construction or initialization; there is no
-shared hot-reload mechanism.
+shared hot-reload mechanism. Device `SystemReboot` restarts the executable with
+Linux `execv` after sending its response, rereading all configuration on startup;
+see [Application Reboot](SYSTEM_REBOOT.md).
 
 - `common.config`: bind/advertised endpoints, RTP range, users, authentication,
   logging, delay and channel simulation, and the RTSP input file.
@@ -287,8 +289,11 @@ guard of its own Asio context, and joins that context's thread. RTSP destruction
 closes clients/sessions, stops metadata subscriptions, quits its private GLib loop
 and joins its worker. A complete application signal shutdown remains unfinished,
 and the separate PullPoint HTTP listener runs in a detached thread. The Event service keeps file-level state and rejects
-reinitialization. Correct restart of all subsystems and independence of multiple
-servers in a single process cannot currently be assumed.
+reinitialization. Correct reinitialization of all subsystems and independence of multiple
+servers in a single process cannot currently be assumed. `SystemReboot` replaces
+the process image rather than reinitializing these objects. Linux closes all
+non-stdio descriptors at exec and removes the old worker threads; PID, arguments,
+environment and working directory are retained.
 
 ## Build and Validation
 

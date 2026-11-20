@@ -12,6 +12,7 @@
 
 #include <boost/asio/io_context.hpp>
 
+#include <functional>
 #include <memory>
 
 // namespace onvif server
@@ -31,6 +32,9 @@ using HttpServer = SimpleWeb::Server<socket_t>;
 
 struct ServerConfigs
 {
+	// Installed by the executable; invoked only after the reboot response is sent.
+	std::function<void()> reboot;
+
 	std::string ipv4_address_;
 	std::string http_port_;
 	std::string rtsp_port_;
@@ -78,7 +82,7 @@ public:
 	Server(ILogger&&) = delete;
 	~Server();
 
-	void init();
+	void init(std::function<void()> reboot = {});
 
 	// throws exceptions in error
 	void run();
