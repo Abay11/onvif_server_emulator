@@ -232,6 +232,12 @@ docker run --rm -it \
     osrv-dev:latest
 ```
 
+The ordinary `dev` image omits the metadata payloader. Before running the
+application in this image, explicitly set `rtsp_metadata.enabled=false` in the
+configuration you pass to it. The default is now true; the normal runtime image
+includes the required plugin. See [RTSP metadata](docs/RTSP_METADATA.md) for its
+dependency requirements.
+
 Inside the container:
 
 ```bash
@@ -269,7 +275,7 @@ The normal application runtime now includes that pinned plugin. Use the
 `metadata-dev` target to build/test with `rtsp_metadata.enabled=true`; the ordinary
 `dev` target does not contain the payloader. The plugin requires GStreamer 1.20+;
 the documented Trixie environment uses GStreamer 1.26.2. See
-[live RTSP metadata](docs/RTSP_METADATA.md) for its Stage 3 scope and the
+[live RTSP metadata](docs/RTSP_METADATA.md) for configuration/profile control and the
 `unit_tests/rtsp_metadata_smoke.py` receiver checks.
 
 With a running emulator, Python 3 can check the default SOAP service configuration,

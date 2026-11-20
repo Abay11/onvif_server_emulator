@@ -751,6 +751,67 @@
         ],
         "additionalProperties": false
       }
+    },
+    "Metadata": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "$ref": "types.schema.json#/$defs/token"
+          },
+          "Name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "Events": {
+            "$ref": "types.schema.json#/$defs/boolean"
+          },
+          "Filters": {
+            "type": "array",
+            "maxItems": 2,
+            "items": {
+              "type": "object",
+              "properties": {
+                "Kind": {
+                  "enum": [
+                    "TopicExpression",
+                    "MessageContent"
+                  ]
+                },
+                "Dialect": {
+                  "type": "string"
+                },
+                "Expression": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 4096
+                },
+                "Namespaces": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              },
+              "required": [
+                "Kind",
+                "Dialect",
+                "Expression",
+                "Namespaces"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "token",
+          "Name",
+          "Events"
+        ],
+        "additionalProperties": false
+      }
     }
   },
   "required": [

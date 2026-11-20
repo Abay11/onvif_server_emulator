@@ -20,6 +20,8 @@
 #include "utility/XmlParser.h"
 
 #include "MediaFormats.h"
+#include "utility/MetadataConfiguration.h"
+#include "utility/MediaProfilesManager.h"
 
 #include "Simple-Web-Server/server_http.hpp"
 
@@ -99,7 +101,14 @@ void Server::init()
 	// TODO: here is the same list is copied into digest_session, although it's already stored in server_configs
 	server_configs_->digest_session_->set_users_list(server_configs_->system_users_);
 
-	profiles_config_ = osrv::ServiceConfigs("media_profiles", configs_dir);
+	// Both SOAP services share the manager's authoritative tree. Streaming receives copies.
+	profiles_config_ = MediaProfilesManager()->SharedConfigs();
+	MediaProfilesManager()->MetadataAvailable(server_configs_->rtsp_metadata_enabled_);
+	if (!server_configs_->rtsp_metadata_enabled_)
+		for (const auto& [_, profile] : profiles_config_->get_child("MediaProfiles"))
+			if (!profile.get<std::string>("Metadata", "").empty())
+				throw std::runtime_error("Profiles reference metadata but rtsp_metadata.enabled is false; enable the transport "
+																 "or remove the metadata associations");
 
 	// Validate and join discovery before event generators create background threads.
 	// A wrong mirrored interface must fail startup cleanly.
@@ -187,6 +196,14 @@ void Server::init()
 	};
 
 	rtspServer_ = new rtsp::Server(&*logger_, *server_configs_, std::move(ainfo), event_source_);
+	// Keep profile URIs valid after disabling metadata, without requiring its payloader.
+	Metadata()->Bind(
+			[this](const auto& path, const auto& encoder, bool audio, auto settings) {
+				rtspServer_->ConfigureProfile(path, encoder, std::move(settings), audio);
+			},
+			[this](const auto& path) { rtspServer_->SynchronizeProfile(path); },
+			[this](const auto& paths) { rtspServer_->RetainProfiles(paths); });
+	Metadata()->Refresh();
 
 	if (auto delay = server_configs_->network_delay_simulation_; delay > 0)
 	{
@@ -269,7 +286,7 @@ std::shared_ptr<ServerConfigs> read_server_configs(const std::string& config_pat
 	read_configs->advertised_pullpoint_port_ = configs_tree.get<unsigned short>("advertised.pullpoint_port", 0);
 	read_configs->rtp_port_min_ = configs_tree.get<unsigned short>("rtp.port_min", 50000);
 	read_configs->rtp_port_max_ = configs_tree.get<unsigned short>("rtp.port_max", 50199);
-	read_configs->rtsp_metadata_enabled_ = configs_tree.get<bool>("rtsp_metadata.enabled", false);
+	read_configs->rtsp_metadata_enabled_ = configs_tree.get<bool>("rtsp_metadata.enabled", true);
 	if (read_configs->rtp_port_min_ == 0 || read_configs->rtp_port_min_ % 2 != 0 ||
 		read_configs->rtp_port_max_ <= read_configs->rtp_port_min_ || read_configs->rtp_port_max_ % 2 != 1)
 		throw std::runtime_error("RTP range must start at a positive even port and end at a larger odd port");

@@ -111,9 +111,9 @@
     },
     "rtsp_metadata": {
       "type": "object",
-      "properties": {"enabled": {"type": "boolean", "default": false}},
+      "properties": {"enabled": {"type": "boolean", "default": true}},
       "additionalProperties": false,
-      "description": "Opt-in live RTSP event metadata transport; SOAP metadata configuration is not yet implemented."
+      "description": "Live RTSP event metadata and Media/Media2 metadata configuration, enabled by default. Individual profiles require a metadata configuration association."
     },
     "authenticationMethods": {
       "type": "array",

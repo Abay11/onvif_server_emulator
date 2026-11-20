@@ -3,8 +3,11 @@
 #include <boost/property_tree/ptree.hpp>
 
 #include <array>
+#include <functional>
 #include <memory>
 #include <string>
+#include <vector>
+#include <utility>
 
 namespace osrv
 {
@@ -163,6 +166,7 @@ public:
 	void Read();
 	// save current configs into a file
 	void Save() const;
+	void OnSave(std::function<void()> callback) { on_save_ = std::move(callback); }
 	// reset all changes to the initial state how it was at the first Read() using backup instance.
 	// it also writes backup instance state into a file calling Save() automatically.
 	void Reset();
@@ -176,9 +180,15 @@ public:
 		return *configsTree_;
 	};
 
+	std::shared_ptr<boost::property_tree::ptree> SharedConfigs()
+	{
+		return configsTree_;
+	}
+
 private:
+	std::function<void()> on_save_;
 	const std::string filePath_;
-	std::unique_ptr<boost::property_tree::ptree> configsTree_;
+	std::shared_ptr<boost::property_tree::ptree> configsTree_;
 	std::unique_ptr<boost::property_tree::ptree> configsTreeBackup_; // used for reset operation
 };
 
@@ -188,10 +198,19 @@ class MediaProfilesManager
 public:
 	explicit MediaProfilesManager(const std::string& filePath);
 
-	void Create(const std::string& profileName) const;
+	void Create(const std::string& profileName,
+							const std::vector<std::pair<std::string, std::string>>& configurations = {}) const;
+	void MetadataAvailable(bool available)
+	{
+		metadata_available_ = available;
+	}
 	void Delete(const std::string& profileToken) const;
 	void AddConfiguration(const std::string& profileToken, const std::string& configType,
 												const std::string& configToken) const;
+	void AddConfigurations(const std::string& profileToken,
+												 const std::vector<std::pair<std::string, std::string>>& configurations) const;
+	void RemoveConfigurations(const std::string& profileToken,
+														const std::vector<std::pair<std::string, std::string>>& configurations) const;
 	void RemoveConfiguration(std::string_view profileToken, std::string_view configType,
 													 std::string_view configToken = {}) const;
 
@@ -210,6 +229,11 @@ public:
 
 	const boost::property_tree::ptree& GetConfigByToken(std::string_view token, std::string_view configType) const;
 
+	std::shared_ptr<boost::property_tree::ptree> SharedConfigs()
+	{
+		return readerWriter_->SharedConfigs();
+	}
+
 	// do not call Back on empty profiles list
 	const boost::property_tree::ptree& Back() const;
 
@@ -226,9 +250,12 @@ public:
 	size_t GetUseCount(std::string_view /*token*/, std::string_view /*configType*/) const;
 
 private:
+	void ApplyConfigurations(boost::property_tree::ptree& profile,
+													 const std::vector<std::pair<std::string, std::string>>& configurations) const;
 	std::string newProfileToken(size_t n) const;
 	boost::property_tree::ptree::iterator getProfileNode(std::string_view profileToken) const;
 
+	bool metadata_available_ = true;
 	std::unique_ptr<ConfigsReaderWriter> readerWriter_;
 };
 

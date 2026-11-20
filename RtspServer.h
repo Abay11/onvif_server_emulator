@@ -6,12 +6,14 @@
 #include <string>
 #include <thread>
 #include <memory>
+#include <vector>
 
 class ILogger;
 
 namespace osrv
 {
 struct ServerConfigs;
+namespace metadata { struct Settings; }
 namespace event { class IEventSource; }
 namespace rtsp
 {
@@ -40,6 +42,9 @@ public:
 	~Server();
 	void run();
 	unsigned short Port() const;
+	void ConfigureProfile(const std::string& path, const std::string& encoder, std::shared_ptr<const metadata::Settings> settings, bool audio = false);
+	void SynchronizeProfile(const std::string& path);
+	void RetainProfiles(const std::vector<std::string>& paths);
 
 private:
 	ILogger* logger_;
@@ -59,6 +64,9 @@ private:
 	guint listener_ = 0;
 	GSource* session_cleanup_ = nullptr;
 	std::unique_ptr<MetadataStreams> metadata_;
+	struct Profiles;
+	std::shared_ptr<Profiles> profiles_;
+	std::string high_pipeline_, low_pipeline_, audio_pipeline_, test_audio_pipeline_;
 	void Shutdown();
 };
 } // namespace rtsp

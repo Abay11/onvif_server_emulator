@@ -127,6 +127,15 @@ BOOST_AUTO_TEST_CASE(network_config_parsing_and_validation)
     BOOST_TEST(cfg->rtp_port_min_ == 51000);
     BOOST_TEST(cfg->rtp_port_max_ == 51099);
     BOOST_TEST(cfg->rtsp_metadata_enabled_);
+    // Missing settings use the same enabled default as the shipped configuration.
+    tree.erase("rtsp_metadata");
+    pt::write_json(path, tree);
+    BOOST_TEST(osrv::read_server_configs(path)->rtsp_metadata_enabled_);
+    BOOST_TEST(osrv::ServerConfigs{}.rtsp_metadata_enabled_);
+    tree.put("rtsp_metadata.enabled", false);
+    pt::write_json(path, tree);
+    BOOST_TEST(!osrv::read_server_configs(path)->rtsp_metadata_enabled_);
+
     for (const auto* invalid_ip : {"0.0.0.0", "239.255.255.250", "255.255.255.255", "not-an-ip"})
     {
         tree.put("advertised.ipv4", invalid_ip);

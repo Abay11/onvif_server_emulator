@@ -88,7 +88,7 @@ flowchart TD
    shared HTTP server and `MediaProfilesManager`, which reads `media_profiles.config`.
    The service factory uses `shared_from_this()`.
 3. `Server::init()` loads shared settings, sets the HTTP bind address and port,
-   creates a digest session, and reads a separate media profile tree.
+   creates a digest session, and shares the manager's authoritative profile tree.
 4. Discovery is initialized and started before event generators: a bind or
    multicast interface join failure must abort startup at this stage.
 5. `Run()` is called on nine SOAP services. The Event service is then initialized
@@ -146,8 +146,8 @@ shared hot-reload mechanism.
   inputs. `Enabled` in `GetServices` controls service advertisement;
   `Server::init()` still calls `Run()` on all nine services.
 - `media_profiles.config`: profiles and associated source/encoder configurations.
-  `ProfilesConfig()` and `MediaProfilesManager` hold separate views of this data;
-  changing one tree does not automatically update the other.
+  `ProfilesConfig()` shares the manager's authoritative tree; metadata factories
+  receive immutable copies of settings and compiled filters.
 - `event.config`: namespaces, event properties, generators, and PullPoint settings.
 - `discovery.config`: discovery enablement and local multicast interface selection.
 - Other service `.config` files: data for the corresponding SOAP operations.
@@ -198,13 +198,15 @@ clients can use RTP/RTCP over UDP or interleaved RTSP/TCP. Many pipeline paramet
 are hardcoded, so changing codec or resolution settings through SOAP does not
 guarantee a change to the actual stream.
 
-`common.config` can opt into event metadata with `rtsp_metadata.enabled=true`.
-Both live factories then add an application RTP track using appsrc and the pinned
-ONVIF payloader. Metadata-only, aggregate and audio/video-only track selection are
-supported. A per-media bridge consumes the shared event source on the private
-RTSP GLib context and requests fresh property state for metadata PLAY, including
-late clients. See [RTSP Metadata](RTSP_METADATA.md) for the explicit Stage 3
-control-plane simulation deviation and the pending Stage 4 SOAP configuration.
+Metadata configuration/streaming is enabled by default through
+`common.config` (`rtsp_metadata.enabled=true`); an explicit false disables it. Media/Media2 expose event metadata configurations
+and profile associations. Profile-specific stable RTSP URIs have an application
+track only when metadata is attached; per-profile factories retain immutable
+settings. Persisted changes replace factories for new connections while active
+sessions retain their snapshots. Startup installs profile URIs, and deletion
+removes obsolete mounts. The bridge polls independent bounded source queues on
+the RTSP GLib context and requests fresh filtered property state for metadata
+PLAY and media synchronization points. See [RTSP Metadata](RTSP_METADATA.md).
 
 `onvif/Recording.*` models recording descriptions, time ranges, and search sessions
 for Recording Search. Replay Control returns an RTSP URI. This emulates an archive;
@@ -218,8 +220,8 @@ validates and stores rule snapshots, alarm state and object history under a mute
 `utility::line` handles Line Detector parameters and geometry. SOAP mutations persist rules
 through the media manager; synthetic event generators read the shared snapshot
 without accessing the manager from the event thread. Media and Media2 serialize
-rules from the manager's current tree. Scene analytics modules and SOAP metadata
-capabilities are not advertised. Optional RTSP metadata carries events, not scene
+rules from the manager's current tree. Scene analytics modules remain unsupported.
+Optional RTSP metadata carries events, not scene
 frames. Line crossing notifications are non-property events and have no
 synchronization state. `utility::counting::State` tracks counts, per-object passages,
 report deadlines and daily resets; only its rule configuration is persisted.

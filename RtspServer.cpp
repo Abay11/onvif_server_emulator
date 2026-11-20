@@ -2,6 +2,11 @@
 #include "Logger.h"
 #include "Server.h"
 #include "rtsp/MetadataStream.h"
+#include "utility/MetadataConfiguration.h"
+#include <gst/video/video-event.h>
+#include <mutex>
+#include <map>
+#include <vector>
 
 #include "../utility/AudioSourceReader.h"
 #include "include/MediaFormats.h"
@@ -195,6 +200,23 @@ namespace osrv
 {
 namespace rtsp
 {
+struct Server::Profiles
+{
+	struct Entry
+	{
+		std::string identity;
+		std::vector<std::shared_ptr<GWeakRef>> media;
+	};
+	std::mutex mutex;
+	std::map<std::string, Entry> entries;
+};
+
+static std::string metadata_branch(int index)
+{
+	return " appsrc name=metadata_src is-live=true format=time block=false max-bytes=262144 "
+		"caps=application/x-onvif-metadata ! rtponvifmetadatapay name=pay" + std::to_string(index) + " pt=107 mtu=1200 ";
+}
+
 Server::Server(ILogger* logger, ServerConfigs& server_configs, const AudioInfo& ainfo,
 		std::shared_ptr<event::IEventSource> event_source)
 		: logger_(logger), event_source_(std::move(event_source)), server_configs_(&server_configs)
@@ -228,6 +250,8 @@ Server::Server(ILogger* logger, ServerConfigs& server_configs, const AudioInfo& 
 	std::stringstream mediadescr;
 
 	auto asetup = utility::AudioSetupFactory().AudioSetup(ainfo.codec, ainfo.bitrate, ainfo.samplerate);
+	test_audio_pipeline_ = " audiotestsrc is-live=1 ! audioconvert ! audioresample ! audio/x-raw,rate=8000 ! " +
+		asetup->Encoding() + " ! " + asetup->PayloadPluginName() + " name=pay1 pt=" + std::to_string(asetup->PayloadNum());
 
 	if (server_configs_->rtsp_streaming_file_.empty())
 	{
@@ -247,12 +271,10 @@ Server::Server(ILogger* logger, ServerConfigs& server_configs, const AudioInfo& 
 							 << " demuxer. ! audioconvert ! audioresample ! audio/x-raw,rate=8000 ! " << asetup->Encoding() << " ! "
 							 << asetup->PayloadPluginName() << " name=pay1 pt= " << std::to_string(asetup->PayloadNum());
 	}
-	auto metadata_branch = [](int index) {
-		return " appsrc name=metadata_src is-live=true format=time block=false max-bytes=262144 "
-				"caps=application/x-onvif-metadata ! rtponvifmetadatapay name=pay" + std::to_string(index) +
-				" pt=107 mtu=1200 ";
-	};
-	if (metadata_) mediadescr << metadata_branch(2);
+	high_pipeline_ = mediadescr.str();
+	auto audio_start = high_pipeline_.find(server_configs_->rtsp_streaming_file_.empty() ? " audiotestsrc" : " demuxer. ! audioconvert");
+	audio_pipeline_ = high_pipeline_.substr(audio_start);
+	high_pipeline_.resize(audio_start);
 	mediadescr << " )";
 
 	gst_rtsp_media_factory_set_launch(factoryHighStream_, mediadescr.str().c_str());
@@ -261,14 +283,10 @@ Server::Server(ILogger* logger, ServerConfigs& server_configs, const AudioInfo& 
 	factoryLowStream_ = gst_rtsp_media_factory_new();
 	std::string low_pipeline = "(videotestsrc is-live=1 ! timeoverlay ! video/x-raw,width=640,height=320 ! "
 			"x264enc ! rtph264pay name=pay0 pt=96 ";
-	if (metadata_) low_pipeline += metadata_branch(1);
+	low_pipeline_ = low_pipeline;
+	profiles_ = std::make_shared<Profiles>();
 	gst_rtsp_media_factory_set_launch(factoryLowStream_, (low_pipeline + " )").c_str());
 	gst_rtsp_media_factory_set_shared(factoryLowStream_, TRUE);
-	if (metadata_)
-	{
-		metadata_->Attach(factoryHighStream_);
-		metadata_->Attach(factoryLowStream_);
-	}
 
 	replayFactory_ = onvif_factory_new();
 	gst_rtsp_media_factory_set_media_gtype(replayFactory_, GST_TYPE_RTSP_ONVIF_MEDIA);
@@ -293,6 +311,99 @@ Server::Server(ILogger* logger, ServerConfigs& server_configs, const AudioInfo& 
 	g_object_unref(mounts_);
 };
 
+void Server::ConfigureProfile(const std::string& path, const std::string& encoder,
+															std::shared_ptr<const metadata::Settings> settings, bool audio)
+{
+	if (settings && !metadata_)
+		throw std::logic_error("Metadata transport is disabled");
+	std::lock_guard lock(profiles_->mutex);
+	auto identity = encoder + (audio ? ":audio:" : ":") + (settings ? settings->identity : "");
+	auto& entry = profiles_->entries[path];
+	if (entry.identity == identity)
+		return;
+	bool high = encoder == "VideoEncoderToken0";
+	auto pipeline = encoder.empty() ? "( " : high ? high_pipeline_ : low_pipeline_;
+	if (audio)
+	{
+		auto branch = high ? audio_pipeline_ : test_audio_pipeline_;
+		if (encoder.empty())
+			branch.replace(branch.find("name=pay1"), 9, "name=pay0");
+		pipeline += branch;
+	}
+	if (settings)
+		pipeline += metadata_branch((encoder.empty() ? 0 : 1) + (audio ? 1 : 0));
+	pipeline += " )";
+	auto factory = gst_rtsp_media_factory_new();
+	gst_rtsp_media_factory_set_launch(factory, pipeline.c_str());
+	gst_rtsp_media_factory_set_shared(factory, TRUE);
+	if (settings)
+		metadata_->Attach(factory, settings);
+	auto pool = gst_rtsp_media_factory_get_address_pool(factoryHighStream_);
+	gst_rtsp_media_factory_set_address_pool(factory, pool);
+	g_object_unref(pool);
+	using Attachment = std::pair<std::shared_ptr<Profiles>, std::string>;
+	g_signal_connect_data(
+			factory, "media-configure", G_CALLBACK((+[](GstRTSPMediaFactory*, GstRTSPMedia* media, gpointer data) {
+				auto& [profiles, path] = *static_cast<Attachment*>(data);
+				auto weak = std::shared_ptr<GWeakRef>(new GWeakRef, [](auto ref) {
+					g_weak_ref_clear(ref);
+					delete ref;
+				});
+				g_weak_ref_init(weak.get(), media);
+				std::lock_guard lock(profiles->mutex);
+				auto& streams = profiles->entries[path].media;
+				std::erase_if(streams, [](const auto& weak) {
+					auto object = g_weak_ref_get(weak.get());
+					if (object)
+						g_object_unref(object);
+					return !object;
+				});
+				streams.push_back(std::move(weak));
+			})),
+			new Attachment(profiles_, path), +[](gpointer data, GClosure*) { delete static_cast<Attachment*>(data); },
+			G_CONNECT_DEFAULT);
+	auto mounts = gst_rtsp_server_get_mount_points(server_);
+	// Mount replacement keeps already prepared media alive for their existing sessions.
+	gst_rtsp_mount_points_add_factory(mounts, path.c_str(), factory);
+	g_object_unref(mounts);
+	entry.identity = identity;
+}
+
+void Server::RetainProfiles(const std::vector<std::string>& paths)
+{
+	std::lock_guard lock(profiles_->mutex);
+	auto mounts = gst_rtsp_server_get_mount_points(server_);
+	std::erase_if(profiles_->entries, [&](const auto& entry) {
+		if (std::ranges::find(paths, entry.first) != paths.end())
+			return false;
+		gst_rtsp_mount_points_remove_factory(mounts, entry.first.c_str());
+		return true;
+	});
+	g_object_unref(mounts);
+}
+
+void Server::SynchronizeProfile(const std::string& path)
+{
+	std::vector<GstRTSPMedia*> streams;
+	{
+		std::lock_guard lock(profiles_->mutex);
+		auto entry = profiles_->entries.find(path);
+		if (entry == profiles_->entries.end())
+			return;
+		for (const auto& weak : entry->second.media)
+			if (auto media = g_weak_ref_get(weak.get()))
+				streams.push_back(GST_RTSP_MEDIA(media));
+	}
+	for (auto media : streams)
+	{
+		MetadataStreams::Synchronize(media);
+		auto element = gst_rtsp_media_get_element(media);
+		gst_element_send_event(element, gst_video_event_new_upstream_force_key_unit(GST_CLOCK_TIME_NONE, TRUE, 0));
+		gst_object_unref(element);
+		g_object_unref(media);
+	}
+}
+
 Server::~Server()
 {
 	if (worker_thread_.joinable())
@@ -300,17 +411,21 @@ Server::~Server()
 		// An attached source always runs on the worker, even when stop races its
 		// initial entry to g_main_loop_run(). A direct quit could lose that race.
 		auto stop = g_idle_source_new();
-		g_source_set_callback(stop, +[](gpointer data) -> gboolean {
-			auto self = static_cast<Server*>(data);
-			self->Shutdown();
-			g_main_loop_quit(self->loop_);
-			return G_SOURCE_REMOVE;
-		}, this, nullptr);
+		g_source_set_callback(
+				stop,
+				+[](gpointer data) -> gboolean {
+					auto self = static_cast<Server*>(data);
+					self->Shutdown();
+					g_main_loop_quit(self->loop_);
+					return G_SOURCE_REMOVE;
+				},
+				this, nullptr);
 		g_source_attach(stop, context_);
 		g_source_unref(stop);
 		worker_thread_.join();
 	}
-	else Shutdown();
+	else
+		Shutdown();
 	g_object_unref(server_);
 	g_main_loop_unref(loop_);
 	g_main_context_unref(context_);

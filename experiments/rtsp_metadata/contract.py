@@ -82,6 +82,27 @@ def load_schema(destination, resource_faults=False):
     return etree.XMLSchema(etree.fromstring(etree.tostring(wrapper), parser))
 
 
+def load_media_schema(destination, media2=False):
+    """Validate the pinned inline schema using XSD 1.1 element/wildcard priority.
+
+    libxml2 rejects the upstream VideoSourceConfigurationOptionsExtension2 model
+    under XSD 1.0 UPA rules. No upstream document is modified to work around it.
+    Requires the optional, validation-only xmlschema package (tested with 3.4.5).
+    """
+    from lxml import etree
+    from xmlschema import XMLSchema11
+    root = destination / "specs"
+    verify_repository(root)
+    imports = checked_imports(destination)
+    path = (root / ("wsdl/ver20/media/wsdl/media.wsdl" if media2 else
+                    "wsdl/ver10/media/wsdl/media.wsdl")).resolve()
+    wsdl = etree.parse(str(path), etree.XMLParser(no_network=True, resolve_entities=False))
+    schema = wsdl.find(".//{http://www.w3.org/2001/XMLSchema}schema")
+    return XMLSchema11(etree.tostring(schema), base_url=path.parent.as_uri() + "/",
+                       uri_mapper={url: str(file.resolve()) for url, file in imports.items()},
+                       allow="local", use_fallback=False)
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("destination", type=Path)

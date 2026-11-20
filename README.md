@@ -281,16 +281,20 @@ The `PullPoint` section contains the following settings:
 
 ### RTSP event metadata (`common.config`)
 
-Set `rtsp_metadata.enabled` to `true` to add an ONVIF XML event metadata track to
-both live RTSP streams, including file input. It defaults to `false`. RTSP clients
-can select metadata alone or receive it with video/audio while PullPoint clients
-continue receiving the same notifications independently. Normal Docker runtime
-builds include the required GStreamer payloader.
+ONVIF event metadata configuration and streaming are enabled by default
+(`rtsp_metadata.enabled=true`, including when the setting is omitted). Set it to
+`false` to disable this feature. List/configure metadata through Media or
+Media2, attach a metadata configuration to a profile, then use that profile's
+`GetStreamUri` result. Clients can select metadata alone or with video/audio;
+PullPoint subscriptions receive notifications independently. Normal Docker
+runtime builds include the required GStreamer payloader.
 
-This Stage 3 setting enables the transport on the fixed live mounts. SOAP metadata
-configuration/profile support is planned for Stage 4. See
-[live RTSP metadata](docs/RTSP_METADATA.md) for receiving, build/test commands and
-the current simulation scope.
+The example metadata catalog has two configurations with events enabled and no
+profile associations. Supported controls include event enable/disable, topic and
+ItemFilter content filters, and media synchronization points. See
+[live RTSP metadata](docs/RTSP_METADATA.md) for SOAP operations, filter examples,
+persistence/session behavior and validation commands. Analytics scene frames,
+PTZ metadata, compression and multicast metadata are unsupported.
 
 ### Discovery Service (`discovery.config`)
 

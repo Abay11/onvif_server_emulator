@@ -13,6 +13,8 @@ namespace pt = boost::property_tree;
 
 class ILogger;
 
+namespace osrv::metadata { class Control; }
+
 namespace utility { class AnalyticsRules; }
 
 namespace utility::media
@@ -76,6 +78,7 @@ public:
 	};
 
 	std::shared_ptr<utility::AnalyticsRules> Rules();
+	std::shared_ptr<metadata::Control> Metadata();
 
 protected:
 	const std::string& configs_path_;
@@ -89,6 +92,7 @@ protected:
 
 private:
 	std::shared_ptr<utility::AnalyticsRules> analytics_rules_;
+	std::shared_ptr<metadata::Control> metadata_control_;
 	std::shared_ptr<IOnvifService> analytics_service_;
 	std::shared_ptr<IOnvifService> device_service_;
 	std::shared_ptr<IOnvifService> deviceio_service_;

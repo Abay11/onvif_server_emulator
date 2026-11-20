@@ -1,4 +1,4 @@
-# Live RTSP event metadata (Stage 3)
+# Live RTSP event metadata
 
 The GStreamer RTSP server can deliver the shared event source as an ONVIF XML
 metadata RTP track alongside live video/audio. PullPoint subscribers and RTSP
@@ -6,14 +6,15 @@ clients receive independent copies of the same generated notifications.
 
 ## Enable the transport
 
-In a configuration copy, set the optional `common.config` setting:
+The transport and SOAP metadata configuration APIs are enabled by default.
+The optional `common.config` setting is:
 
 ```json
 "rtsp_metadata": { "enabled": true }
 ```
 
-Restart the server. The default is false for compatibility with configurations
-that have not enabled this transport. Enabled startup requires the
+The default is also true when the setting is omitted. Restart the server after
+changing it. Set it to false to disable the feature. Enabled startup requires the
 `rtponvifmetadatapay` GStreamer plugin; a missing plugin produces a startup error.
 Normal Docker runtime builds include the pinned plugin, source and notices from
 Stage 1. For source builds/tests use the `metadata-dev` target:
@@ -26,21 +27,111 @@ Follow [BUILD.md](../BUILD.md) for repository/build mounts, CMake and network
 settings. The ordinary `dev` target still supports builds and runs with metadata
 disabled; it does not include the optional payloader.
 
-The metadata track is present on `/Live&HighStream` and `/Live&LowStream`, including
-the high stream's file-input variant. Use the existing RTSP URI and discover its
-application track through DESCRIBE. No separate metadata URI is required. Replay
-at `/Recording0` is unchanged and does not contain historical event metadata.
+## Configure a profile through SOAP
 
-### Intentional Stage 3 simulation scope
+With the transport enabled, Media and Media2 expose metadata configuration APIs.
+The shipped `media_profiles.config` has two reusable configurations,
+`MetadataToken0` and `MetadataToken1`, initially enabling all events. Profiles are
+initially unattached: enabling the transport alone does not add a metadata track.
+Older configuration directories need the `Metadata` catalog from the example.
+Detach metadata from all profiles before disabling the transport. Startup rejects
+persisted metadata associations when the switch is false, and Media2 rejects
+adding metadata while it is disabled, keeping profile responses and SDP consistent.
 
-This switch enables event metadata on both fixed live mounts. It is a transport
-integration setting, independent of the currently empty profile Metadata slots.
-Until Stage 4 implements metadata configurations and profile associations, it is
-an intentional control-plane simulation deviation: SOAP profile responses do not
-configure or advertise these additional tracks. Do not interpret this setting as
-full ONVIF Media/Media2 metadata-configuration support. Metadata-capable raw RTSP
-clients can select the application track; a VMS that requires SOAP metadata
-configuration first may need Stage 4 before it uses the track.
+1. List configurations using Media `GetMetadataConfigurations`, or Media2
+   `GetMetadataConfigurations` with optional ConfigurationToken/ProfileToken.
+2. Read `GetMetadataConfigurationOptions`. Media also provides
+   `GetMetadataConfiguration` and `GetCompatibleMetadataConfigurations`.
+3. Use `SetMetadataConfiguration` to select events and filters. Media accepts
+   ForcePersistence; the obsolete flag is treated as true even when false is sent.
+   Media2 has no ForcePersistence field. All accepted changes persist.
+4. Attach the token using Media `AddMetadataConfiguration` (ProfileToken and
+   ConfigurationToken), or Media2 `AddConfiguration` (ProfileToken and a
+   Configuration containing Type=Metadata and Token). Addition replaces the
+   previous metadata reference; UseCount is computed from actual references.
+5. Request `GetStreamUri` for that profile. DESCRIBE the returned URI and select
+   its application track, alone or with video/audio. Both services return the
+   same stable `/onvif/profile/<SHA-256-of-profile-token>` URI. The URI is
+   installed at startup and stays valid across configuration changes and reboot.
+
+Remove the association using Media `RemoveMetadataConfiguration` or Media2
+`RemoveConfiguration` with Type=Metadata. Profile responses include the full
+metadata configuration in the schema-defined location. Media2 advertises
+Metadata in ConfigurationsSupported only when the transport is enabled.
+
+The fixed `/Live&HighStream` and `/Live&LowStream` mounts remain available for
+legacy video/audio clients; metadata clients must use the profile URI returned
+by SOAP. Replay at `/Recording0` has no historical metadata track. This replaces
+the temporary Stage 3 behavior that added metadata to both fixed mounts.
+
+### Supported settings and filters
+
+The Events element controls event delivery: include an empty Events element for
+all events, omit it for no events, or include Events/Filter for selected events.
+An attached, events-disabled configuration retains the application track and
+sends empty metadata documents. This is different from removing its association,
+which removes the metadata track from newly prepared streams. Media2 CreateProfile,
+AddConfiguration and RemoveConfiguration process their configuration references
+as a batch, validating metadata/source dependencies on the final profile.
+
+The accepted filter dialects are OASIS Concrete and ONVIF ConcreteSet topics,
+and ONVIF ItemFilter message content, using the URIs in Core 24.12. Concrete
+selects one exact topic. ConcreteSet supports exact paths, `|` alternatives and
+`//.` subtrees. QName matching uses namespace URIs, including bindings inherited
+from the SOAP envelope; prefix aliases are interchangeable. ItemFilter supports
+boolean presence tests on SimpleItem/ElementItem, Name/Value comparisons,
+parentheses, `not`, `and` and `or` with the Core-defined precedence. For example:
+
+```xml
+<tt:Events xmlns:tt="http://www.onvif.org/ver10/schema"
+           xmlns:wsnt="http://docs.oasis-open.org/wsn/b-2"
+           xmlns:topic="http://www.onvif.org/ver10/topics">
+  <tt:Filter>
+    <wsnt:TopicExpression Dialect="http://www.onvif.org/ver10/tev/topicExpression/ConcreteSet">topic:RuleEngine/CellMotionDetector//.</wsnt:TopicExpression>
+    <wsnt:MessageContent Dialect="http://www.onvif.org/ver10/tev/messageContentFilter/ItemFilter">boolean(//tt:SimpleItem[@Name='IsMotion' and @Value='true'])</wsnt:MessageContent>
+  </tt:Filter>
+</tt:Events>
+```
+
+One topic expression and one content expression can be combined; both must match.
+Each expression is limited to 4096 UTF-8 bytes. Unsupported dialects, syntax,
+subscription policies, metadata producers or configuration values return
+Sender/InvalidArgVal/ConfigModify. Missing configuration/profile tokens return
+NoConfig/NoProfile. Input UseCount is ignored; returned UseCount reflects actual
+associations. Topic/content filters apply to property snapshots as well as live
+notifications. They do not change independent PullPoint subscriptions; existing
+PullPoint filter simulation limits remain described in [event delivery](EVENT_DELIVERY.md).
+
+Only uncompressed event metadata is supported. Configuration responses explicitly
+include `CompressionType="None"`, including after SetMetadataConfiguration, so
+clients can read back the selected mode. Analytics, PTZ status/position,
+GeoLocation and ShapePolygon cannot be enabled. Options report false PTZ flags,
+CompressionType=None and MaxContentFilterSize=4096. The supported multicast
+placeholder is IPv4 0.0.0.0, port 0, TTL 1, AutoStart=false; multicast streaming is
+unadvertised and unsupported. Media SessionTimeout is fixed at PT60S; Media2
+ignores the deprecated timeout field. Scene metadata remains Stage 5 work.
+
+### Persistence and active sessions
+
+Both SOAP services share the manager's authoritative profile tree. Writes use a
+temporary file and rename in the same configuration directory, which therefore
+must be writable. Temporary names are unique; failed writes restore profile state.
+Metadata configuration validation precedes mutation. RTSP
+receives immutable settings and compiled filters; streaming callbacks never read
+the mutable JSON/profile tree.
+
+Persisted changes refresh profile factories at the same URI. New RTSP connections
+receive the updated track/filter selection. Existing prepared sessions keep their
+previous snapshot until reconnect, including when an association is removed.
+Use a fresh RTSP connection for the updated configuration.
+Request the URI again and restart affected streams after configuration changes,
+as required for reliable application by Media/Media2. Unchanged factories share
+media within a profile; different profiles use separate factories even when they
+share a video encoder. Deleting a profile removes its URI for new connections.
+Encoder tokens are resolved through the Media/Media2 GetStreamUri configuration
+catalogs to the existing high/low pipeline variants; token spelling is not fixed.
+The two catalogs must agree when they map the same encoder. Source/encoder
+emulation retains the existing hardcoded pipeline limitations.
 
 ## Transport and synchronization
 
@@ -72,7 +163,9 @@ configuration first may need Stage 4 before it uses the track.
   the stream; this supplies late clients without restarting generators. PAUSE
   and resume retain the media lifecycle and request fresh state on resumed PLAY.
   Property snapshots do not invent initialization for transient notifications.
-  The SOAP media synchronization operation remains Stage 4 work.
+  Media and Media2 SetSynchronizationPoint request fresh filtered property state
+  and send an upstream force-key-unit event to the profile's video encoder.
+  Other profiles and PullPoint queues are independent.
 - Metadata RTCP reserves 4000 bits/s for senders and 12000 bits/s for receivers.
   This avoids very long sender-report intervals caused by automatic bandwidth
   estimation on sparse XML traffic. The normal five-second minimum RTCP interval
@@ -101,13 +194,17 @@ still limit full application restart/multi-server behavior.
 
 The implementation uses the pinned ONVIF 24.12 set at commit
 `d7f3684501c4a6d58f879e72e1e3322c120f95e6`: Streaming metadata RTP and metadata
-RTSP session sections, Core property synchronization, `metadatastream.xsd`,
+RTSP session sections, Core event filtering/property synchronization, Media
+metadata configuration and synchronization sections, Media2 generic configuration
+operations, `wsdl/ver10/media/wsdl/media.wsdl`,
+`wsdl/ver20/media/wsdl/media.wsdl`, `metadatastream.xsd`,
 `common.xsd`, `onvif.xsd` and imported definitions. See
 [the Stage 1 references/cache instructions](../experiments/rtsp_metadata/README.md)
 and [the immutable release](https://github.com/onvif/specs/tree/d7f3684501c4a6d58f879e72e1e3322c120f95e6).
 GStreamer API references are [appsrc](https://gstreamer.freedesktop.org/documentation/app/appsrc.html),
 [RTSP client](https://gstreamer.freedesktop.org/documentation/gst-rtsp-server/rtsp-client.html)
 and [metadata payloader](https://gstreamer.freedesktop.org/documentation/rsonvif/rtponvifmetadatapay.html).
+The example Device service advertises Media/Media2 version 24.12 for this baseline.
 These are implementation references, not an official conformance claim.
 
 Build and run CTest in the metadata-enabled development image:
@@ -127,13 +224,28 @@ Against a source-built server with this switch enabled, default event settings
 and disabled authentication, run:
 
 ```bash
-python3 unit_tests/network_smoke.py
+python3 unit_tests/network_smoke.py --profile-uris
 python3 unit_tests/event_delivery_smoke.py
 python3 unit_tests/rtsp_metadata_smoke.py --contract /contract
+python3 unit_tests/metadata_configuration_smoke.py --contract /contract
+python3 unit_tests/metadata_restart_smoke.py
 ```
 
 `/contract` is the Stage 1 pinned schema cache mounted into the test container.
 Omit that argument for a standard-library-only receiver without XSD validation.
+The Stage 4 script additionally uses the optional validation-only `xmlschema`
+Python package (tested with Debian python3-xmlschema 3.4.5). It uses XSD 1.1
+priority rules for the unchanged upstream schema: libxml2's XSD 1.0 checker rejects
+VideoSourceConfigurationOptionsExtension2 because of its element/wildcard model.
+The pinned WSDL/XSD files remain unchanged and outside the checkout. Network
+imports are disabled and hash-pinned cached imports are used. This validation
+choice is not a claim of complete ONVIF conformance.
+
+For metadata-enabled `network_smoke.py`, add `--profile-uris`. The configuration
+smoke script requires writable disposable default configs; it restores the
+settings and associations it changes. The transport smoke script attaches both
+stock profiles, obtains their SOAP URIs and removes its associations afterwards.
+
 All scripts accept explicit host/port options. The metadata script checks two
 RTSP consumers plus two PullPoints, identical live events, late property state,
 marker-delimited fragmented XML, 90 kHz SDP, monotonic timestamps, RTCP sender
@@ -167,5 +279,35 @@ GStreamer 1.26.2 and the pinned ONVIF plugin 0.13.7:
 All network runs used isolated container namespaces and configuration copies;
 no host listening ports or source configurations were changed by the tests.
 The temporary runtime verification container was stopped and removed. Long-running
-backpressure stress, Windows/LAN/VMS behavior, and the Stage 4 configuration
-contract remain outside this validation.
+backpressure stress and Windows/LAN/VMS behavior remain outside this validation.
+
+### Recorded Stage 4 results
+
+The source build and complete CTest suite passed in the documented Linux Docker
+workflow (`osrv-metadata-dev:stage1`, GStreamer 1.26.2, ONVIF plugin 0.13.7).
+Docker context `default` used the WSL Linux Engine on its Unix socket.
+
+- `metadata_configuration_smoke.py --contract /contract` passed Media/Media2
+  request/response and SOAP fault validation against the pinned contract. It
+  covered metadata-first batched profile creation, configuration/profile lookup,
+  capabilities, namespace-aware topic/content filters, stable profile isolation,
+  events disabled, attachment removal, unchanged active sessions, property
+  synchronization and H.264 IDR delivery.
+- `rtsp_metadata_smoke.py --contract /contract`, `event_delivery_smoke.py` and
+  `network_smoke.py --profile-uris` passed: two RTSP receivers plus two PullPoints,
+  TCP/UDP, XML reconstruction, RTCP, late join, pause/resume, reconnect, aggregate
+  and selective track setup, snapshot download and discovery.
+- `metadata_restart_smoke.py` passed metadata-only URI preload before SOAP,
+  configured custom encoder tokens, persistence with ForcePersistence=false,
+  fresh-process restart and disabled-transport startup rejection.
+- The development image without the metadata payloader, with metadata explicitly
+  disabled, passed the network and PullPoint checks. Disabled metadata attachment was rejected, and previously
+  issued profile URI paths remained usable for video/audio.
+- JSON validation passed for all shipped configs and the SOAP-modified config
+  copy. CTest also covered failed-write rollback and atomic metadata/source
+  configuration batches. Python syntax, local documentation links and
+  `git diff --check` passed.
+
+All network tests used isolated container networks and disposable configuration
+copies. The full runtime image was not rebuilt in Stage 4; Windows/LAN/VMS
+acceptance and sustained load/backpressure tests remain outside these results.

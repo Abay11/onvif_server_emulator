@@ -26,6 +26,7 @@ add_executable(test_executable
 	line_counting_tests.cpp
 	motion_region_tests.cpp
 	media2_tests.cpp
+	metadata_configuration_tests.cpp
 	mediaprofiles_manager_tests.cpp
 	pull_point_tests.cpp
 	recording_tests.cpp

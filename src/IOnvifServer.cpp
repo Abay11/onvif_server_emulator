@@ -6,6 +6,7 @@
 #include "../utility/MediaProfilesManager.h"
 
 #include "../Server.h"
+#include "../utility/MetadataConfiguration.h"
 
 #include "../onvif_services/IOnvifService.h"
 
@@ -85,6 +86,18 @@ IOnvifServer::IOnvifServer(const std::string& configs_path, std::shared_ptr<ILog
 			media_profiles_manager_(std::make_shared<utility::media::MediaProfilesManager>(
 					ConfigPath(configs_path_, ConfigName(PROFILES_CONFIG_FILE))))
 {
+}
+
+std::shared_ptr<metadata::Control> IOnvifServer::Metadata()
+{
+	if (!metadata_control_)
+	{
+		metadata_control_ = std::make_shared<metadata::Control>(*media_profiles_manager_, *server_configs_, configs_path_);
+		media_profiles_manager_->ReaderWriter()->OnSave([weak = std::weak_ptr<metadata::Control>(metadata_control_)] {
+			if (auto control = weak.lock()) control->Refresh();
+		});
+	}
+	return metadata_control_;
 }
 
 std::shared_ptr<utility::AnalyticsRules> IOnvifServer::Rules()

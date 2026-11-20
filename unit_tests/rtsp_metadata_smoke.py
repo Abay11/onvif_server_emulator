@@ -33,6 +33,7 @@ class Receiver:
         self.fragmented = False
         self.rtcp = False
         self.seen_media = set()
+        self.video_idr = 0
         self.last_timestamp = None
         self.timestamp_changes = 0
         started = time.monotonic()
@@ -135,6 +136,15 @@ class Receiver:
             return None
         assert len(data) >= 12 and data[0] >> 6 == 2
         self.seen_media.add(media)
+        if media == "video":
+            offset = 12 + (data[0] & 15) * 4
+            if data[0] & 16:
+                offset += 4 + int.from_bytes(data[offset + 2:offset + 4], "big") * 4
+            payload = data[offset:]
+            if payload and ((payload[0] & 31) == 5 or
+                            ((payload[0] & 31) == 28 and len(payload) > 1 and
+                             payload[1] & 128 and payload[1] & 31 == 5)):
+                self.video_idr += 1
         if media != "application": return None
         assert len(data) <= 1200 and data[1] & 127 == self.metadata_payload
         assert data[0] & 0x3F == 0, "Unexpected metadata CSRC, padding or extension"
@@ -204,10 +214,16 @@ def main():
         validate = lambda data: schema.assertValid(etree.fromstring(data))
     endpoint = f"http://{args.host}:{args.http_port}/onvif/event_service"
     subscriptions = []
+    # Stage 4 requires profile association and the URI returned by SOAP.
+    from metadata_configuration_smoke import attach, stream_path
+    paths = {}
+    for profile, name in (("ProfileToken0", "Live&HighStream"), ("ProfileToken1", "Live&LowStream")):
+        attach(args.host, args.http_port, profile)
+        paths[name] = stream_path(args.host, args.http_port, profile)
     try:
         with ExitStack() as stack:
             create = lambda path, transport, mode="metadata": Receiver(
-                args.host, args.rtsp_port, path, transport, mode, validate)
+                args.host, args.rtsp_port, paths[path], transport, mode, validate)
             first = create("Live&HighStream", "tcp")
             stack.callback(first.close)
             first.document(initialized=True)

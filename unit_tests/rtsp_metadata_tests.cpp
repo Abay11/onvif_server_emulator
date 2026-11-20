@@ -1,5 +1,6 @@
 #include "../RtspServer.h"
 #include "../Server.h"
+#include "../utility/MetadataConfiguration.h"
 #include "../onvif_services/EventSource.h"
 
 #include <boost/test/unit_test.hpp>
@@ -109,6 +110,11 @@ BOOST_AUTO_TEST_CASE(rtsp_listener_and_active_metadata_prepare_stop_and_restart)
 		boost::asio::ip::tcp::iostream client;
 		{
 			osrv::rtsp::Server server(&logger, configs, {"PCMU", 64000, 8000}, source);
+			if (enabled)
+			{
+				boost::property_tree::ptree config; config.put("Events", true);
+				server.ConfigureProfile("/Live&LowStream", "VideoEncoderToken1", osrv::metadata::Compile(config));
+			}
 			server.run();
 			auto body = Describe(client, server.Port());
 			BOOST_TEST((body.find("m=application") != std::string::npos) == enabled);

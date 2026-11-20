@@ -23,7 +23,7 @@ find_package(Boost REQUIRED
 include_directories(${Boost_INCLUDE_DIRS})
 add_definitions(-DBOOST_ASIO_USE_TS_EXECUTOR_AS_DEFAULT) # helps to solve errors while building Simple-Web-Server with BOOST.Asio version greater or equal 1.74
 find_package(PkgConfig REQUIRED)
-pkg_check_modules(GSTREAMER REQUIRED gstreamer-rtsp-server-1.0 gstreamer-app-1.0)
+pkg_check_modules(GSTREAMER REQUIRED gstreamer-rtsp-server-1.0 gstreamer-app-1.0 gstreamer-video-1.0)
 message(STATUS "gstreamer lib dir: ${GSTREAMER_LIBRARY_DIRS}")
 message(STATUS "gstreamer include dir ${GSTREAMER_INCLUDE_DIRS}")
 include_directories(${GSTREAMER_INCLUDE_DIRS})
@@ -76,6 +76,8 @@ FILE(GLOB SERVICES_SRC
 	"onvif_services/media2_service.cpp"
 	"onvif_services/media2_service.h"
 	"onvif_services/media_service.cpp"
+	"onvif_services/metadata_handlers.cpp"
+	"onvif_services/metadata_handlers.h"
 	"onvif_services/media_service.h"
 	"onvif_services/physical_components/IPhysicalComponent.h"
 	"onvif_services/ptz_service.cpp"
@@ -126,6 +128,8 @@ FILE (GLOB UTILITY_SRC
 	"utility/HttpDigestHelper.h"
 	"utility/HttpHelper.cpp"
 	"utility/HttpHelper.h"
+	"utility/MetadataConfiguration.cpp"
+	"utility/MetadataConfiguration.h"
 	"utility/MediaProfilesManager.cpp"
 	"utility/MediaProfilesManager.h"
 	"utility/PtzConfigurationReader.cpp"

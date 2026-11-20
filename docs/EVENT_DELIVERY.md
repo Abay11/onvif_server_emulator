@@ -2,9 +2,9 @@
 
 The emulator now generates each live notification once and distributes immutable
 messages to independent consumers. HTTP PullPoint uses this source. The RTSP
-server receives the same `IEventSource` dependency. [Stage 3](RTSP_METADATA.md)
-adds an opt-in live metadata track using that source. SOAP metadata configuration
-and capability advertisement remain Stage 4 work.
+server receives the same `IEventSource` dependency. [RTSP metadata](RTSP_METADATA.md)
+uses that source and is enabled by default. Media/Media2 configuration and profile
+associations select the metadata track and its event filters.
 
 ## Ownership and execution
 

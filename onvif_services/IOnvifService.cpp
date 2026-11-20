@@ -350,6 +350,9 @@ void osrv::IOnvifService::Run()
 	for (auto namespaces_tree = configs_ptree_->get_child("Namespaces"); const auto& [key, tree] : namespaces_tree)
 		xml_namespaces_.try_emplace(key, tree.get_value<std::string>());
 
+	xml_namespaces_.try_emplace("ter", "http://www.onvif.org/ver10/error");
+	if (service_name_ == "media" || service_name_ == "media2") xml_namespaces_.try_emplace("wsnt", "http://docs.oasis-open.org/wsn/b-2");
+
 	const auto service_config = dvc_srv_cfg->find("GetServices");
 	auto search_configs =
 			std::ranges::find_if(service_config->second, [uri = service_uri_](const pt::ptree::iterator::value_type& tree) {

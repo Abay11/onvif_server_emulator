@@ -1,3 +1,5 @@
+#include "metadata_handlers.h"
+#include "../utility/MetadataConfiguration.h"
 #include "analytics_service.h"
 #include "media_service.h"
 
@@ -726,6 +728,7 @@ MediaService::MediaService(const std::string& service_uri, const std::string& se
 													 std::shared_ptr<IOnvifServer> srv)
 		: IOnvifService(service_uri, service_name, srv)
 {
+	AddMetadataHandlers(requestHandlers_, xml_namespaces_, configs_ptree_, srv, false);
 	requestHandlers_.push_back(
 			std::make_shared<media::GetAudioDecoderConfigurationsHandler>(xml_namespaces_, configs_ptree_));
 	requestHandlers_.push_back(std::make_shared<media::GetAudioEncoderConfigurationOptionsHandler>(
@@ -883,6 +886,11 @@ void fill_soap_media_profile(const pt::ptree& profileConfigs, pt::ptree& profile
 			profileOutNode.put_child("tt:AudioEncoderConfiguration", ae_node);
 		}
 	}
+	if (auto token = profileConfigs.get<std::string>("Metadata", ""); !token.empty())
+		for (const auto& [_, configuration] : profiles_cfg.get_child("Metadata", emptyIfNoNode))
+			if (configuration.get<std::string>("token") == token)
+				profileOutNode.add_child("tt:MetadataConfiguration", osrv::metadata::ConfigurationXml(configuration, profiles_cfg));
+
 }
 	
 std::string osrv::media::util::generate_rtsp_url(const osrv::ServerConfigs& server_configs,

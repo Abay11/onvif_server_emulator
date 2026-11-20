@@ -1,4 +1,5 @@
 #include "MetadataStream.h"
+#include "../utility/MetadataConfiguration.h"
 
 #include "../Logger.h"
 #include "../onvif_services/EventSource.h"
@@ -20,8 +21,8 @@ class Bridge : public std::enable_shared_from_this<Bridge>
 {
 public:
 	using Ptr = std::shared_ptr<Bridge>;
-	Bridge(GstElement* element, GstElement* appsrc, std::shared_ptr<event::IEventSource> source, const ILogger& logger)
-			: element_(element), appsrc_(appsrc), source_(std::move(source)), logger_(logger)
+	Bridge(GstElement* element, GstElement* appsrc, std::shared_ptr<event::IEventSource> source, const ILogger& logger, std::shared_ptr<const metadata::Settings> settings)
+			: settings_(std::move(settings)), element_(element), appsrc_(appsrc), source_(std::move(source)), logger_(logger)
 	{
 		namespaces_ = source_->Namespaces();
 		subscription_ = source_->Subscribe({}, false);
@@ -158,7 +159,7 @@ private:
 		auto batch = subscription_->Take(16);
 		std::deque<event::NotificationMessage> messages;
 		for (const auto& message : batch.messages)
-			messages.push_back(*message);
+			if (!settings_ || settings_->accepts(*message, namespaces_)) messages.push_back(*message);
 		if (batch.dropped)
 			logger_.Warn("RTSP metadata queue lost " + std::to_string(batch.dropped) + " notifications");
 		if (batch.needs_synchronization)
@@ -167,6 +168,7 @@ private:
 			Push(event::serialize_metadata(messages, namespaces_));
 	}
 
+	std::shared_ptr<const metadata::Settings> settings_;
 	GstElement* element_;
 	GstElement* appsrc_;
 	std::shared_ptr<event::IEventSource> source_;
@@ -215,11 +217,13 @@ MetadataStreams::~MetadataStreams()
 	Stop();
 }
 
-void MetadataStreams::Attach(GstRTSPMediaFactory* factory)
+void MetadataStreams::Attach(GstRTSPMediaFactory* factory, std::shared_ptr<const metadata::Settings> settings)
 {
+	using Attachment = std::pair<std::shared_ptr<State>, std::shared_ptr<const metadata::Settings>>;
 	g_signal_connect_data(
 			factory, "media-configure", G_CALLBACK(+[](GstRTSPMediaFactory*, GstRTSPMedia* media, gpointer data) {
-				auto state = *static_cast<std::shared_ptr<State>*>(data);
+				auto& attachment = *static_cast<Attachment*>(data);
+				auto state = attachment.first;
 				std::lock_guard lock(state->mutex);
 				if (state->stopped)
 					return;
@@ -233,7 +237,7 @@ void MetadataStreams::Attach(GstRTSPMediaFactory* factory)
 				Bridge::Ptr bridge;
 				try
 				{
-					bridge = std::make_shared<Bridge>(element, source, state->source, state->logger);
+					bridge = std::make_shared<Bridge>(element, source, state->source, state->logger, attachment.second);
 					bridge->Start(media, state->context);
 					std::erase_if(state->streams, [](const auto& weak) { return weak.expired(); });
 					state->streams.push_back(bridge);
@@ -250,8 +254,8 @@ void MetadataStreams::Attach(GstRTSPMediaFactory* factory)
 					state->logger.Error(std::string("Cannot configure RTSP metadata: ") + error.what());
 				}
 			}),
-			new std::shared_ptr<State>(state_),
-			+[](gpointer data, GClosure*) { delete static_cast<std::shared_ptr<State>*>(data); }, G_CONNECT_DEFAULT);
+			new Attachment(state_, std::move(settings)),
+			+[](gpointer data, GClosure*) { delete static_cast<Attachment*>(data); }, G_CONNECT_DEFAULT);
 }
 
 void MetadataStreams::Stop()
@@ -263,6 +267,11 @@ void MetadataStreams::Stop()
 			stream->Stop();
 	state_->streams.clear();
 	state_->source.reset();
+}
+
+void MetadataStreams::Synchronize(GstRTSPMedia* media)
+{
+	if (auto holder = static_cast<Bridge::Ptr*>(g_object_get_data(G_OBJECT(media), BridgeKey))) (*holder)->Synchronize();
 }
 
 void MetadataStreams::OnPlay(GstRTSPClient*, GstRTSPContext* context, gpointer)
