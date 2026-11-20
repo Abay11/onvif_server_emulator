@@ -203,6 +203,113 @@
     }
   }
 
+  // Each view owns a cursor. Filtering and pausing never consume the server's
+  // history or interfere with other browsers and ONVIF consumers.
+  let journalCursor = 0;
+  let journalInstance = null;
+  let journalPaused = false;
+  let journalGeneration = 0;
+  let journalTimer;
+  let journalRequest = null;
+  let journalRows = [];
+  let journalDropped = 0;
+  let journalFilter = {category: "", level: "", q: ""};
+
+  function drawJournal() {
+    const body = byId("journal-body");
+    body.replaceChildren();
+    for (const entry of journalRows) {
+      const row = node("tr");
+      const time = node("td", new Date(entry.time).toLocaleString(), "journal-time");
+      time.title = entry.time;
+      const type = node("td");
+      type.append(node("span", entry.level, `badge journal-${entry.level}`), node("span", entry.category, "subline"));
+      row.append(time, type, node("td", entry.source, "journal-source mono"), node("td", entry.message, "journal-message"));
+      body.append(row);
+    }
+    if (!journalRows.length) {
+      const row = node("tr");
+      const empty = node("td", "No matching events in the retained history.");
+      empty.colSpan = 4;
+      row.append(empty);
+      body.append(row);
+    }
+    byId("journal-gap").hidden = !journalDropped;
+    byId("journal-gap").textContent = `${journalDropped} earlier events are no longer in the server buffer. History is incomplete.`;
+  }
+
+  async function updateJournal() {
+    clearTimeout(journalTimer);
+    if (journalPaused || document.hidden) {
+      journalTimer = setTimeout(updateJournal, 1000);
+      return;
+    }
+    const generation = journalGeneration;
+    const controller = new AbortController();
+    journalRequest = controller;
+    const timeout = setTimeout(() => controller.abort(), 5000);
+    let delay = 1000;
+    try {
+      const query = new URLSearchParams({...journalFilter, after: String(journalCursor), limit: "100"});
+      const response = await fetch(`/admin/api/journal?${query}`, {cache: "no-store", signal: controller.signal});
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const batch = await response.json();
+      if (generation !== journalGeneration) return;
+      if (journalInstance && journalInstance !== batch.instance_id) {
+        journalInstance = batch.instance_id;
+        journalCursor = 0;
+        journalRows = [];
+        journalDropped = 0;
+        drawJournal();
+        byId("journal-state").textContent = "Application restarted. Loading the new journal…";
+        delay = 0;
+      } else {
+        journalInstance = batch.instance_id;
+        if (batch.reset) { journalRows = []; journalDropped = 0; }
+        journalCursor = batch.cursor;
+        journalDropped += batch.dropped;
+        // Keep browser memory and DOM bounded independently of server retention.
+        journalRows = [...batch.entries].reverse().concat(journalRows).slice(0, 500);
+        drawJournal();
+        byId("journal-state").textContent = `${batch.has_more ? "Catching up" : "Live"} · ${journalRows.length} most recent matching events shown · Updated ${new Date().toLocaleTimeString()}`;
+        delay = batch.has_more ? 100 : 1000;
+      }
+    } catch (error) {
+      if (generation === journalGeneration && !journalPaused) {
+        byId("journal-state").textContent = `Journal disconnected (${error.message}). Retrying without advancing the cursor…`;
+        delay = 3000;
+      }
+    } finally {
+      clearTimeout(timeout);
+      if (journalRequest === controller) journalRequest = null;
+      if (generation === journalGeneration) journalTimer = setTimeout(updateJournal, delay);
+    }
+  }
+
+  byId("journal-filters").addEventListener("submit", (event) => {
+    event.preventDefault();
+    journalFilter = {category: byId("journal-category").value, level: byId("journal-level").value, q: byId("journal-search").value};
+    ++journalGeneration;
+    journalRequest?.abort();
+    journalCursor = 0;
+    journalRows = [];
+    journalDropped = 0;
+    byId("journal-gap").hidden = true;
+    byId("journal-state").textContent = journalPaused ? "Updates paused. Resume to apply filters." : "Loading filtered history…";
+    drawJournal();
+    updateJournal();
+  });
+  byId("journal-pause").addEventListener("click", () => {
+    journalPaused = !journalPaused;
+    ++journalGeneration;
+    journalRequest?.abort();
+    byId("journal-pause").setAttribute("aria-pressed", String(journalPaused));
+    byId("journal-pause").textContent = journalPaused ? "Resume updates" : "Pause updates";
+    byId("journal-state").textContent = journalPaused ? "Updates paused. Internal collection continues." : "Reconnecting…";
+    updateJournal();
+  });
+  updateJournal();
+
   refreshButton.addEventListener("click", () => refresh(true));
   restartButton.addEventListener("click", () => {
     dialog.returnValue = "cancel";

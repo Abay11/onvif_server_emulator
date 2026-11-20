@@ -16,6 +16,7 @@
     <nav>
       <a class="nav-link" href="#overview"><span aria-hidden="true">▦</span> Overview</a>
       <a class="nav-link" href="#configuration"><span aria-hidden="true">≡</span> Configuration</a>
+      <a class="nav-link" href="#journal"><span aria-hidden="true">☷</span> Event journal</a>
       <a class="nav-link" href="#system"><span aria-hidden="true">⏻</span> System</a>
     </nav>
     <div class="sidebar-footer"><span class="sidebar-caption">LOCAL ADMINISTRATION</span><span>Application control panel</span><span class="access-label">Access without sign-in</span></div>
@@ -38,6 +39,23 @@
         <div class="panel config-panel" id="settings"><p class="loading">Loading application settings…</p></div>
         <article class="panel table-panel"><div class="panel-heading"><h2>Media profiles</h2><span class="tag">Current associations</span></div><div class="table-scroll"><table><caption class="sr-only">Current media profile configuration associations</caption><thead><tr><th>Profile</th><th>Video encoder</th><th>Audio encoder</th><th>Metadata</th></tr></thead><tbody id="profiles-body"><tr><td colspan="4">Loading profiles…</td></tr></tbody></table></div><p class="table-note">Profile associations describe configuration; some streaming parameters are fixed by the emulator.</p></article>
         <article class="panel table-panel"><div class="panel-heading"><h2>ONVIF services</h2><span class="tag">Configured endpoints</span></div><div class="table-scroll"><table><caption class="sr-only">Configured ONVIF services and advertisement settings</caption><thead><tr><th>Service</th><th>Endpoint</th><th>Discovery listing</th></tr></thead><tbody id="services-body"><tr><td colspan="3">Loading services…</td></tr></tbody></table></div></article>
+      </section>
+      <section id="journal" aria-labelledby="journal-title">
+        <div class="section-heading"><div><h2 id="journal-title">System event journal</h2><p>Application activity and detector summaries, collected internally.</p></div><button id="journal-pause" class="button secondary" type="button" aria-pressed="false">Pause updates</button></div>
+        <article class="panel">
+          <form id="journal-filters" class="journal-filters" role="search" aria-label="Filter journal">
+            <label>Category<select id="journal-category"><option value="">All categories</option><option value="system">System</option><option value="client">Clients</option><option value="detector">Detectors</option></select></label>
+            <label>Level<select id="journal-level"><option value="">All levels</option><option value="info">Information</option><option value="warn">Warning</option><option value="error">Error</option></select></label>
+            <label class="journal-search">Search<input id="journal-search" type="search" maxlength="64" placeholder="Topic, rule or message"></label>
+            <button class="button secondary" type="submit">Apply filters</button>
+          </form>
+          <p id="journal-state" class="journal-state" role="status" aria-live="polite">Connecting to journal…</p>
+          <p id="journal-gap" class="journal-gap" role="status" hidden></p>
+          <div class="table-scroll journal-scroll" tabindex="0" aria-label="Event history">
+            <table><caption class="sr-only">System event journal, newest entries first</caption><thead><tr><th>Time</th><th>Level / category</th><th>Source</th><th>Summary</th></tr></thead><tbody id="journal-body"><tr><td colspan="4">Loading event history…</td></tr></tbody></table>
+          </div>
+          <p class="table-note">Recent history is kept in memory for this application run. Pausing the view does not stop collection.</p>
+        </article>
       </section>
       <section id="system" aria-labelledby="system-title"><div class="section-heading"><div><h2 id="system-title">System controls</h2><p>Apply configuration changes by restarting the application.</p></div></div><article class="panel restart-panel"><div class="restart-icon" aria-hidden="true">⏻</div><div class="restart-copy"><h3>Restart application</h3><p>Reload configuration files in the same container. Active streams and event subscriptions will disconnect.</p><span class="restart-note">The application PID and container stay the same.</span></div><button id="restart" class="button danger" type="button" disabled>Restart application</button></article></section>
       <footer class="page-footer"><span>ONVIF Server Emulator<span class="footer-separator">·</span>Administration</span><span id="last-update">Not connected yet</span></footer>

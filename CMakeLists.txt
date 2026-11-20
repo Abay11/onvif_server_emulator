@@ -23,7 +23,7 @@ find_package(Boost REQUIRED
 include_directories(${Boost_INCLUDE_DIRS})
 add_definitions(-DBOOST_ASIO_USE_TS_EXECUTOR_AS_DEFAULT) # helps to solve errors while building Simple-Web-Server with BOOST.Asio version greater or equal 1.74
 find_package(PkgConfig REQUIRED)
-pkg_check_modules(GSTREAMER REQUIRED gstreamer-rtsp-server-1.0 gstreamer-app-1.0 gstreamer-video-1.0)
+pkg_check_modules(GSTREAMER REQUIRED gstreamer-rtsp-server-1.0 gstreamer-rtsp-1.0 gstreamer-app-1.0 gstreamer-video-1.0)
 message(STATUS "gstreamer lib dir: ${GSTREAMER_LIBRARY_DIRS}")
 message(STATUS "gstreamer include dir ${GSTREAMER_INCLUDE_DIRS}")
 include_directories(${GSTREAMER_INCLUDE_DIRS})
@@ -156,6 +156,8 @@ add_library(onvif_server STATIC
 	Server.h
 	web/AdminUi.cpp
 	web/AdminUi.h
+	utility/SystemJournal.cpp
+	utility/SystemJournal.h
 	utility/ApplicationReboot.cpp
 	utility/ApplicationReboot.h
 	RtspServer.cpp

@@ -172,4 +172,24 @@ BOOST_AUTO_TEST_CASE(reboot_unavailable_is_reported_without_a_false_acknowledgem
 						 "503 Service Unavailable");
 	BOOST_TEST(endpoint.reboots.load() == 0u);
 }
+BOOST_AUTO_TEST_CASE(journal_http_filters_and_cursors_do_not_consume_history)
+{
+	Endpoint endpoint;
+	auto journal = endpoint.server->GetServerConfigs()->journal;
+	journal->Add("info", "system", "application", "Started");
+	journal->Add("info", "detector", "Motion", "Rule=frontdoor State=true");
+	journal->Add("warn", "client", "ONVIF", "Access rejected");
+	auto response = endpoint.Request("GET", "/admin/api/journal?category=detector&q=FRONTDOOR&limit=1");
+	BOOST_TEST(response->status_code == "200 OK");
+	Tree result;
+	boost::property_tree::read_json(response->content, result);
+	BOOST_REQUIRE_EQUAL(result.get_child("entries").size(), 1u);
+	BOOST_TEST(result.get_child("entries").front().second.get<std::string>("source") == "Motion");
+	BOOST_TEST(result.get<unsigned>("cursor") == 2u);
+	BOOST_TEST(result.get<bool>("has_more"));
+	BOOST_TEST(journal->Read(0, 100, {}).entries.size() == 3u);
+	for (const auto* query : {"after=-1", "limit=0", "limit=201", "after=abc", "category=invalid", "level=debug", "limit=1&limit=2"})
+		BOOST_TEST(endpoint.Request("GET", std::string("/admin/api/journal?") + query)->status_code == "400 Bad Request");
+}
+
 BOOST_AUTO_TEST_SUITE_END()

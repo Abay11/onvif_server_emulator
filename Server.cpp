@@ -89,6 +89,7 @@ void Server::init(std::function<void()> reboot)
 	auto configs_dir = configs_path_ + "/";
 	server_configs_ = read_server_configs(configs_dir + COMMON_CONFIGS_NAME);
 	server_configs_->reboot = std::move(reboot);
+	server_configs_->journal->Add("info", "system", "application", "Application initialization started");
 
 	http_server_->config.address = server_configs_->ipv4_address_;
 	http_server_->config.port = std::stoi(server_configs_->http_port_);
@@ -183,7 +184,7 @@ void Server::init(std::function<void()> reboot)
 			 {utility::field::Topic,
 				{{"VideoSource", "tt:ReferenceToken"}, {"AnalyticsConfiguration", "tt:ReferenceToken"}, {"Rule", "xsd:string"}},
 				{{"IsInside", "xsd:boolean"}}}}};
-	event_source_ = std::make_shared<event::EventSource>(*logger_);
+	event_source_ = std::make_shared<event::EventSource>(*logger_, server_configs_->journal);
 	event::init_service(*http_server_, *server_configs_, configs_dir, *logger_, event_source_, event_generators);
 
 	// TODO: impl. logic for multichannel cannel
@@ -252,6 +253,7 @@ void Server::run()
 		auto port = listening.get();
 		rtspServer_->run();
 		logger_->Info("Server is successfully started on port: " + std::to_string(port));
+		server_configs_->journal->Add("info", "system", "application", "Application started; HTTP and RTSP listeners ready");
 		server_thread.join();
 	}
 	catch (...)

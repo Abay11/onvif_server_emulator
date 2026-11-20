@@ -420,10 +420,17 @@ void do_handler_request(std::shared_ptr<HttpServer::Response> response, std::sha
 				}
 			}
 
+			server_configs->journal->Client("ONVIF", request->remote_endpoint().address().to_string(),
+					current_user == osrv::auth::USER_TYPE::ADMIN ? "administrator" :
+				current_user == osrv::auth::USER_TYPE::OPERATOR ? "operator" :
+				current_user == osrv::auth::USER_TYPE::USER ? "user" : "unauthenticated");
 			(*handler_ptr)(response, request);
 		}
 		catch (const osrv::auth::digest_failed& e)
 		{
+			server_configs->journal->Add("warn", "client", "ONVIF",
+					"Authentication or access check rejected a request from " +
+					request->remote_endpoint().address().to_string());
 			log_->Error(e.what());
 
 			*response << utility::http::RESPONSE_UNAUTHORIZED << "\r\n"
@@ -437,6 +444,7 @@ void do_handler_request(std::shared_ptr<HttpServer::Response> response, std::sha
 		catch (const std::exception& e)
 		{
 			log_->Error("A server's error occured in DeviceService while processing: " + method + ". Info: " + e.what());
+			server_configs->journal->Add("error", "system", "ONVIF events", "Event service request failed; see process log");
 
 			*response << "HTTP/1.1 500 Server error\r\nContent-Length: " << 0 << "\r\n\r\n";
 		}

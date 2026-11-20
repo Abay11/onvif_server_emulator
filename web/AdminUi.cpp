@@ -10,6 +10,7 @@
 #include <boost/property_tree/json_parser.hpp>
 #include <boost/uuid/random_generator.hpp>
 #include <boost/uuid/uuid_io.hpp>
+#include <charconv>
 #include <chrono>
 #include <cstdlib>
 #include <sstream>
@@ -149,6 +150,61 @@ Tree Profiles(const Tree& profiles)
 	return result;
 }
 
+std::string JournalPage(const SystemJournal& journal, const Request& request)
+{
+	if (request->query_string.size() > 2048)
+		throw std::invalid_argument("Query is too long");
+	std::uint64_t after = 0, limit = 100;
+	SystemJournal::Filter filter;
+	auto number = [](const std::string& text) {
+		std::uint64_t value = 0;
+		auto [end, error] = std::from_chars(text.data(), text.data() + text.size(), value);
+		if (error != std::errc{} || end != text.data() + text.size() || text.empty())
+			throw std::invalid_argument("Invalid journal cursor or limit");
+		return value;
+	};
+	const auto query = request->parse_query_string();
+	for (const auto& [key, value] : query)
+	{
+		if (query.count(key) != 1)
+			throw std::invalid_argument("Duplicate parameter");
+		if (key == "after")
+			after = number(value);
+		else if (key == "limit")
+			limit = number(value);
+		else if (key == "category" && (value.empty() || value == "system" || value == "client" || value == "detector"))
+			filter.category = value;
+		else if (key == "level" && (value.empty() || value == "info" || value == "warn" || value == "error"))
+			filter.level = value;
+		else if (key == "q" && value.size() <= 256)
+			filter.text = value;
+		else
+			throw std::invalid_argument("Invalid journal filter");
+	}
+	if (!limit || limit > 200)
+		throw std::invalid_argument("Invalid journal limit");
+	const auto batch = journal.Read(after, static_cast<std::size_t>(limit), filter);
+	std::string result = "{\"instance_id\":\"" + journal.Instance() + "\",\"cursor\":" + std::to_string(batch.cursor) +
+											 ",\"dropped\":" + std::to_string(batch.dropped) +
+											 ",\"has_more\":" + (batch.more ? "true" : "false") +
+											 ",\"reset\":" + (batch.reset ? "true" : "false") + ",\"entries\":[";
+	bool first = true;
+	for (const auto& entry : batch.entries)
+	{
+		Tree fields;
+		fields.put("time", entry.time);
+		fields.put("level", entry.level);
+		fields.put("category", entry.category);
+		fields.put("source", entry.source);
+		fields.put("message", entry.message);
+		if (!first)
+			result += ',';
+		first = false;
+		result += "{\"id\":" + std::to_string(entry.id) + "," + Encode(fields).substr(1);
+	}
+	return result + "]}";
+}
+
 bool SameOrigin(const Request& request)
 {
 	// A custom header prevents cross-site HTML forms from triggering a reboot.
@@ -193,14 +249,27 @@ void RegisterAdminUi(IOnvifServer& server)
 		headers.emplace("Location", "/admin/");
 		response->write(Status::redirection_found, "", headers);
 	};
-	const auto asset = [http](const std::string& path, std::string_view contents, const std::string& type) {
-		http->resource[path]["GET"] = [contents, type](Response response, Request) {
+	const auto asset = [http, cfg](const std::string& path, std::string_view contents, const std::string& type) {
+		http->resource[path]["GET"] = [contents, type, cfg, page = path == "^/admin/$"](Response response,
+																																										Request request) {
+			if (page)
+				cfg->journal->Client("WebUI", request->remote_endpoint().address().to_string(), "unauthenticated");
 			response->write(Status::success_ok, std::string(contents), Headers(type));
 		};
 	};
 	asset("^/admin/$", admin_assets::Html, "text/html; charset=utf-8");
 	asset(R"(^/admin/app\.css$)", admin_assets::Css, "text/css; charset=utf-8");
 	asset(R"(^/admin/app\.js$)", admin_assets::Js, "text/javascript; charset=utf-8");
+	http->resource["^/admin/api/journal$"]["GET"] = [journal = cfg->journal](Response response, Request request) {
+		try
+		{
+			Json(response, Status::success_ok, JournalPage(*journal, request));
+		}
+		catch (const std::invalid_argument&)
+		{
+			Json(response, Status::client_error_bad_request, "{\"error\":\"Invalid journal query\"}");
+		}
+	};
 	http->resource["^/admin/api/status$"]["GET"] = [status_body, logger](Response response, Request) {
 		try
 		{

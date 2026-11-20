@@ -124,3 +124,94 @@ For browser acceptance, check desktop and narrow layouts, keyboard navigation,
 dialog cancellation/confirmation, offline status and reconnect after restart.
 A process without a reboot callback should display a disabled restart button.
 The Linux checks do not replace the [Windows/VMS acceptance checks](WSL2.md).
+
+## Live system event journal
+
+The Event journal section updates about once per second through
+`GET /admin/api/journal`. Category (system/client/detector), exact level
+(info/warn/error), and text filters can be combined. Text search covers source
+and summary, with case folding for ASCII text. Apply filters reloads retained
+history; pause affects the view only. The browser keeps at most 500 recent
+matching entries, newest first, and indicates connection failures and missing
+history. Multiple browsers read independently. Hidden tabs suspend polling and
+resume from their cursor when visible again.
+
+The journal collects structured operational events rather than copying stdout
+or reading log files. Sources currently include initialization/listener readiness,
+restart requests and failures, SOAP processing failures and access rejections,
+WebUI/ONVIF client activity, RTSP connection/disconnection, and detector event
+summaries. HTTP activity is not a login or persistent connection session. With
+Digest enabled, roles are recorded after verification; otherwise activity is
+labelled unauthenticated. Repeated HTTP activity for the same peer/protocol/role
+is coalesced for one minute, with at most 256 coalescing keys. Polling status and
+journal endpoints does not generate activity records itself. A Digest challenge
+can appear as an access rejection before the authenticated retry.
+
+`ServerConfigs` owns a `SystemJournal`. `Server` injects it into `EventSource`
+before event generators start. On each live publication, `EventSource::Publish`
+writes a bounded summary directly into this journal **before** enqueuing messages
+for external consumers. This does not create an `EventSubscription`, PullPoint,
+RTSP metadata reader, ONVIF request or synchronization request. Collection runs
+with zero ONVIF clients and with metadata disabled. Slow or overflowing external
+consumer queues cannot consume, reset or suppress journal entries. Synchronization
+snapshots generated for individual clients are not counted as new detector events.
+The ONVIF wire format and subscription semantics are unchanged; their existing
+contract references remain in [EVENT_DELIVERY.md](EVENT_DELIVERY.md).
+
+The internal append is a short mutex-protected operation shared by all publisher
+threads. It performs no network/disk I/O or browser callbacks. Reads take a
+bounded snapshot; a browser's connection, filters and refresh rate do not control
+detector generation. RTSP signal callbacks retain their journal handles through
+GObject closure destruction, independently of the server's callback lifetime.
+
+The server retains the latest **4096 entries in memory**, with bounded fields
+(source up to 256 UTF-8 bytes, summary up to 1024). Detector summaries select
+rule/source identifiers and known scalar state/count/object/likelihood fields;
+images, image URLs, arbitrary ElementItems and recognition identity fields are
+excluded. The timestamp is journal capture time in UTC. Each entry receives a
+monotonic sequence ID under the journal lock. Retention evicts oldest entries;
+this is recent operational history, not a durable audit log. Restart/exec clears
+history and changes the journal instance ID. Abrupt termination cannot add a
+shutdown record. Existing console/file logging remains separate and unchanged.
+
+### Journal HTTP interface
+
+Parameters are optional: `after` (nonnegative sequence ID, default 0), `limit`
+(1–200, default 100), `category`, `level`, and `q` (at most 256 bytes; the UI allows
+64 characters). Unknown, duplicate or invalid parameters receive 400. Reboot and
+status APIs are unaffected. This endpoint has the same unauthenticated access as
+the existing WebUI.
+
+```bash
+curl 'http://127.0.0.1:8080/admin/api/journal?category=detector&after=0&limit=100'
+```
+
+The JSON object contains `instance_id`, `cursor`, `has_more`, `reset`, `dropped`
+and an `entries` array. Entries have numeric `id` plus string `time`, `level`,
+`category`, `source`, `message`. `cursor` advances over all scanned records,
+including filtered records; reuse it for incremental reads with the same filter.
+A filter change should start at 0. `has_more` indicates more history to scan.
+`dropped` counts global sequence IDs already evicted since the supplied cursor,
+including records that might not match the current filter. A cursor ahead of the
+current journal returns `reset=true` and restarts from retained history. Readers
+must also compare `instance_id` and restart from 0 when it changes. A failed HTTP
+request must not advance the reader's cursor. The UI follows these rules and
+reports retention gaps explicitly.
+
+### Journal validation
+
+In the Docker dev environment, after building and running CTest:
+
+```bash
+python3 unit_tests/system_journal_smoke.py --network-smoke
+```
+
+This starts a source-built process with temporary configuration and metadata
+explicitly disabled. It first waits for detector entries with no ONVIF consumers,
+then checks independent reads, incremental cursors, filters and ONVIF/RTSP client
+activity. The optional network checks run `network_smoke.py` and
+`event_delivery_smoke.py` against that server. CTest also verifies concurrent
+publication ordering, bounded retention and payloads, cursor reset/gap behavior,
+filter validation, secret exclusion, and capture despite a slow external
+subscriber overflowing its queue. Browser acceptance should additionally check
+pause/resume, filter changes, reconnect, missing-history notices and layout.

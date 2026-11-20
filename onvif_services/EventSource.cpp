@@ -1,6 +1,7 @@
 #include "EventSource.h"
 
 #include "../Logger.h"
+#include "../utility/SystemJournal.h"
 #include "pullpoint/event_generators.h"
 
 #include <algorithm>
@@ -126,8 +127,9 @@ bool EventSubscription::Enqueue(NotificationPtr message, std::size_t bytes)
 	return retained_all;
 }
 
-EventSource::EventSource(const ILogger& logger)
-		: logger_(logger), work_(boost::asio::make_work_guard(io_context_)), worker_([this]() { io_context_.run(); })
+EventSource::EventSource(const ILogger& logger, std::shared_ptr<SystemJournal> journal)
+		: logger_(logger), journal_(std::move(journal)), work_(boost::asio::make_work_guard(io_context_)),
+			worker_([this]() { io_context_.run(); })
 {
 }
 
@@ -226,6 +228,8 @@ void EventSource::Synchronize(const std::shared_ptr<EventSubscription>& subscrip
 
 void EventSource::Publish(NotificationMessage message)
 {
+	if (journal_)
+		journal_->Detector(message);
 	auto bytes = notification_size(message);
 	auto immutable = std::make_shared<const NotificationMessage>(std::move(message));
 	std::erase_if(subscriptions_, [](const auto& weak) { return weak.expired(); });

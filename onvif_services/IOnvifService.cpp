@@ -93,10 +93,17 @@ public:
 					}
 				}
 
+				srv_cfg->journal->Client("ONVIF", request->remote_endpoint().address().to_string(),
+					current_user == osrv::auth::USER_TYPE::ADMIN ? "administrator" :
+					current_user == osrv::auth::USER_TYPE::OPERATOR ? "operator" :
+					current_user == osrv::auth::USER_TYPE::USER ? "user" : "unauthenticated");
 				(*handler_ptr)(response, request);
 			}
 			catch (const osrv::auth::digest_failed& e)
 			{
+				srv_cfg->journal->Add("warn", "client", "ONVIF",
+						"Authentication or access check rejected a request from " +
+						request->remote_endpoint().address().to_string());
 				log_->Error(e.what());
 
 				*response << utility::http::RESPONSE_UNAUTHORIZED << "\r\n"
@@ -313,6 +320,7 @@ public:
 				oss << "A server's error occured in " << service_->ServiceName() << " while processing: " << method
 						<< ". Info: " << e.what();
 				log_->Error(oss.str());
+				srv_cfg->journal->Add("error", "system", "ONVIF", "SOAP request processing failed; see process log");
 
 				*response << "HTTP/1.1 500 Server error\r\nContent-Length: " << 0 << "\r\n\r\n";
 			}

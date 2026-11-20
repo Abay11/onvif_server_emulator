@@ -12,6 +12,8 @@
 
 class ILogger;
 
+namespace osrv { class SystemJournal; }
+
 namespace osrv::event
 {
 class IEventGenerator;
@@ -80,7 +82,7 @@ public:
 class EventSource : public IEventSource
 {
 public:
-	explicit EventSource(const ILogger& logger);
+	explicit EventSource(const ILogger& logger, std::shared_ptr<SystemJournal> journal = {});
 	~EventSource();
 	EventSource(const EventSource&) = delete;
 	EventSource& operator=(const EventSource&) = delete;
@@ -105,6 +107,7 @@ public:
 private:
 	void Publish(NotificationMessage message);
 	const ILogger& logger_;
+	const std::shared_ptr<SystemJournal> journal_;
 	boost::asio::io_context io_context_;
 	boost::asio::executor_work_guard<boost::asio::io_context::executor_type> work_;
 	std::thread worker_;

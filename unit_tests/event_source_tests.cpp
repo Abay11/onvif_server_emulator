@@ -1,4 +1,5 @@
 #include "../onvif_services/EventSource.h"
+#include "../utility/SystemJournal.h"
 #include "../onvif_services/pullpoint/event_generators.h"
 #include "../onvif_services/pullpoint/pull_point.h"
 
@@ -79,7 +80,8 @@ private:
 struct Fixture
 {
 	QuietLogger logger;
-	std::shared_ptr<EventSource> source = std::make_shared<EventSource>(logger);
+	std::shared_ptr<osrv::SystemJournal> journal = std::make_shared<osrv::SystemJournal>();
+	std::shared_ptr<EventSource> source = std::make_shared<EventSource>(logger, journal);
 	std::shared_ptr<Generator> property = std::make_shared<Generator>(source->GetIoContext(), logger);
 	std::shared_ptr<Generator> transient = std::make_shared<Generator>(source->GetIoContext(), logger, false);
 	Fixture()
@@ -333,6 +335,21 @@ BOOST_AUTO_TEST_CASE(notification_serialization_is_shared_escaped_and_preserves_
 	// consumes this independently generated artifact in the integration check.
 	std::ofstream("stage2_metadata.xml") << xml;
 	std::ofstream("stage2_metadata_empty.xml") << serialize_metadata({});
+}
+
+BOOST_FIXTURE_TEST_CASE(journal_receives_events_without_clients_and_survives_slow_consumer_overflow, Fixture)
+{
+	Emit(Message("before any clients"));
+	auto slow = source->Subscribe({1, 4096}, false);
+	for (unsigned index = 0; index < 10; ++index) Emit(Message(std::to_string(index)));
+	auto batch = journal->Read(0, 100, {});
+	BOOST_REQUIRE_EQUAL(batch.entries.size(), 11u);
+	BOOST_TEST(batch.dropped == 0u);
+	BOOST_TEST(batch.entries.front().message.find("before any clients") != std::string::npos);
+	BOOST_TEST(slow->Take(100).dropped == 9u);
+	// Reading either transport queue or journal cannot consume another reader's data.
+	BOOST_TEST(journal->Read(0, 100, {}).entries.size() == 11u);
+	BOOST_TEST(journal->Read(batch.cursor, 100, {}).entries.empty());
 }
 
 BOOST_AUTO_TEST_SUITE_END()

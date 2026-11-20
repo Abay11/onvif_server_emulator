@@ -53,6 +53,7 @@ an official conformance claim; see the
 | `onvif_services/` | SOAP services, operation handlers, discovery, and events |
 | `onvif/` | Base ONVIF request handler, recording/search models, notification serialization and scene snapshots |
 | `web/` | Embedded administration page, read-only settings/status JSON and application restart |
+| `utility/SystemJournal.*` | Bounded internal operational history, cursors, filtering and detector summaries |
 | `utility/ApplicationReboot.*` | Shared response completion and pending restart guard for SOAP and WebUI |
 | `RtspServer.h`, `RtspServer.cpp` | GStreamer RTSP server, live streams, synthetic replay |
 | `rtsp/` | Metadata appsrc bridge, subscriptions, scene readers and media lifecycle |
@@ -78,6 +79,8 @@ flowchart TD
     Server --> EventSource[Shared event source]
     EventSource --> Events
     EventSource --> RTSP
+    EventSource --> Journal[Internal system journal]
+    Journal --> Admin[WebUI JSON journal]
     Events --> HTTP
     Server --> Discovery[IPv4 WS-Discovery / UDP]
     Server --> RTSP[GStreamer / RTSP / RTP]
@@ -114,7 +117,11 @@ profile associations from the manager's shared tree. It exposes reachability,
 uptime and a per-run instance ID. The restart API and ONVIF `SystemReboot` use the
 same response-completion helper and pending flag, replacing the process image
 only after sending the acknowledgement. WebUI routes are separate from SOAP and
-currently have no authorization, including in SOAP Digest mode. See
+currently have no authorization, including in SOAP Digest mode. A separate
+`SystemJournal` records structured lifecycle/client events and detector summaries
+directly from the publication path, ahead of external consumer queues. The WebUI
+reads this bounded history by cursor over its own JSON API, without an ONVIF
+subscription or metadata bridge. See
 [Administration WebUI](WEB_UI.md) for endpoints, access, assets and validation.
 
 ## SOAP Request Handling
