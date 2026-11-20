@@ -10,6 +10,7 @@ find_package(Boost REQUIRED
 )
 
 add_executable(test_executable
+	admin_ui_tests.cpp
 	analytics_configuration_reader_test.cpp
 	audio_source_tests.cpp
 	auth_tests.cpp	

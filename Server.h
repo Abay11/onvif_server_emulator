@@ -12,6 +12,7 @@
 
 #include <boost/asio/io_context.hpp>
 
+#include <atomic>
 #include <functional>
 #include <memory>
 
@@ -34,6 +35,7 @@ struct ServerConfigs
 {
 	// Installed by the executable; invoked only after the reboot response is sent.
 	std::function<void()> reboot;
+	std::shared_ptr<std::atomic_bool> reboot_pending = std::make_shared<std::atomic_bool>(false);
 
 	std::string ipv4_address_;
 	std::string http_port_;

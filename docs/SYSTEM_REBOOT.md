@@ -1,6 +1,8 @@
 # Application Reboot
 
 Device Management implements `SystemReboot` at `/onvif/device_service`.
+The [administration WebUI](WEB_UI.md) exposes the same application restart through
+a separate JSON endpoint and shares the pending restart guard with SOAP.
 After editing configuration files, invoke this operation from an ONVIF client to
 restart the emulator and reread the complete configuration directory, including
 logging, authentication, endpoints, discovery, events, media profiles and RTSP.

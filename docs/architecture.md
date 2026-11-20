@@ -52,6 +52,8 @@ an official conformance claim; see the
 | `include/IOnvifServer.h`, `src/IOnvifServer.cpp` | Shared context, factory and lazy SOAP service creation, media profile manager |
 | `onvif_services/` | SOAP services, operation handlers, discovery, and events |
 | `onvif/` | Base ONVIF request handler, recording/search models, notification serialization and scene snapshots |
+| `web/` | Embedded administration page, read-only settings/status JSON and application restart |
+| `utility/ApplicationReboot.*` | Shared response completion and pending restart guard for SOAP and WebUI |
 | `RtspServer.h`, `RtspServer.cpp` | GStreamer RTSP server, live streams, synthetic replay |
 | `rtsp/` | Metadata appsrc bridge, subscriptions, scene readers and media lifecycle |
 | `utility/` | XML/SOAP/HTTP, authorization, media profiles, audio/video/PTZ configuration readers, date and time |
@@ -103,6 +105,17 @@ Asio context and worker thread; `EventSource` owns the event context and worker,
 with PullPoint timers on that context. RTSP runs a GLib main loop in a separate
 thread. An additional Asio
 context in `Server` handles simulated network delays in the Event service.
+
+## Administration WebUI
+
+`Server::init()` registers the embedded WebUI at `/admin/` on the shared HTTP
+server. Its JSON API selects non-secret startup settings and reads current media
+profile associations from the manager's shared tree. It exposes reachability,
+uptime and a per-run instance ID. The restart API and ONVIF `SystemReboot` use the
+same response-completion helper and pending flag, replacing the process image
+only after sending the acknowledgement. WebUI routes are separate from SOAP and
+currently have no authorization, including in SOAP Digest mode. See
+[Administration WebUI](WEB_UI.md) for endpoints, access, assets and validation.
 
 ## SOAP Request Handling
 

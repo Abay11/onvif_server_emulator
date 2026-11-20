@@ -154,6 +154,10 @@ add_library(onvif_server STATIC
 	src/IOnvifServer.cpp
 	Server.cpp
 	Server.h
+	web/AdminUi.cpp
+	web/AdminUi.h
+	utility/ApplicationReboot.cpp
+	utility/ApplicationReboot.h
 	RtspServer.cpp
 	RtspServer.h
 	rtsp/MetadataStream.cpp
@@ -169,6 +173,17 @@ add_library(onvif_server STATIC
 	include/StreamLogger.h
 	include/MediaFormats.h
 )
+
+# Embed the UI so native and container builds need no extra runtime asset mount.
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+    "${CMAKE_CURRENT_SOURCE_DIR}/web/index.html"
+    "${CMAKE_CURRENT_SOURCE_DIR}/web/app.css"
+    "${CMAKE_CURRENT_SOURCE_DIR}/web/app.js")
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/web/index.html" ADMIN_HTML)
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/web/app.css" ADMIN_CSS)
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/web/app.js" ADMIN_JS)
+configure_file(web/Assets.h.in generated/AdminAssets.h @ONLY)
+target_include_directories(onvif_server PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/generated")
 
 include_directories(main
 	"${CMAKE_CURRENT_SOURCE_DIR}/include"

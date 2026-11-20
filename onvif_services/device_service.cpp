@@ -4,6 +4,7 @@
 
 #include "../Logger.h"
 #include "../Server.h"
+#include "../utility/ApplicationReboot.h"
 #include "../utility/HttpDigestHelper.h"
 #include "../utility/HttpHelper.h"
 #include "../utility/SoapHelper.h"
@@ -12,7 +13,6 @@
 #include "../Simple-Web-Server/server_http.hpp"
 
 #include <algorithm>
-#include <atomic>
 
 #include <boost/property_tree/json_parser.hpp>
 #include <boost/property_tree/ptree.hpp>
@@ -370,7 +370,7 @@ struct SystemRebootHandler : public OnvifRequestBase
 	SystemRebootHandler(const std::map<std::string, std::string>& ns, const std::shared_ptr<pt::ptree>& configs,
 											const std::shared_ptr<IOnvifServer>& server)
 			: OnvifRequestBase("SystemReboot", auth::SECURITY_LEVELS::UNRECOVERABLE, ns, configs),
-				reboot_(server->GetServerConfigs()->reboot), logger_(server->Logger())
+				server_configs_(server->GetServerConfigs()), logger_(server->Logger())
 	{
 	}
 
@@ -385,7 +385,7 @@ struct SystemRebootHandler : public OnvifRequestBase
 		catch (const pt::xml_parser_error&)
 		{
 		}
-		if (!valid || !reboot_)
+		if (!valid || !server_configs_->reboot)
 		{
 			envelope.put("s:Body.s:Fault.s:Code.s:Value", valid ? "s:Receiver" : "s:Sender");
 			envelope.put("s:Body.s:Fault.s:Code.s:Subcode.s:Value", valid ? "ter:ActionNotSupported" : "ter:InvalidArgVal");
@@ -408,29 +408,12 @@ struct SystemRebootHandler : public OnvifRequestBase
 		pt::write_xml(xml, root);
 		response->close_connection_after_response = true;
 		utility::http::fillResponseWithHeaders(*response, xml.str());
-		auto pending = pending_;
-		if (pending->exchange(true))
-			return;
-		response->send([reboot = reboot_, logger = logger_, pending](const SimpleWeb::error_code& ec) {
-			try
-			{
-				if (!ec)
-					reboot();
-				else
-					logger->Error("SystemReboot response failed: " + ec.message());
-			}
-			catch (const std::exception& e)
-			{
-				logger->Error(e.what());
-			}
-			pending->store(false);
-		});
+		RebootAfterResponse(response, server_configs_, logger_);
 	}
 
 private:
-	std::function<void()> reboot_;
+	std::shared_ptr<ServerConfigs> server_configs_;
 	std::shared_ptr<ILogger> logger_;
-	std::shared_ptr<std::atomic_bool> pending_ = std::make_shared<std::atomic_bool>(false);
 };
 
 DeviceService::DeviceService(const std::string& service_uri, const std::string& service_name,

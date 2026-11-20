@@ -1,4 +1,5 @@
 #include "Server.h"
+#include "web/AdminUi.h"
 #include "../onvif_services/device_service.h"
 #include "../onvif_services/discovery_service.h"
 #include "../onvif_services/event_service.h"
@@ -219,6 +220,7 @@ void Server::init(std::function<void()> reboot)
 	});
 
 	server_configs_->io_context_ = io_context_;
+	RegisterAdminUi(*this);
 }
 
 void Server::run()

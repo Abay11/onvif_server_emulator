@@ -288,6 +288,11 @@ then test UDP separately. In your ONVIF VMS, verify:
 4. UDP streaming including RTCP, multiple simultaneous clients and both streams.
 5. Repeat after WSL restart, with the actual VPN and Ethernet/Wi-Fi configuration.
 
+The [administration WebUI](WEB_UI.md) is available at
+`http://192.168.1.10:8080/admin/` on the same HTTP listener, with no extra port
+mapping or firewall rule. This initial version has no login, including when SOAP
+Digest is enabled.
+
 An HTTP GET on the device service may return 400: SOAP POST is expected. This
 alone is not a failed connectivity test. An open RTSP TCP port alone does not
 prove UDP media works. Replay here is the project's synthetic replay emulation,

@@ -97,6 +97,15 @@ This Compose file uses the published image and host networking with the ports
 listed above. It does not build source code. Run either the Compose deployment or
 the equivalent `docker run` deployment: both use the same host ports.
 
+### Administration WebUI
+
+Open `http://<emulator-host>:8080/admin/` (use the configured HTTP port if different)
+for application status, active settings, media profile associations and application
+restart. The page uses the same listener as ONVIF and is bundled into the executable.
+This initial version has no login; WebUI access, including restart, is available to
+clients that can reach that port even when SOAP Digest is enabled. Account passwords
+are excluded from the status API. See [WebUI documentation](docs/WEB_UI.md).
+
 ### Custom configuration and persistence
 
 Extract the complete bundled configuration into a new local directory:
