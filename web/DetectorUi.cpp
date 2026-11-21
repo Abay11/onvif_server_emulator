@@ -2,6 +2,7 @@
 #include "../Server.h"
 #include "../include/onvif_services/service_configs.h"
 #include "../utility/AnalyticsRules.h"
+#include "../utility/ConfigValidation.h"
 #include <algorithm>
 #include <boost/property_tree/json_parser.hpp>
 #include <boost/property_tree/xml_parser.hpp>
@@ -183,7 +184,27 @@ void DetectorUi::Change(const Tree& command)
 			document.put_child("s:Envelope", envelope);
 			std::ostringstream xml;
 			boost::property_tree::write_xml(xml, document);
-			rules_->Execute(operation, xml.str());
+			try
+			{
+				rules_->Execute(operation, xml.str());
+			}
+			catch (const utility::RuleFault& error)
+			{
+				// Preserve ONVIF's ConfigurationConflict fault, exposing validation
+				// details only at the administration JSON boundary.
+				try
+				{
+					std::rethrow_if_nested(error);
+				}
+				catch (const utility::ConfigValidationError&)
+				{
+					throw;
+				}
+				catch (...)
+				{
+				}
+				throw;
+			}
 		}
 	}
 	configs_->journal->Add("info", "system", "detectors", "Detector control or rule configuration updated: " + action);

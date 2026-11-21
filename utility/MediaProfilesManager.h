@@ -166,6 +166,7 @@ public:
 	void Read();
 	// save current configs into a file
 	void Save() const;
+	void BeforeSave(std::function<void(const std::string&)> validate) { before_save_ = std::move(validate); }
 	void OnSave(std::function<void()> callback) { on_save_ = std::move(callback); }
 	// reset all changes to the initial state how it was at the first Read() using backup instance.
 	// it also writes backup instance state into a file calling Save() automatically.
@@ -186,6 +187,7 @@ public:
 	}
 
 private:
+	std::function<void(const std::string&)> before_save_;
 	std::function<void()> on_save_;
 	const std::string filePath_;
 	std::shared_ptr<boost::property_tree::ptree> configsTree_;

@@ -2,6 +2,8 @@
 #include "../Simple-Web-Server/client_http.hpp"
 #include "../Simple-Web-Server/server_http.hpp"
 #include "../include/LoggerFactories.h"
+#include "../utility/AnalyticsRules.h"
+#include "../utility/ConfigValidation.h"
 #include "../utility/MediaProfilesManager.h"
 #include "../web/AdminUi.h"
 #include <atomic>
@@ -255,6 +257,45 @@ BOOST_AUTO_TEST_CASE(detector_catalog_and_rule_crud_use_the_shared_model)
 	post(command);
 	BOOST_TEST(endpoint.server->GetServerConfigs()->detectors->Enabled("MotionAlarm"));
 	BOOST_TEST(endpoint.Request("POST", "/admin/api/detectors", "{}")->status_code == "403 Forbidden");
+}
+
+BOOST_AUTO_TEST_CASE(schema_failure_reports_field_and_keeps_file_and_rule_model_unchanged)
+{
+	Endpoint endpoint;
+	auto reader = endpoint.server->MediaProfilesManager()->ReaderWriter();
+	std::ifstream original(endpoint.path + "/media_profiles.config");
+	const std::string bytes((std::istreambuf_iterator<char>(original)), {});
+	auto response = endpoint.Request("GET", "/admin/api/detectors");
+	Tree catalog;
+	boost::property_tree::read_json(response->content, catalog);
+	const auto config = catalog.get_child("configurations").front().second;
+	const auto rule = config.get_child("templates").front().second;
+	// Simulate a previously loaded invalid setting outside the edited rule.
+	// Validating just the request/rule would miss this configuration error.
+	reader->ConfigsTree().get_child("VideoEncoder").front().second.put("RateControl.BitrateLimit", "bad-number");
+	Tree command;
+	command.put("action", "create");
+	command.put("configuration", config.get<std::string>("token"));
+	command.put("name", rule.get<std::string>("Name"));
+	command.put_child("rule", rule);
+	std::ostringstream body;
+	boost::property_tree::write_json(body, command);
+	auto rejected = endpoint.Request("POST", "/admin/api/detectors", body.str(),
+																	 {{"Content-Type", "application/json"}, {"X-ONVIF-Admin", "detectors"}});
+	BOOST_REQUIRE_EQUAL(rejected->status_code, "422 Unprocessable Entity");
+	Tree error;
+	boost::property_tree::read_json(rejected->content, error);
+	BOOST_TEST(error.get<std::string>("error") == "ConfigValidationFailed");
+	BOOST_REQUIRE(!error.get_child("validation_errors").empty());
+	BOOST_TEST(error.get_child("validation_errors").front().second.get<std::string>("file") == "media_profiles.config");
+	BOOST_TEST(error.get_child("validation_errors").front().second.get<std::string>("path").find("BitrateLimit") !=
+						 std::string::npos);
+	std::ifstream unchanged(endpoint.path + "/media_profiles.config");
+	BOOST_TEST(std::string((std::istreambuf_iterator<char>(unchanged)), {}) == bytes);
+	BOOST_TEST(reader->ConfigsTree().get_child("Analytics").front().second.get_child("rules").empty());
+	BOOST_TEST(endpoint.server->Rules()->Snapshot().get_child("Analytics").front().second.get_child("rules").empty());
+	for (const auto& entry : fs::directory_iterator(endpoint.path))
+		BOOST_TEST(!entry.path().filename().string().starts_with("media_profiles.config."));
 }
 
 BOOST_AUTO_TEST_SUITE_END()

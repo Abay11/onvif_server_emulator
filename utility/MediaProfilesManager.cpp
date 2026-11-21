@@ -42,6 +42,11 @@ void ConfigsReaderWriter::Save() const
 		return;
 	}
 
+	std::ostringstream candidate;
+	pt::write_json(candidate, *configsTree_);
+	const auto json = candidate.str();
+	if (before_save_) before_save_(json);
+
 	auto temporary = filePath_ + ".XXXXXX";
 	auto descriptor = mkstemp(temporary.data());
 	if (descriptor < 0)
@@ -51,7 +56,7 @@ void ConfigsReaderWriter::Save() const
 	{
 		std::ofstream os(temporary);
 		os.exceptions(std::ios::failbit | std::ios::badbit);
-		pt::write_json(os, *configsTree_);
+		os << json;
 		os.close();
 		std::filesystem::permissions(temporary, std::filesystem::status(filePath_).permissions());
 		std::filesystem::rename(temporary, filePath_);

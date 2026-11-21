@@ -1,6 +1,7 @@
 #include "../include/IOnvifServer.h"
 
 #include "../utility/AuthHelper.h"
+#include "../utility/ConfigValidation.h"
 #include "../utility/AnalyticsRules.h"
 #include "../utility/AnalyticsReader.h"
 #include "../utility/MediaProfilesManager.h"
@@ -86,6 +87,9 @@ IOnvifServer::IOnvifServer(const std::string& configs_path, std::shared_ptr<ILog
 			media_profiles_manager_(std::make_shared<utility::media::MediaProfilesManager>(
 					ConfigPath(configs_path_, ConfigName(PROFILES_CONFIG_FILE))))
 {
+	media_profiles_manager_->ReaderWriter()->BeforeSave([](const std::string& candidate) {
+		utility::ValidateConfig("media_profiles.config", candidate);
+	});
 }
 
 std::shared_ptr<metadata::Control> IOnvifServer::Metadata()

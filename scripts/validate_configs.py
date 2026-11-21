@@ -3,6 +3,7 @@
 
 import argparse
 import json
+import re
 from pathlib import Path
 import sys
 
@@ -15,7 +16,7 @@ except ImportError:
 SCHEMAS_DIR = Path(__file__).resolve().parents[1] / "schemas"
 
 
-def load_json(path):
+def parse_json(text):
     def unique_keys(pairs):
         result = {}
         for key, value in pairs:
@@ -27,8 +28,49 @@ def load_json(path):
     def reject_constant(value):
         raise ValueError(f"Invalid JSON constant: {value}")
 
-    with path.open(encoding="utf-8") as source:
-        return json.load(source, object_pairs_hook=unique_keys, parse_constant=reject_constant)
+    return json.loads(text, object_pairs_hook=unique_keys, parse_constant=reject_constant)
+
+
+def load_json(path):
+    return parse_json(path.read_text(encoding="utf-8"))
+
+
+def validate_candidate(filename, text, validators=None):
+    """Validate in-memory data without writing a candidate or revealing values."""
+    try:
+        config = parse_json(text)
+    except ValueError as error:
+        return {"valid": False, "errors": [{"file": filename, "path": "/", "message": str(error)[:512]}]}
+    validators = validators if validators is not None else load_validators()
+    validator = validators.get(filename)
+    if validator is None:
+        return {"valid": False, "errors": [{"file": filename, "path": "/", "message": "No schema registered for this filename"}]}
+    issues = []
+    truncated = False
+    for error in validator.iter_errors(config):
+        if len(issues) == 20:
+            truncated = True
+            break
+        pointer = "/" + "/".join(str(p).replace("~", "~0").replace("/", "~1") for p in error.absolute_path)
+        # jsonschema messages can embed whole values, including account secrets.
+        # Return schema constraints and field paths instead of configuration data.
+        kind = error.validator
+        if kind == "required":
+            missing = [name for name in error.validator_value if name not in error.instance]
+            message = "Missing required field(s): " + ", ".join(missing)
+        elif kind == "additionalProperties":
+            unknown = [str(key) for key in error.instance
+                       if key not in error.schema.get("properties", {})
+                       and not any(re.search(pattern, key) for pattern in error.schema.get("patternProperties", {}))]
+            message = "Unknown field(s): " + ", ".join(unknown)
+        elif kind == "type":
+            message = "Expected JSON type: " + str(error.validator_value)
+        elif kind in ("oneOf", "anyOf"):
+            message = "Value does not match an allowed schema variant"
+        else:
+            message = "Value violates schema constraint: " + str(kind)
+        issues.append({"file": filename, "path": pointer, "message": message[:512]})
+    return {"valid": not issues, "errors": issues, "truncated": truncated}
 
 
 def load_validators():
@@ -69,7 +111,11 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("paths", nargs="*", type=Path, default=[Path("server_configs")],
                         help="Complete configuration directories or individual .config files (default: server_configs)")
+    parser.add_argument("--stdin", metavar="FILENAME", help="Validate a candidate from stdin; return a structured JSON report")
     args = parser.parse_args(argv)
+    if args.stdin:
+        print(json.dumps(validate_candidate(args.stdin, sys.stdin.read()), ensure_ascii=True))
+        return 0
     validators = load_validators()
     success = True
     files = []

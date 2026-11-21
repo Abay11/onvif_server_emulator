@@ -77,6 +77,12 @@
       <footer class="page-footer"><span>ONVIF Server Emulator<span class="footer-separator">·</span>Administration</span><span id="last-update">Not connected yet</span></footer>
     </main>
   </div>
+  <dialog id="config-error-dialog" aria-labelledby="config-error-title" aria-describedby="config-error-summary">
+    <h2 id="config-error-title">Settings could not be applied</h2>
+    <p id="config-error-summary"></p>
+    <ul id="config-error-details" class="validation-issues"></ul>
+    <form method="dialog" class="dialog-actions"><button class="button secondary" autofocus>Close</button></form>
+  </dialog>
   <dialog id="restart-dialog" aria-labelledby="dialog-title" aria-describedby="dialog-description"><form method="dialog"><div class="dialog-icon" aria-hidden="true">⏻</div><h2 id="dialog-title">Restart application?</h2><p id="dialog-description">The application will reload its configuration files. Active streams and event subscriptions will disconnect and must be reconnected.</p><p class="dialog-detail">If you changed the HTTP address or port, reopen administration at the new address. Invalid configuration can prevent startup.</p><div class="dialog-actions"><button class="button secondary" value="cancel" autofocus>Cancel</button><button id="confirm-restart" class="button danger" value="restart">Restart application</button></div></form></dialog>
   <noscript><p class="noscript">Enable JavaScript to view current settings and restart the application.</p></noscript>
 </body>

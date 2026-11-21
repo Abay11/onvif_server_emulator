@@ -39,6 +39,7 @@ To build OnvifServerEmulator:
 
 * cmake 3.16 or later to generate build files
 * C++ compiler with decent C++20 support
+* Python 3 with jsonschema 4.18+ and referencing for pre-write configuration validation
 * Boost libraries 1.72 or later:
 	- system
 	- date_time
@@ -76,7 +77,7 @@ sudo apt update
 **Step 1.** Install toolchain and build tools:
 
 ```bash
-sudo apt install -y build-essential cmake pkg-config git
+sudo apt install -y build-essential cmake pkg-config git python3 python3-jsonschema
 ```
 
 **Step 2.** Install GStreamer libraries:
@@ -129,6 +130,14 @@ ctest --test-dir build --output-on-failure
 ```
 
 **Optional:** If your distro has different package names, substitute accordingly (e.g., Fedora/RHEL use `dnf`/`yum`).
+
+The application validates configuration writes with the bundled JSON Schema
+checker. CMake checks Python imports and stages `build/config_validation/`.
+Keep that directory alongside a distributed executable; Docker packages it
+automatically. For a Python virtual environment, install `schemas/requirements.txt`
+and pass `-DPython3_EXECUTABLE=/absolute/path/to/venv/bin/python` when configuring.
+The selected interpreter must also exist in the runtime environment. See
+[configuration validation](schemas/README.md#server-save-gate-and-webui-errors).
 
 ### Building Docker
 

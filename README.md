@@ -208,9 +208,11 @@ Existing configuration directories must use the same names: `device.config`,
 `recording_search.config`, and `replay_control.config`. Rename older capitalized
 filenames and replace spaces with underscores before running this version.
 
-Optional [JSON Schema validation](schemas/README.md) checks edited files before
-startup. Schemas cover every bundled `.config` file and can also be used by
-editors or a future GUI configurator. The checker reports structural errors;
+The server runs [JSON Schema validation](schemas/README.md) before persisting
+configuration changes. WebUI save errors open a modal with the file, field path
+and reason, keeping the draft for correction. The same checker can optionally
+check manually edited files before startup. Schemas cover every bundled `.config`
+file and can also be used by editors. The checker reports structural errors;
 cross-file token references and topology consistency need separate validation.
 
 Configuration support varies by operation. Some settings are hardcoded or only

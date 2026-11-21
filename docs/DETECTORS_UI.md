@@ -95,7 +95,10 @@ parser validates the complete candidate and its source bindings and limits, then
 the existing manager callback saves `media_profiles.config` before committing
 state. Media, Media2, Analytics and the WebUI share these changes. A writable
 configuration mount is required for rule editing. Failed validation or persistence
-leaves the existing rule intact. Rule changes survive SystemReboot; runtime
+leaves the existing rule intact. Before any file is written, the full candidate
+JSON is checked against the bundled configuration schema. A rejected save opens
+a modal with file, field path and reason and keeps the draft for correction; see
+[save validation](../schemas/README.md#server-save-gate-and-webui-errors). Rule changes survive SystemReboot; runtime
 switches do not. Creating/deleting a rule through either interface removes any
 stale runtime switch for that name. Deleting a paused rule may therefore publish
 a final Deleted lifecycle notification if its type and parent remain enabled.
@@ -135,7 +138,9 @@ to 32 KiB. Supported commands:
 For `previous`, omit the WebUI-only `enabled` field. Successful changes return
 `200 {"status":"updated"}`. Invalid data/rules receive 400; missing same-origin
 request headers receive 403; wrong content type receives 415; stale rules, resource
-limits and persistence/configuration conflicts receive 409. Responses use the
+limits and persistence/configuration conflicts receive 409. Full-document JSON
+schema errors receive 422 with `validation_errors`; an unavailable checker
+receives 503. Both prevent the file write. Responses use the
 same no-cache, framing and content policies as other administration endpoints.
 
 ## Validation

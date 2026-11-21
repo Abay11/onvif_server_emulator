@@ -39,8 +39,10 @@ the file and a JSON Pointer to the failing field. Exit status is `0` on success,
 `1` on validation/file errors, and `2` on invalid command-line arguments.
 Duplicate JSON properties and non-JSON constants such as `NaN` are rejected.
 The checker never rewrites configuration and is not run automatically at server
-startup. Python dependencies are optional development tools; the C++ server does
-not use them. The main validator dependency and its `referencing` dependency
+startup. The server now invokes the same checker before persisting its managed
+configuration; Python 3, jsonschema and referencing are runtime dependencies for
+that save gate. CMake checks the imports and Docker dev/build/runtime stages
+include the required Debian packages. The main validator dependency and its `referencing` dependency
 are MIT licensed; neither is vendored in this repository.
 
 Run schema regression checks separately from the C++ tests:
@@ -74,7 +76,8 @@ Repeat the mapping for other filenames as needed. Do not add `$schema` to the
 configuration files themselves: some service handlers iterate over configuration
 properties, and the schemas reject unknown fields.
 
-A future GUI can reuse the filename mapping, field types, required fields,
+The WebUI save gate reuses these schemas and their filename mapping. Other
+configurators can reuse the field types, required fields,
 descriptions, and enumerations. Profile tokens and collection sizes are not fixed
 to the shipped examples. Newly created, unattached profiles are accepted.
 Most objects reject unknown properties to catch typos; namespace and scope maps
@@ -116,3 +119,78 @@ Profile changes share an authoritative `ProfilesConfig()` /
 When changing configuration, update the corresponding schema, consumers,
 examples, and regression checks together. Do not infer protocol correctness from
 these local storage schemas.
+
+## Server save gate and WebUI errors
+
+The server installs a `ConfigsReaderWriter::BeforeSave` hook for its shared media
+profile manager. The writer serializes the complete future document once and
+validates those exact bytes before creating a temporary configuration file. On
+success the existing atomic rename writes the validated document; on rejection
+existing mutation transactions restore their prior model. Standalone uses of
+`ConfigsReaderWriter` can install the same hook explicitly with `ValidateConfig`;
+the raw reader/writer does not guess a schema for arbitrary fixture filenames.
+Currently the WebUI persists rules through this manager; overview settings and
+runtime enable switches do not write config files.
+
+The C++ adapter runs the bundled checker through `posix_spawn`, without a shell.
+Candidate input, validator output and diagnostics use anonymous memory file
+descriptors. Other server descriptors are closed in the child. The checker uses
+only bundled schemas and never retrieves remote references. A five-second timeout,
+a failed process/import, or missing resources blocks the write rather than
+bypassing validation. Geometric and ONVIF semantic validation remains separate.
+
+CMake stages `config_validation/scripts/validate_configs.py` and the complete
+schema set alongside the build. When distributing the executable, copy its
+`config_validation/` directory alongside it. Docker copies both executable and
+resources out of the build cache into `/app`. Native builds record the selected
+Python interpreter; the runtime environment must supply that interpreter and
+its dependencies. A source-build fallback locates staged resources for CTest's
+nested executable directory. Validation does not depend on the process cwd.
+
+The internal machine interface is:
+
+```bash
+python3 scripts/validate_configs.py --stdin media_profiles.config < candidate.json
+```
+
+It returns JSON with `valid`, `errors` and an optional `truncated` flag. Each issue
+contains `file`, a JSON Pointer `path`, and a short `message`. At most 20 issues
+are returned. Messages describe constraints without printing configuration
+values, which could contain credentials. Duplicate keys, NaN and invalid syntax
+are also rejected. The existing human-readable CLI and exit codes are unchanged;
+the stdin mode returns a report for a completed validation, including rejection.
+A broken validator exits unsuccessfully and the C++ caller reports unavailability.
+
+The WebUI returns HTTP 422 / `ConfigValidationFailed` with `validation_errors` for
+schema rejection and HTTP 503 / `ValidationUnavailable` if the checker cannot
+run. Both leave the target file unchanged. The save/apply action shows a modal
+with file, field path and reason, retaining input for correction. Parameter,
+geometry, stale-edit, malformed-request and transport errors also open the modal;
+transport errors do not claim that a save definitively failed. Ordinary ONVIF
+rule operations preserve their ConfigurationConflict SOAP fault behavior instead
+of exposing administration JSON error details.
+
+Validation tests include:
+
+```bash
+ctest --test-dir build --output-on-failure
+python3 unit_tests/config_schema_tests.py
+python3 unit_tests/config_validation_smoke.py
+```
+
+The smoke test copies installed runtime artifacts into a temporary layout, checks
+a full-document rejection outside the edited rule, unchanged file/model and no
+temporary config file on rejection, missing-resource failure, and successful save
+after correction. It does not replace browser acceptance of modal focus, close,
+Escape, field diagnostics and retained draft values.
+
+Optional browser regression (a test-only image/environment with Chromium,
+chromium-driver and python3-selenium installed):
+
+```bash
+python3 unit_tests/config_validation_browser.py
+```
+
+This checks that Save opens the schema-error modal, details exclude values,
+closing it preserves the draft, local required-field failures use the modal,
+Escape dismisses it, and saving succeeds after correction and reload.

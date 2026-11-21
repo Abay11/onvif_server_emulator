@@ -1,4 +1,5 @@
 #include "AnalyticsRules.h"
+#include "ConfigValidation.h"
 #include "DetectorControls.h"
 #include "DateTime.hpp"
 #include "FieldDetector.h"
@@ -11,6 +12,7 @@
 #include <boost/geometry/geometries/polygon.hpp>
 #include <boost/property_tree/xml_parser.hpp>
 #include <cmath>
+#include <exception>
 #include <set>
 
 namespace utility
@@ -474,6 +476,10 @@ AnalyticsRules::Tree AnalyticsRules::Execute(const std::string& operation, const
 		try
 		{
 			save_(token, candidate);
+		}
+		catch (const ConfigValidationError&)
+		{
+			std::throw_with_nested(RuleFault("ConfigurationConflict", true));
 		}
 		catch (const std::exception&)
 		{

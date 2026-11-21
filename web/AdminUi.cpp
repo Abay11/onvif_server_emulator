@@ -8,6 +8,7 @@
 #include "../utility/MediaProfilesManager.h"
 #include "AdminAssets.h"
 #include "DetectorUi.h"
+#include "../utility/ConfigValidation.h"
 
 #include <boost/property_tree/json_parser.hpp>
 #include <boost/uuid/random_generator.hpp>
@@ -296,6 +297,14 @@ void RegisterAdminUi(IOnvifServer& server)
 			boost::property_tree::read_json(input, command);
 			detector_ui->Change(command);
 			Json(response, Status::success_ok, "{\"status\":\"updated\"}");
+		}
+		catch (const utility::ConfigValidationError& e)
+		{
+			Tree error;
+			error.put("error", e.unavailable ? "ValidationUnavailable" : "ConfigValidationFailed");
+			error.put("message", "Configuration was not saved");
+			error.put_child("validation_errors", e.issues);
+			Json(response, e.unavailable ? Status::server_error_service_unavailable : Status::client_error_unprocessable_entity, Encode(error));
 		}
 		catch (const utility::RuleFault& e)
 		{

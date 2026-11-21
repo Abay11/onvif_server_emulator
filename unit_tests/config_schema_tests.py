@@ -154,6 +154,17 @@ class ConfigSchemaTests(unittest.TestCase):
         config["Namespaces"]["tt"] = "not a URI"
         self.check("media.config", config, False)
 
+    def test_candidate_validation_reports_paths_without_exposing_values(self):
+        candidate = deepcopy(self.configs["common.config"])
+        candidate["users"][0]["password"] = {"sensitive": "never-echo-this-secret"}
+        report = validation.validate_candidate("common.config", json.dumps(candidate), self.validators)
+        self.assertFalse(report["valid"])
+        self.assertTrue(any(e["path"] == "/users/0/password" for e in report["errors"]))
+        self.assertNotIn("never-echo-this-secret", json.dumps(report))
+        self.assertFalse(validation.validate_candidate("common.config", '{"x":1,"x":2}', self.validators)["valid"])
+        self.assertFalse(validation.validate_candidate("common.config", '{"x":NaN}', self.validators)["valid"])
+        self.assertTrue(validation.validate_candidate("common.config", json.dumps(self.configs["common.config"]), self.validators)["valid"])
+
     def test_cli_directory_file_missing_and_unknown(self):
         with tempfile.TemporaryDirectory() as temp, contextlib.redirect_stdout(io.StringIO()), \
                 contextlib.redirect_stderr(io.StringIO()):

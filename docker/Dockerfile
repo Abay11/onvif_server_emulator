@@ -85,12 +85,16 @@ FROM toolchain AS dev
 COPY --from=metadata-runtime /usr/local/ /usr/local/
 ENV GST_PLUGIN_PATH=/usr/local/lib/gstreamer-1.0
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends python3-lxml python3-xmlschema python3-gi gir1.2-gst-rtsp-server-1.0 \
+    && apt-get install -y --no-install-recommends python3-jsonschema python3-lxml python3-xmlschema python3-gi gir1.2-gst-rtsp-server-1.0 \
     && rm -rf /var/lib/apt/lists/* \
     && gst-inspect-1.0 appsrc \
     && gst-inspect-1.0 rtponvifmetadatapay
 
 FROM toolchain AS build
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends python3-jsonschema \
+    && rm -rf /var/lib/apt/lists/*
 
 ARG CMAKE_BUILD_TYPE=Debug
 ARG BUILD_JOBS
@@ -106,12 +110,18 @@ RUN --mount=type=cache,id=onvif-build,target=/workspace/build,sharing=locked \
         -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
         -DENABLE_UNIT_TESTS=OFF \
     && cmake --build build --parallel "${BUILD_JOBS:-$(nproc)}" \
-    && install -D build/main /app/main
+    && install -D build/main /app/main \
+    && cp -a build/config_validation /app/config_validation
 
 FROM metadata-runtime AS runtime
 
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends python3-jsonschema \
+    && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 COPY --from=build /app/main ./main
+COPY --from=build /app/config_validation ./config_validation
 COPY server_configs ./server_configs
 
 EXPOSE 8080 8554

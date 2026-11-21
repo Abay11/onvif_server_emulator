@@ -180,7 +180,11 @@ see [Application Reboot](SYSTEM_REBOOT.md).
 - Other service `.config` files: data for the corresponding SOAP operations.
 
 `MediaProfilesManager` uses `ConfigsReaderWriter` and persists profile changes to
-the JSON file. Profile mutation requires write access to the configuration
+the JSON file. The server installs a pre-save hook that validates the serialized
+full candidate with the bundled JSON Schema checker before creating a temporary
+configuration file. The validated bytes are then atomically renamed into place.
+WebUI schema errors carry field paths into a modal while retaining the draft;
+see [configuration validation](../schemas/README.md#server-save-gate-and-webui-errors). Profile mutation requires write access to the configuration
 location; a read-only mount is suitable for scenarios without those operations.
 Snapshots are served from `rs/snapshot.jpeg`, rather than extracted from the
 current RTSP stream.

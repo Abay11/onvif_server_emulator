@@ -225,3 +225,13 @@ uniform-frame geometry previews, vertex editing, enable switches and rule CRUD.
 See [Detector administration](DETECTORS_UI.md) for API, coordinates, persistence
 and runtime pause semantics. Rule changes persist; enable switches reset after
 restart. WebUI authorization remains unchanged, including for these mutations.
+
+## Save validation feedback
+
+Saving or applying detector changes reports validation failures in a modal,
+with the configuration filename, JSON Pointer to the field and a short reason.
+The server checks the complete future configuration with the existing offline
+JSON Schema validator before creating any temporary config file. Draft values
+remain available for correction. Missing validation dependencies/resources block
+the save as well. See [save validation](../schemas/README.md#server-save-gate-and-webui-errors)
+for runtime packaging, HTTP 422/503 details and tests.

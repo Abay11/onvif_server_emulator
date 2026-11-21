@@ -22,6 +22,26 @@
     el("detector-message").className = `notice ${error ? "error" : ""}`;
     el("detector-message").hidden = !text;
   }
+  const errorDialog = el("config-error-dialog");
+  let errorReturnFocus = null;
+  function validationPopup(summary, issues = []) {
+    if (!errorDialog.open) errorReturnFocus = document.activeElement;
+    el("config-error-summary").textContent = summary;
+    const details = el("config-error-details");
+    details.replaceChildren();
+    for (const issue of issues) {
+      const row = node("li");
+      row.append(node("strong", `${issue.file || "Settings"} · ${issue.path || "/"}`, "mono"),
+        node("p", issue.message || "Invalid value"));
+      details.append(row);
+    }
+    details.hidden = !issues.length;
+    if (!errorDialog.open) errorDialog.showModal();
+  }
+  errorDialog.addEventListener("close", () => {
+    if (errorReturnFocus?.isConnected) errorReturnFocus.focus();
+  });
+
   function button(text, callback, kind = "secondary") {
     const item = node("button", text, `button ${kind}`);
     item.type = "button";
@@ -31,6 +51,7 @@
   async function change(command) {
     if (saving) return;
     saving = true;
+    const sourceFocus = document.activeElement;
     el("detector-settings").inert = true;
     el("detector-catalog").inert = true;
     try {
@@ -41,7 +62,9 @@
       const result = await response.json();
       if (!response.ok) {
         const errors = {InvalidRule: "Invalid rule settings: check geometry, coordinate ranges and parameter values", SettingsChanged: "The rule changed in another client. Refresh before editing", TooManyRules: "The limit of four rules has been reached", RuleAlreadyExistent: "A rule with this name already exists", RuleNotExistent: "The rule no longer exists", ConfigurationConflict: "The rule could not be saved; check configuration access and application logs"};
-        throw new Error(errors[result.error] || result.error || `HTTP ${response.status}`);
+        const failure = new Error(result.message || errors[result.error] || result.error || `HTTP ${response.status}`);
+        failure.issues = Array.isArray(result.validation_errors) ? result.validation_errors : [];
+        throw failure;
       }
       editing = false;
       if (command.action === "delete") selected = null;
@@ -52,6 +75,8 @@
       if (await load(true)) message("Detector settings updated.");
     } catch (error) {
       message(`${error.message}. Changes were not confirmed. Refresh and inspect current settings before retrying.`, true);
+      validationPopup(error.message, error.issues);
+      errorReturnFocus = sourceFocus;
     } finally {
       saving = false;
       el("detector-settings").inert = false;
@@ -202,6 +227,7 @@
           for (const axis of ["x", "y"]) {
             const wrapper = node("label", axis);
             const input = node("input"); input.type = "number"; input.step = "any"; input.value = point[axis];
+            input.dataset.validationPath = [...path, String(i), axis].join("/");
             input.addEventListener("input", () => { point[axis] = input.value; dirty(); });
             wrapper.append(input); row.append(wrapper);
           }
@@ -233,9 +259,11 @@
       }
       const wrapper = node("label", `${label(key)} (JSON array)`);
       const input = node("textarea"); input.value = JSON.stringify(value); input.rows = 2;
+      input.dataset.validationPath = path.join("/");
+      input.addEventListener("input", dirty);
       input.addEventListener("change", () => {
         try { const parsed = JSON.parse(input.value); if (!Array.isArray(parsed)) throw new Error(); parent[key] = parsed; input.setCustomValidity(""); dirty(); }
-        catch { input.setCustomValidity("Enter a valid JSON array."); input.reportValidity(); }
+        catch { input.setCustomValidity("Enter a valid JSON array."); }
       });
       wrapper.append(input); return wrapper;
     }
@@ -254,6 +282,7 @@
       input.type = ["Armed", "PassAllPolylines"].includes(key) ? "checkbox" : "text";
       if (input.type === "checkbox") input.checked = truth(value); else input.value = value;
     }
+    input.dataset.validationPath = path.join("/");
     if (key === "Name") { input.required = true; input.maxLength = 256; input.readOnly = !selected.creating; }
     input.addEventListener("input", () => { parent[key] = input.type === "checkbox" ? String(input.checked) : input.value; dirty(); });
     wrapper.append(input); return wrapper;
@@ -261,6 +290,13 @@
   function renderEditor() {
     el("detector-selected-title").textContent = selected.creating ? "Create analytics rule" : draft.Name;
     const form = node("form", undefined, "detector-form");
+    form.addEventListener("invalid", (event) => {
+      event.preventDefault();
+      if (!errorDialog.open) {
+        validationPopup("Check the setting before saving.", [{file: "Settings", path: "/rule/" + (event.target.dataset.validationPath || ""), message: event.target.validationMessage || "Invalid value"}]);
+        errorReturnFocus = event.target;
+      }
+    }, true);
     const typeLabel = node("label", "Rule type"); const select = node("select");
     for (const item of configuration.templates) { const option = node("option", label(item.Type)); option.value = item.Type; select.append(option); }
     select.value = draft.Type;

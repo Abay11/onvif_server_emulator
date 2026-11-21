@@ -903,3 +903,9 @@ dialog p {
 .detector-form .dialog-actions { flex-wrap: wrap; }
 .detector-form input:focus-visible, .detector-form select:focus-visible, .detector-form textarea:focus-visible { outline: 3px solid #32c2c2; outline-offset: 2px; }
 @media (max-width: 1100px) { .detector-layout { grid-template-columns: 1fr; } .detector-point { grid-template-columns: 1fr 1fr; } }
+
+#config-error-dialog { max-width: 640px; max-height: 85vh; overflow-y: auto; }
+.validation-issues { padding-left: 20px; margin-top: 18px; }
+.validation-issues li { margin-bottom: 16px; font-size: .875rem; overflow-wrap: anywhere; }
+.validation-issues strong { display: block; color: #9b3931; font-size: .875rem; }
+.validation-issues p { margin-top: 5px; }

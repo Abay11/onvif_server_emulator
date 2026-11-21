@@ -156,6 +156,8 @@ add_library(onvif_server STATIC
 	Server.h
 	web/AdminUi.cpp
 	web/AdminUi.h
+	utility/ConfigValidation.cpp
+	utility/ConfigValidation.h
 	utility/DetectorControls.cpp
 	utility/DetectorControls.h
 	web/DetectorUi.cpp
@@ -179,6 +181,25 @@ add_library(onvif_server STATIC
 	include/StreamLogger.h
 	include/MediaFormats.h
 )
+
+# The application reuses the bundled offline JSON Schema checker before writes.
+find_package(Python3 REQUIRED COMPONENTS Interpreter)
+execute_process(COMMAND "${Python3_EXECUTABLE}" -c "from jsonschema import Draft202012Validator; from referencing import Registry"
+    RESULT_VARIABLE CONFIG_VALIDATION_IMPORT_RESULT ERROR_QUIET)
+if(NOT CONFIG_VALIDATION_IMPORT_RESULT EQUAL 0)
+    message(FATAL_ERROR "Configuration validation requires Python jsonschema and referencing; install python3-jsonschema or schemas/requirements.txt for ${Python3_EXECUTABLE}")
+endif()
+set(CONFIG_VALIDATION_DIR "${CMAKE_CURRENT_BINARY_DIR}/config_validation")
+file(MAKE_DIRECTORY "${CONFIG_VALIDATION_DIR}/scripts" "${CONFIG_VALIDATION_DIR}/schemas")
+configure_file(scripts/validate_configs.py "${CONFIG_VALIDATION_DIR}/scripts/validate_configs.py" COPYONLY)
+file(GLOB VALIDATION_SCHEMAS CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/schemas/*.json")
+foreach(SCHEMA_FILE IN LISTS VALIDATION_SCHEMAS)
+    get_filename_component(SCHEMA_NAME "${SCHEMA_FILE}" NAME)
+    configure_file("${SCHEMA_FILE}" "${CONFIG_VALIDATION_DIR}/schemas/${SCHEMA_NAME}" COPYONLY)
+endforeach()
+target_compile_definitions(onvif_server PRIVATE
+    OSRV_CONFIG_VALIDATION_DIR="${CONFIG_VALIDATION_DIR}"
+    OSRV_VALIDATION_PYTHON="${Python3_EXECUTABLE}")
 
 # Embed the UI so native and container builds need no extra runtime asset mount.
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
