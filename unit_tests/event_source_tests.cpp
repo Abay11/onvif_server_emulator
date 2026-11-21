@@ -385,4 +385,97 @@ BOOST_FIXTURE_TEST_CASE(disabled_detectors_and_rules_do_not_publish_or_synchroni
 	BOOST_TEST(subscriber->Take(100).messages.size() == 1u);
 }
 
+
+BOOST_AUTO_TEST_CASE(manual_step_uses_generator_with_auto_off_and_cancels_old_timer)
+{
+	QuietLogger logger;
+	auto controls = std::make_shared<osrv::DetectorControls>();
+	controls->Register("MotionAlarm", "motion", true);
+	auto journal = std::make_shared<osrv::SystemJournal>();
+	auto source = std::make_shared<EventSource>(logger, journal, controls);
+	class InspectableMotion : public MotionAlarmEventGenerator
+	{
+	public:
+		using MotionAlarmEventGenerator::MotionAlarmEventGenerator;
+		auto Deadline() const { return alarm_timer_.expiry(); }
+	};
+	auto generator = std::make_shared<InspectableMotion>("source", 3600, "motion", source->GetIoContext(), logger);
+	source->AddGenerator(generator);
+	source->ConfigureDetector("MotionAlarm", 3600, false, true);
+	source->Run();
+	auto client = source->Subscribe({}, false);
+	source->GenerateOnce("MotionAlarm");
+	auto first = client->Take(100);
+	BOOST_REQUIRE_EQUAL(first.messages.size(), 1u);
+	BOOST_TEST(first.messages.front()->data_value == "true");
+	source->GenerateOnce("MotionAlarm");
+	auto second = client->Take(100);
+	BOOST_REQUIRE_EQUAL(second.messages.size(), 1u);
+	BOOST_TEST(second.messages.front()->data_value == "false");
+	BOOST_TEST(journal->Read(0, 100, {}).entries.size() == 2u);
+	source->ConfigureDetector("MotionAlarm", 3600, true, true);
+	const auto deadline = source->Invoke([&]() { return generator->Deadline(); });
+	source->GenerateOnce("MotionAlarm");
+	BOOST_TEST(source->Invoke([&]() { return generator->Deadline() == deadline; }));
+	BOOST_REQUIRE_EQUAL(client->Take(100).messages.size(), 1u);
+	source->ConfigureDetector("MotionAlarm", 1, true, true);
+	source->ConfigureDetector("MotionAlarm", 3600, false, true);
+	// A cancelled one-second callback must not restart automatic generation.
+	std::promise<void> elapsed;
+	boost::asio::steady_timer barrier(source->GetIoContext());
+	source->Invoke([&]() {
+		barrier.expires_after(std::chrono::milliseconds(1100));
+		barrier.async_wait([&](const auto&) { elapsed.set_value(); });
+	});
+	elapsed.get_future().get();
+	BOOST_TEST(client->Take(100).messages.empty());
+	source->ConfigureDetector("MotionAlarm", 3600, false, false);
+	BOOST_CHECK_THROW(source->GenerateOnce("MotionAlarm"), std::runtime_error);
+	BOOST_TEST(client->Take(100).messages.empty());
+	source->ConfigureDetector("MotionAlarm", 3600, false, true);
+	source->GenerateOnce("MotionAlarm");
+	BOOST_REQUIRE_EQUAL(client->Take(100).messages.size(), 1u);
+	BOOST_CHECK_THROW(source->GenerateOnce("missing"), std::runtime_error);
+}
+
+BOOST_AUTO_TEST_CASE(manual_rule_step_is_scoped_and_respects_rule_and_parent_gates)
+{
+	QuietLogger logger;
+	auto controls = std::make_shared<osrv::DetectorControls>();
+	controls->Register("tt:Test", "test", true);
+	auto source = std::make_shared<EventSource>(logger, nullptr, controls);
+	class RuleGenerator : public IEventGenerator
+	{
+	public:
+		RuleGenerator(boost::asio::io_context& io, const ILogger& logger) : IEventGenerator(3600, "test", io, logger) {}
+		std::deque<NotificationMessage> GenerateSynchronizationEvent() const override { return {}; }
+		void generate_event() override
+		{
+			for (const auto* configuration : {"A", "B"})
+				for (const auto* name : {"one", "two"})
+				{
+					auto message = Message();
+					message.topic = "test";
+					message.analytics_configuration = configuration;
+					message.source_item_descriptions = {{"Rule", name}};
+					event_signal_(message);
+				}
+		}
+	};
+	source->AddGenerator(std::make_shared<RuleGenerator>(source->GetIoContext(), logger));
+	source->ConfigureDetector("tt:Test", 3600, false, true);
+	source->Run();
+	auto client = source->Subscribe({}, false);
+	source->GenerateOnce("tt:Test", "A", "one");
+	auto batch = client->Take(100);
+	BOOST_REQUIRE_EQUAL(batch.messages.size(), 1u);
+	BOOST_TEST(batch.messages.front()->analytics_configuration == "A");
+	controls->SetRule("A", "one", false);
+	BOOST_CHECK_THROW(source->GenerateOnce("tt:Test", "A", "one"), std::runtime_error);
+	controls->SetRule("A", "one", true);
+	controls->Set("rules", false);
+	BOOST_CHECK_THROW(source->GenerateOnce("tt:Test", "A", "one"), std::runtime_error);
+	BOOST_TEST(client->Take(100).messages.empty());
+}
+
 BOOST_AUTO_TEST_SUITE_END()

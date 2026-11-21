@@ -486,7 +486,8 @@ void init_service(HttpServer& srv, const osrv::ServerConfigs& server_configs_ins
 	notifications_manager =
 			std::make_unique<osrv::event::NotificationsManager>(logger, XML_NAMESPACES, source);
 
-	// TODO: reading events generating interval from configs
+	for (const auto* id : {"DigitalInputsAlarm", "MotionAlarm", "CellMotion", "AudioDetection"})
+		server_configs->detectors->Register(id, EVENT_CONFIGS_TREE.get<std::string>(std::string(id) + ".Topic"), true);
 	// add event generators
 	auto di_event_generator = std::shared_ptr<osrv::event::DInputEventGenerator>(new event::DInputEventGenerator(
 			EVENT_CONFIGS_TREE.get<int>("DigitalInputsAlarm.EventGenerationTimeout"),
@@ -503,11 +504,6 @@ void init_service(HttpServer& srv, const osrv::ServerConfigs& server_configs_ins
 		additional_event_topics.push_back(registration.description);
 	}
 
-	// Register every built-in generator so initially disabled detectors can be
-	// enabled live. The shared source gates publication and synchronization.
-	for (const auto* id : {"DigitalInputsAlarm", "MotionAlarm", "CellMotion", "AudioDetection"})
-		server_configs->detectors->Register(id, EVENT_CONFIGS_TREE.get<std::string>(std::string(id) + ".Topic"),
-			EVENT_CONFIGS_TREE.get<bool>(std::string(id) + ".GenerateEvents", true));
 	// add motion alarms generator
 
 	{
@@ -545,6 +541,18 @@ void init_service(HttpServer& srv, const osrv::ServerConfigs& server_configs_ins
 				EVENT_CONFIGS_TREE.get<std::string>("AudioDetection.Topic"), notifications_manager->GetIoContext(), *log_);
 
 		notifications_manager->AddGenerator(audio_generator);
+	}
+
+	for (const auto* id : {"DigitalInputsAlarm", "MotionAlarm", "CellMotion", "AudioDetection",
+		"tt:MotionRegionDetector", "tt:LineDetector", "tt:LineCounting", "tt:FieldDetector",
+		"tt:LicensePlateRecognition", "tt:FaceRecognition"})
+	{
+		const auto section = DetectorControls::Section(id);
+		if (!source->HasDetector(id)) continue;
+		source->ConfigureDetector(id, EVENT_CONFIGS_TREE.get<int>(section + ".EventGenerationTimeout",
+				section == "MotionRegion" || section == "LineDetector" ? 2 : 1),
+			EVENT_CONFIGS_TREE.get<bool>(section + ".AutoGenerateEvents", true),
+			EVENT_CONFIGS_TREE.get<bool>(section + ".Enabled", true));
 	}
 
 	notifications_manager->Run();

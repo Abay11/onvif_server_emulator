@@ -35,6 +35,7 @@ using HttpServer = SimpleWeb::Server<socket_t>;
 
 struct ServerConfigs
 {
+	std::weak_ptr<event::EventSource> event_source;
 	std::shared_ptr<DetectorControls> detectors = std::make_shared<DetectorControls>();
 	std::shared_ptr<SystemJournal> journal = std::make_shared<SystemJournal>();
 

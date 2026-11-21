@@ -1,6 +1,7 @@
 #pragma once
 #include <boost/property_tree/ptree.hpp>
 #include <memory>
+#include <mutex>
 #include <string>
 namespace utility
 {
@@ -18,6 +19,8 @@ public:
 	void Change(const boost::property_tree::ptree& command);
 
 private:
+	mutable std::mutex mutex_;
+	std::string events_path_;
 	std::shared_ptr<utility::AnalyticsRules> rules_;
 	std::shared_ptr<ServerConfigs> configs_;
 	boost::property_tree::ptree events_;

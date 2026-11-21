@@ -1,8 +1,8 @@
 #include "EventSource.h"
 
 #include "../Logger.h"
-#include "../utility/SystemJournal.h"
 #include "../utility/DetectorControls.h"
+#include "../utility/SystemJournal.h"
 #include "pullpoint/event_generators.h"
 
 #include <algorithm>
@@ -129,9 +129,9 @@ bool EventSubscription::Enqueue(NotificationPtr message, std::size_t bytes)
 }
 
 EventSource::EventSource(const ILogger& logger, std::shared_ptr<SystemJournal> journal,
-	std::shared_ptr<DetectorControls> controls)
-		: logger_(logger), journal_(std::move(journal)), controls_(std::move(controls)), work_(boost::asio::make_work_guard(io_context_)),
-			worker_([this]() { io_context_.run(); })
+												 std::shared_ptr<DetectorControls> controls)
+		: logger_(logger), journal_(std::move(journal)), controls_(std::move(controls)),
+			work_(boost::asio::make_work_guard(io_context_)), worker_([this]() { io_context_.run(); })
 {
 }
 
@@ -160,6 +160,56 @@ void EventSource::AddGenerator(std::shared_ptr<IEventGenerator> generator)
 														[this, message = std::move(message)]() mutable { Publish(std::move(message)); });
 		}));
 		generators_.push_back(generator);
+	});
+}
+
+bool EventSource::HasDetector(const std::string& id)
+{
+	return Invoke([&]() {
+		return controls_ && std::any_of(generators_.begin(), generators_.end(), [&](const auto& generator) {
+						 return controls_->IdForTopic(generator->Topic()) == id;
+					 });
+	});
+}
+void EventSource::ConfigureDetector(const std::string& id, int interval, bool automatic, bool enabled)
+{
+	Invoke([&]() {
+		if (!HasDetector(id))
+			throw std::invalid_argument("Detector unavailable");
+		if (interval < 1)
+			throw std::invalid_argument("Invalid event interval");
+		controls_->Set(id, enabled);
+		controls_->SetAutomatic(id, automatic);
+		for (const auto& generator : generators_)
+			if (controls_->IdForTopic(generator->Topic()) == id)
+				// Line sampling also feeds counting, field rules and scene metadata.
+				generator->Configure(interval, automatic || id == "tt:LineDetector");
+	});
+}
+void EventSource::GenerateOnce(const std::string& id, const std::string& configuration, const std::string& rule)
+{
+	Invoke([&]() {
+		if (!running_ || !HasDetector(id))
+			throw std::runtime_error("Detector unavailable");
+		if (!controls_->Enabled(id) || (id.starts_with("tt:") && !controls_->Enabled("rules")) ||
+				(!configuration.empty() && !controls_->RuleEnabled(configuration, rule)))
+			throw std::runtime_error("Detector disabled");
+		manual_ = true;
+		manual_id_ = id;
+		manual_configuration_ = configuration;
+		manual_rule_ = rule;
+		try
+		{
+			for (const auto& generator : generators_)
+				if (controls_->IdForTopic(generator->Topic()) == id)
+					generator->GenerateOnce();
+		}
+		catch (...)
+		{
+			manual_ = false;
+			throw;
+		}
+		manual_ = false;
 	});
 }
 
@@ -230,7 +280,30 @@ void EventSource::Synchronize(const std::shared_ptr<EventSubscription>& subscrip
 
 void EventSource::Publish(NotificationMessage message)
 {
-	if (controls_ && !controls_->Allows(message)) return;
+	if (controls_ && !controls_->Allows(message))
+		return;
+	if (controls_)
+	{
+		const auto id = controls_->IdForTopic(message.topic);
+		if (!manual_ && !controls_->Automatic(id))
+			return;
+		if (manual_)
+		{
+			if (id != manual_id_)
+				return;
+			if (!manual_configuration_.empty())
+			{
+				if (message.analytics_configuration != manual_configuration_)
+					return;
+				const auto matches = std::any_of(
+						message.source_item_descriptions.begin(), message.source_item_descriptions.end(), [&](const auto& item) {
+							return (item.first == "Rule" || item.first == "RuleName") && item.second == manual_rule_;
+						});
+				if (!matches)
+					return;
+			}
+		}
+	}
 	if (journal_)
 		journal_->Detector(message);
 	auto bytes = notification_size(message);

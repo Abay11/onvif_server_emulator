@@ -185,6 +185,7 @@ void Server::init(std::function<void()> reboot)
 				{{"VideoSource", "tt:ReferenceToken"}, {"AnalyticsConfiguration", "tt:ReferenceToken"}, {"Rule", "xsd:string"}},
 				{{"IsInside", "xsd:boolean"}}}}};
 	event_source_ = std::make_shared<event::EventSource>(*logger_, server_configs_->journal, server_configs_->detectors);
+	server_configs_->event_source = event_source_;
 	event::init_service(*http_server_, *server_configs_, configs_dir, *logger_, event_source_, event_generators);
 
 	// TODO: impl. logic for multichannel cannel

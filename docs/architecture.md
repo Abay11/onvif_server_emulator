@@ -123,8 +123,11 @@ currently have no authorization, including in SOAP Digest mode. A separate
 directly from the publication path, ahead of external consumer queues. The WebUI
 reads this bounded history by cursor over its own JSON API, without an ONVIF
 subscription or metadata bridge. The detector panel uses the shared AnalyticsRules
-model for persisted rule CRUD and separate runtime notification gates before
-journal/subscriber enqueueing. Canvas geometry editing uses canonical source
+model for persisted rule CRUD and separate notification gates before
+journal/subscriber enqueueing. Detector settings are schema-validated and saved
+to event.config before rescheduling timers on the event worker. Manual steps use
+the same generator method as timer ticks and respect enabled gates while
+bypassing automatic mode. Canvas geometry editing uses canonical source
 bounds and native rule parameters; see [Detector administration](DETECTORS_UI.md). See
 [Administration WebUI](WEB_UI.md) for endpoints, access, assets and validation.
 

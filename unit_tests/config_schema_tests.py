@@ -32,6 +32,21 @@ class ConfigSchemaTests(unittest.TestCase):
             with self.subTest(name=name):
                 self.check(name, config, True)
 
+    def test_detector_controls_and_interval_boundaries(self):
+        for value, valid in [(1, True), (2147483647, True), ("1", True), ("2147483647", True),
+                             (0, False), (-1, False), (2147483648, False), ("2147483648", False),
+                             ("999999999999999999999", False), (1.5, False), ("1.5", False),
+                             (True, False), ("", False), ("0", False)]:
+            with self.subTest(value=value):
+                config = deepcopy(self.configs["event.config"])
+                config["MotionAlarm"]["EventGenerationTimeout"] = value
+                self.check("event.config", config, valid)
+        config = deepcopy(self.configs["event.config"])
+        config["MotionAlarm"]["GenerateEvents"] = config["MotionAlarm"].pop("AutoGenerateEvents")
+        self.check("event.config", config, False)
+        config["MotionAlarm"]["AutoGenerateEvents"] = True
+        self.check("event.config", config, False)
+
     def test_unknown_keys_and_wrong_root_types(self):
         for name, config in self.configs.items():
             with self.subTest(name=name):

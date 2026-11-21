@@ -107,7 +107,8 @@ is bundled into the executable.
 This initial version has no login; WebUI access, including restart, is available to
 clients that can reach that port even when SOAP Digest is enabled. Account passwords
 are excluded from the status API. Rule edits persist to media_profiles.config;
-detector enable switches are runtime controls. See
+detector enable, auto generation and interval settings persist to event.config
+and apply live. Rule engine and individual rule enable switches are runtime controls. See
 [detector administration](docs/DETECTORS_UI.md) and [WebUI documentation](docs/WEB_UI.md).
 
 ### Custom configuration and persistence

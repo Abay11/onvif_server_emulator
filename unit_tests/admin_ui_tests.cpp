@@ -6,6 +6,8 @@
 #include "../utility/ConfigValidation.h"
 #include "../utility/MediaProfilesManager.h"
 #include "../web/AdminUi.h"
+#include "../onvif_services/EventSource.h"
+#include "../onvif_services/pullpoint/event_generators.h"
 #include <atomic>
 #include <boost/property_tree/json_parser.hpp>
 #include <boost/test/unit_test.hpp>
@@ -296,6 +298,76 @@ BOOST_AUTO_TEST_CASE(schema_failure_reports_field_and_keeps_file_and_rule_model_
 	BOOST_TEST(endpoint.server->Rules()->Snapshot().get_child("Analytics").front().second.get_child("rules").empty());
 	for (const auto& entry : fs::directory_iterator(endpoint.path))
 		BOOST_TEST(!entry.path().filename().string().starts_with("media_profiles.config."));
+}
+
+
+BOOST_AUTO_TEST_CASE(detector_settings_validate_before_persistence_and_apply_without_restart)
+{
+	Endpoint endpoint;
+	auto configs = endpoint.server->GetServerConfigs();
+	auto logger = std::shared_ptr<ILogger>(ConsoleLoggerFactory().GetLogger(ILogger::LVL_ERR));
+	auto source = std::make_shared<osrv::event::EventSource>(*logger, configs->journal, configs->detectors);
+	configs->event_source = source;
+	auto generator = std::make_shared<osrv::event::MotionAlarmEventGenerator>("source", 3600,
+		"tns1:VideoSource/MotionAlarm", source->GetIoContext(), *logger);
+	source->AddGenerator(generator);
+	source->ConfigureDetector("MotionAlarm", 3600, false, true);
+	source->Run();
+	auto post = [&](const std::string& body, const std::string& expected = "200 OK") {
+		auto response = endpoint.Request("POST", "/admin/api/detectors", body,
+			{{"Content-Type", "application/json"}, {"X-ONVIF-Admin", "detectors"}});
+		BOOST_REQUIRE_EQUAL(response->status_code, expected);
+		Tree result;
+		boost::property_tree::read_json(response->content, result);
+		return result;
+	};
+	auto bytes = [&]() {
+		std::ifstream file(endpoint.path + "/event.config");
+		return std::string((std::istreambuf_iterator<char>(file)), {});
+	};
+	const auto before = bytes();
+	for (const auto* invalid : {"0", "-1", "2147483648", "\"invalid\""})
+	{
+		auto result = post(std::string(R"({"action":"settings","id":"MotionAlarm","settings":{"EventGenerationTimeout":)") +
+			invalid + "}}", "422 Unprocessable Entity");
+		BOOST_TEST(!result.get_child("validation_errors").empty());
+		BOOST_TEST(bytes() == before);
+	}
+	post(R"({"action":"settings","id":"MotionAlarm","settings":{"Topic":"changed"}})", "400 Bad Request");
+	BOOST_TEST(bytes() == before);
+	post(R"({"action":"settings","id":"MotionAlarm","settings":{"Enabled":true,"AutoGenerateEvents":false,"EventGenerationTimeout":7}})");
+	Tree saved;
+	boost::property_tree::read_json(endpoint.path + "/event.config", saved);
+	BOOST_TEST(saved.get<int>("MotionAlarm.EventGenerationTimeout") == 7);
+	BOOST_TEST(!saved.get<bool>("MotionAlarm.AutoGenerateEvents"));
+	BOOST_TEST(!saved.get_child("MotionAlarm").get_child_optional("GenerateEvents"));
+	BOOST_TEST(configs->detectors->Enabled("MotionAlarm"));
+	BOOST_TEST(!configs->detectors->Automatic("MotionAlarm"));
+	auto client = source->Subscribe({}, false);
+	post(R"({"action":"manual","id":"MotionAlarm"})");
+	BOOST_TEST(client->Take(10).messages.size() == 1u);
+	post(R"({"action":"settings","id":"MotionAlarm","settings":{"Enabled":false}})");
+	post(R"({"action":"manual","id":"MotionAlarm"})", "409 Conflict");
+	BOOST_TEST(client->Take(10).messages.empty());
+	// The in-memory view and disk must agree after repeated partial settings saves.
+	Tree view;
+	auto response = endpoint.Request("GET", "/admin/api/detectors");
+	boost::property_tree::read_json(response->content, view);
+	for (const auto& [_, item] : view.get_child("simple"))
+		if (item.get<std::string>("id") == "MotionAlarm")
+		{
+			BOOST_TEST(!item.get<bool>("settings.Enabled"));
+			BOOST_TEST(!item.get<bool>("settings.AutoGenerateEvents"));
+			BOOST_TEST(item.get<int>("settings.EventGenerationTimeout") == 7);
+		}
+	// An external file edit must not be overwritten by this server's cached view.
+	saved.put("MotionAlarm.EventGenerationTimeout", 9);
+	boost::property_tree::write_json(endpoint.path + "/event.config", saved);
+	const auto external = bytes();
+	post(R"({"action":"settings","id":"MotionAlarm","settings":{"Enabled":true}})", "409 Conflict");
+	BOOST_TEST(bytes() == external);
+	BOOST_TEST(!configs->detectors->Enabled("MotionAlarm"));
+
 }
 
 BOOST_AUTO_TEST_SUITE_END()

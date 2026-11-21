@@ -36,6 +36,27 @@ bool DetectorControls::Enabled(const std::string& id) const
 	auto it = enabled_.find(id);
 	return it == enabled_.end() || it->second;
 }
+std::string DetectorControls::Section(const std::string& id)
+{
+	return id == "tt:MotionRegionDetector" ? "MotionRegion" : id.starts_with("tt:") ? id.substr(3) : id;
+}
+std::string DetectorControls::IdForTopic(const std::string& topic) const
+{
+	std::lock_guard lock(mutex_);
+	auto it = topics_.find(topic);
+	return it == topics_.end() ? "" : it->second;
+}
+void DetectorControls::SetAutomatic(const std::string& id, bool automatic)
+{
+	std::lock_guard lock(mutex_);
+	automatic_[id] = automatic;
+}
+bool DetectorControls::Automatic(const std::string& id) const
+{
+	std::lock_guard lock(mutex_);
+	auto it = automatic_.find(id);
+	return it == automatic_.end() || it->second;
+}
 void DetectorControls::SetRule(const std::string& configuration, const std::string& name, bool enabled)
 {
 	std::lock_guard lock(mutex_);

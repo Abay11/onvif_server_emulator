@@ -909,3 +909,8 @@ dialog p {
 .validation-issues li { margin-bottom: 16px; font-size: .875rem; overflow-wrap: anywhere; }
 .validation-issues strong { display: block; color: #9b3931; font-size: .875rem; }
 .validation-issues p { margin-top: 5px; }
+
+.button.detector-enabled { background: #155c3c; border-color: #34966b; color: #edfff5; }
+.button.detector-disabled { background: #812f39; border-color: #c86670; color: #fff4f4; }
+.button.detector-enabled:hover { background: #1b734d; }
+.button.detector-disabled:hover { background: #a33b48; }

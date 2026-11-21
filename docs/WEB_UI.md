@@ -21,7 +21,7 @@ The first version provides:
   check that the application instance changed.
 
 The overview settings are read only; the [detector panel](DETECTORS_UI.md)
-provides persisted rule editing and runtime event enable controls.
+provides persisted rule editing, live detector settings and manual simulation steps.
 The status API selects explicit fields and excludes account
 lists, passwords, arbitrary config contents and the media input file/URI.
 Configuration settings are captured during initialization; unapplied file edits
@@ -223,8 +223,8 @@ pause/resume, filter changes, reconnect, missing-history notices and layout.
 Open `/admin/#detectors` for built-in detector settings, the rule-based hierarchy,
 uniform-frame geometry previews, vertex editing, enable switches and rule CRUD.
 See [Detector administration](DETECTORS_UI.md) for API, coordinates, persistence
-and runtime pause semantics. Rule changes persist; enable switches reset after
-restart. WebUI authorization remains unchanged, including for these mutations.
+and runtime pause semantics. Rules and detector/type settings persist; rule engine
+and individual rule enable switches reset after restart. WebUI authorization remains unchanged, including for these mutations.
 
 ## Save validation feedback
 

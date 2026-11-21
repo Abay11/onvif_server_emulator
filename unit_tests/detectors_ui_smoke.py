@@ -115,11 +115,33 @@ def main():
                     assert not rule_events(cursor), scope
                     api(command=dict(scope, enabled=True))
                     wait(process, lambda: rule_events(cursor))
-                # An initially disabled generator must be available without restart.
+                # Manual execution is independent of the automatic timer.
                 cursor = journal(limit=200)["cursor"]
-                api(command={"action": "detector", "id": "MotionAlarm", "enabled": True})
+                api(command={"action": "manual", "id": "MotionAlarm"})
+                assert any(e["category"] == "detector" and e["source"] == events["MotionAlarm"]["Topic"]
+                           for e in journal(after=cursor, limit=200)["entries"])
+                before = events_file.read_bytes()
+                rejected = api(command={"action": "settings", "id": "MotionAlarm", "settings": {"EventGenerationTimeout": 0}}, expected=422)
+                assert rejected["validation_errors"] and events_file.read_bytes() == before
+                api(command={"action": "settings", "id": "MotionAlarm", "settings": {"Enabled": False}})
+                api(command={"action": "manual", "id": "MotionAlarm"}, expected=409)
+                api(command={"action": "settings", "id": "MotionAlarm", "settings": {"Enabled": True, "AutoGenerateEvents": True}})
+                cursor = journal(limit=200)["cursor"]
                 wait(process, lambda: any(e["source"] == events["MotionAlarm"]["Topic"] for e in journal(after=cursor, limit=200)["entries"]))
-                api(command={"action": "detector", "id": "MotionAlarm", "enabled": False})
+                api(command={"action": "settings", "id": "MotionAlarm", "settings": {"AutoGenerateEvents": False}})
+                cursor = journal(limit=200)["cursor"]
+                time.sleep(2.2)
+                assert not any(e["source"] == events["MotionAlarm"]["Topic"] for e in journal(after=cursor, limit=200)["entries"])
+                # Scoped rule execution uses the same generator with auto mode off.
+                api(command={"action": "settings", "id": "tt:MotionRegionDetector", "settings": {"AutoGenerateEvents": False}})
+                cursor = journal(limit=200)["cursor"]
+                for _ in range(8):
+                    api(command={"action": "manual", "id": "tt:MotionRegionDetector", "configuration": token, "name": rule["Name"]})
+                assert rule_events(cursor)
+                api(command={"action": "toggle", "configuration": token, "name": rule["Name"], "enabled": False})
+                api(command={"action": "manual", "id": "tt:MotionRegionDetector", "configuration": token, "name": rule["Name"]}, expected=409)
+                api(command={"action": "toggle", "configuration": token, "name": rule["Name"], "enabled": True})
+                api(command={"action": "settings", "id": "tt:MotionRegionDetector", "settings": {"AutoGenerateEvents": True}})
                 api(command={"action": "detector", "id": "rules", "enabled": False})
                 instance = api("/admin/api/status")["instance_id"]
                 req = urllib.request.Request(BASE + "/admin/api/reboot", b'{"confirm":true}',
@@ -135,7 +157,7 @@ def main():
                     for script in ("network_smoke.py", "event_delivery_smoke.py", "analytics_smoke.py"):
                         subprocess.run([sys.executable, str(repo / "unit_tests" / script)], check=True)
                 print("PASS detector catalog/assets, rule create/edit/delete and persistence, invalid/stale edits, "
-                      "ONVIF visibility, per-rule/family/parent event controls and live enable of an initially disabled detector")
+                      "ONVIF visibility, per-rule/family/parent gates, validated live settings and auto-off manual execution")
             except BaseException:
                 log.flush()
                 log.seek(0)

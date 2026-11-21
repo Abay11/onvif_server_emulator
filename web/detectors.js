@@ -61,7 +61,7 @@
       });
       const result = await response.json();
       if (!response.ok) {
-        const errors = {InvalidRule: "Invalid rule settings: check geometry, coordinate ranges and parameter values", SettingsChanged: "The rule changed in another client. Refresh before editing", TooManyRules: "The limit of four rules has been reached", RuleAlreadyExistent: "A rule with this name already exists", RuleNotExistent: "The rule no longer exists", ConfigurationConflict: "The rule could not be saved; check configuration access and application logs"};
+        const errors = {InvalidRule: "Invalid rule settings: check geometry, coordinate ranges and parameter values", DetectorDisabled: "Enable the detector, its rule and the rule engine before running it", DetectorUnavailable: "The detector is unavailable", ConfigFileChanged: "event.config changed externally. Restart the application to reload it before saving detector settings", SettingsChanged: "Settings changed in another client. Refresh before editing", TooManyRules: "The limit of four rules has been reached", RuleAlreadyExistent: "A rule with this name already exists", RuleNotExistent: "The rule no longer exists", ConfigurationConflict: "The rule could not be saved; check configuration access and application logs"};
         const failure = new Error(result.message || errors[result.error] || result.error || `HTTP ${response.status}`);
         failure.issues = Array.isArray(result.validation_errors) ? result.validation_errors : [];
         throw failure;
@@ -72,7 +72,7 @@
       draft = null;
       el("detector-settings").replaceChildren(node("p", "Reloading current settings…"));
       draw();
-      if (await load(true)) message("Detector settings updated.");
+      if (await load(true)) message(command.action === "manual" ? "Detector ran once. Events depend on the current rule conditions and state." : "Detector settings updated.");
     } catch (error) {
       message(`${error.message}. Changes were not confirmed. Refresh and inspect current settings before retrying.`, true);
       validationPopup(error.message, error.issues);
@@ -100,12 +100,73 @@
   function mayLeave() {
     return !editing || window.confirm("Discard unsaved detector changes?");
   }
-  function showSimple(item) {
-    selected = {simple: item.id}; draft = null; previous = null; editing = false;
+  function detectorButton(text, enabled, callback) {
+    const item = button(text, callback, truth(enabled) ? "detector-enabled" : "detector-disabled");
+    item.title = `${text}: ${truth(enabled) ? "enabled" : "disabled"}`;
+    item.setAttribute("aria-label", item.title);
+    return item;
+  }
+  function manualButton(id, enabled, available, scope = {}) {
+    const item = button("Run detector once", () => change({action: "manual", id, ...scope}));
+    item.classList.add("manual-generate");
+    item.disabled = !enabled || !truth(available) || editing;
+    item.dataset.allowed = String(enabled && truth(available));
+    item.title = "Runs one simulation step using the same method as the automatic timer. Rule conditions determine whether events are emitted. Save pending changes first.";
+    return item;
+  }
+  function invalidPopup(event) {
+    event.preventDefault();
+    if (!errorDialog.open) {
+      validationPopup("Check the setting before saving.", [{file: "Settings", path: (draft ? "/rule/" : "/") + (event.target.dataset.validationPath || ""), message: event.target.validationMessage || "Invalid value"}]);
+      errorReturnFocus = event.target;
+    }
+  }
+  function showSettings(item, family = false) {
+    selected = family ? {family: item.id} : {simple: item.id};
+    draft = null; previous = null; editing = false;
     el("detector-selected-title").textContent = label(item.id);
-    const settings = node("dl", undefined, "key-values");
-    for (const [key, value] of Object.entries(item.settings)) settings.append(node("dt", label(key)), node("dd", value));
-    el("detector-settings").replaceChildren(settings);
+    const form = node("form", undefined, "detector-form");
+    form.addEventListener("invalid", invalidPopup, true);
+    const values = {};
+    for (const key of ["Enabled", "AutoGenerateEvents", "EventGenerationTimeout"]) {
+      const wrapper = node("label", key === "EventGenerationTimeout" ? "Event generation timeout (seconds)" : key === "AutoGenerateEvents" ? "Auto generate events" : "Enabled");
+      const input = node("input");
+      input.dataset.validationPath = `${item.id}/${key}`;
+      if (key === "EventGenerationTimeout") {
+        input.type = "number"; input.min = "1"; input.max = "2147483647"; input.step = "1"; input.required = true;
+        input.value = item.settings[key]; values[key] = Number(input.value);
+      } else {
+        input.type = "checkbox"; input.checked = truth(item.settings[key]); values[key] = input.checked;
+      }
+      input.addEventListener("input", () => {
+        values[key] = input.type === "checkbox" ? input.checked : Number(input.value);
+        dirty();
+      });
+      wrapper.append(input); form.append(wrapper);
+    }
+    const readonly = node("dl", undefined, "key-values");
+    for (const [key, value] of Object.entries(item.settings)) {
+      if (!(key in values)) readonly.append(node("dt", `${label(key)} (read-only)`), node("dd", value));
+    }
+    if (readonly.children.length) form.append(readonly);
+    if (family) form.append(node("p", "These settings apply to all rules of this detector type. The rule engine must also be enabled.", "table-note"));
+    const actions = node("div", undefined, "dialog-actions");
+    const save = node("button", "Save changes", "button secondary"); save.type = "submit";
+    actions.append(save, manualButton(item.id, truth(item.enabled) && (!family || truth(data.rules_enabled)), item.manual_available));
+    form.append(actions);
+    form.addEventListener("submit", (event) => {
+      event.preventDefault(); change({action: "settings", id: item.id, settings: values});
+    });
+    el("detector-settings").replaceChildren(form);
+    draw();
+  }
+  function showSimple(item) { showSettings(item); }
+  function showParent() {
+    selected = {parent: true}; draft = null; editing = false;
+    el("detector-selected-title").textContent = "Rule engine";
+    el("detector-settings").replaceChildren(
+      toggle("Enabled", data.rules_enabled, {action: "detector", id: "rules"}),
+      node("p", "Enables or disables all rule-based detectors. Select a detector type to configure its timer, or a rule to edit its parameters.", "table-note"));
     draw();
   }
   function catalog() {
@@ -115,13 +176,13 @@
     target.replaceChildren(node("h3", "Built-in detectors"));
     for (const item of data.simple) {
       const row = node("div", undefined, "detector-row");
-      row.append(button(label(item.id), () => {
+      row.append(detectorButton(label(item.id), item.enabled, () => {
         if (!mayLeave()) return;
         showSimple(item);
-      }), toggle("Enabled", item.enabled, {action: "detector", id: item.id}));
+      }));
       target.append(row);
     }
-    target.append(node("h3", "Rule-based analytics"), toggle("Rule engine enabled", data.rules_enabled, {action: "detector", id: "rules"}));
+    target.append(node("h3", "Rule-based analytics"), detectorButton("Rule engine", data.rules_enabled, () => { if (mayLeave()) showParent(); }));
     for (const cfg of data.configurations) {
       const group = node("div", undefined, "detector-rule-group");
       group.append(node("h4", cfg.name), node("p", cfg.token, "muted mono"));
@@ -132,11 +193,10 @@
         details.open = opened.has(details.dataset.key) || (firstRender && rules.length > 0);
         details.append(node("summary", `${label(family.id)} (${rules.length})`));
         details.append(node("p", `Synthetic interval: ${family.interval_seconds} s`, "table-note"));
-        details.append(toggle("Detector enabled", family.enabled, {action: "detector", id: family.id}));
+        details.append(detectorButton("Detector settings", truth(family.enabled) && truth(data.rules_enabled), () => { if (mayLeave()) showSettings(family, true); }));
         for (const rule of rules) {
           const row = node("div", undefined, "detector-row");
-          row.append(button(rule.Name, () => { if (mayLeave()) openRule(cfg, rule, false); }),
-            toggle("Rule enabled", rule.enabled, {action: "toggle", configuration: cfg.token, name: rule.Name}));
+          row.append(detectorButton(rule.Name, truth(rule.enabled) && truth(family.enabled) && truth(data.rules_enabled), () => { if (mayLeave()) openRule(cfg, rule, false); }));
           details.append(row);
         }
         details.append(button("Create rule", () => {
@@ -152,14 +212,14 @@
   }
   function openRule(cfg, rule, creating) {
     configuration = cfg;
-    selected = {configuration: cfg.token, name: rule.Name, creating};
+    selected = {configuration: cfg.token, name: rule.Name, creating, enabled: truth(rule.enabled)};
     previous = clone(rule);
     delete previous.enabled;
     draft = clone(previous);
     editing = creating;
     renderEditor();
   }
-  function dirty() { editing = true; message("Unsaved changes. Save to apply detector settings."); draw(); }
+  function dirty() { editing = true; document.querySelectorAll(".manual-generate").forEach((item) => { item.disabled = true; }); message("Unsaved changes. Save to apply detector settings."); draw(); }
   function geometryPaths(value, path = []) {
     const result = [];
     if (Array.isArray(value) && value.length && value.every((point) => point && "x" in point && "y" in point)) {
@@ -290,13 +350,14 @@
   function renderEditor() {
     el("detector-selected-title").textContent = selected.creating ? "Create analytics rule" : draft.Name;
     const form = node("form", undefined, "detector-form");
-    form.addEventListener("invalid", (event) => {
-      event.preventDefault();
-      if (!errorDialog.open) {
-        validationPopup("Check the setting before saving.", [{file: "Settings", path: "/rule/" + (event.target.dataset.validationPath || ""), message: event.target.validationMessage || "Invalid value"}]);
-        errorReturnFocus = event.target;
-      }
-    }, true);
+    form.addEventListener("invalid", invalidPopup, true);
+    if (!selected.creating) {
+      const family = data.families.find((item) => item.id === draft.Type);
+      form.append(toggle("Enabled", selected.enabled, {action: "toggle", configuration: configuration.token, name: draft.Name}),
+        node("p", `Auto generate events: ${truth(family.settings.AutoGenerateEvents) ? "on" : "off"} · Event generation timeout: ${family.interval_seconds} s (shared by this detector type).`, "table-note"),
+        button("Edit detector settings", () => { if (mayLeave()) showSettings(family, true); }),
+        manualButton(draft.Type, selected.enabled && truth(family.enabled) && truth(data.rules_enabled), family.manual_available, {configuration: configuration.token, name: draft.Name}));
+    }
     const typeLabel = node("label", "Rule type"); const select = node("select");
     for (const item of configuration.templates) { const option = node("option", label(item.Type)); option.value = item.Type; select.append(option); }
     select.value = draft.Type;
@@ -364,6 +425,8 @@
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       data = await response.json(); catalog();
       if (selected?.simple) showSimple(data.simple.find((item) => item.id === selected.simple));
+      if (selected?.family) showSettings(data.families.find((item) => item.id === selected.family), true);
+      if (selected?.parent) showParent();
       if (selected?.configuration && !editing) {
         const cfg = data.configurations.find((item) => item.token === selected.configuration);
         const rule = cfg?.rules.find((item) => item.Name === selected.name);
