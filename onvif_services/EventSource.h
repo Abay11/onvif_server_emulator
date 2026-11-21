@@ -12,6 +12,12 @@
 
 class ILogger;
 
+namespace osrv
+{
+class SystemJournal;
+class DetectorControls;
+} // namespace osrv
+
 namespace osrv::event
 {
 class IEventGenerator;
@@ -80,11 +86,15 @@ public:
 class EventSource : public IEventSource
 {
 public:
-	explicit EventSource(const ILogger& logger);
+	explicit EventSource(const ILogger& logger, std::shared_ptr<SystemJournal> journal = {},
+											 std::shared_ptr<DetectorControls> controls = {});
 	~EventSource();
 	EventSource(const EventSource&) = delete;
 	EventSource& operator=(const EventSource&) = delete;
 	void AddGenerator(std::shared_ptr<IEventGenerator> generator);
+	void ConfigureDetector(const std::string& id, int interval, bool automatic, bool enabled);
+	bool HasDetector(const std::string& id);
+	void GenerateOnce(const std::string& id, const std::string& configuration = "", const std::string& rule = "");
 	void Run();
 	void SetNamespaces(std::map<std::string, std::string> namespaces);
 	std::map<std::string, std::string> Namespaces() override;
@@ -105,10 +115,14 @@ public:
 private:
 	void Publish(NotificationMessage message);
 	const ILogger& logger_;
+	const std::shared_ptr<SystemJournal> journal_;
+	const std::shared_ptr<DetectorControls> controls_;
 	boost::asio::io_context io_context_;
 	boost::asio::executor_work_guard<boost::asio::io_context::executor_type> work_;
 	std::thread worker_;
 	bool running_ = false;
+	bool manual_ = false;
+	std::string manual_id_, manual_configuration_, manual_rule_;
 	std::map<std::string, std::string> namespaces_;
 	std::vector<std::shared_ptr<IEventGenerator>> generators_;
 	std::vector<boost::signals2::scoped_connection> connections_;

@@ -1,4 +1,6 @@
 #include "AnalyticsRules.h"
+#include "ConfigValidation.h"
+#include "DetectorControls.h"
 #include "DateTime.hpp"
 #include "FieldDetector.h"
 #include "LineDetector.h"
@@ -10,6 +12,7 @@
 #include <boost/geometry/geometries/polygon.hpp>
 #include <boost/property_tree/xml_parser.hpp>
 #include <cmath>
+#include <exception>
 #include <set>
 
 namespace utility
@@ -235,6 +238,26 @@ AnalyticsRules::AnalyticsRules(const Tree& profiles, SaveRules save, Clock clock
 		throw RuleFault("TooManyRules", true);
 }
 
+AnalyticsRules::Tree AnalyticsRules::Snapshot() const
+{
+	std::lock_guard lock(mutex_);
+	return profiles_;
+}
+void AnalyticsRules::BindControls(std::shared_ptr<osrv::DetectorControls> controls)
+{
+	std::lock_guard lock(mutex_);
+	controls_ = std::move(controls);
+}
+AnalyticsRules::Tree AnalyticsRules::DefaultRule(const std::string& token, const std::string& type) const
+{
+	std::lock_guard lock(mutex_);
+	Tree xml;
+	xml.put("<xmlattr>.Name", "New rule");
+	xml.put("<xmlattr>.Type", type);
+	xml.put_child("tt:Parameters", Tree{});
+	return readRule(xml, source(profiles_, token), nullptr);
+}
+
 AnalyticsRules::Tree AnalyticsRules::RuleXml(const Tree& rule)
 {
 	if (rule.get<std::string>("Type") == face::Type)
@@ -454,6 +477,10 @@ AnalyticsRules::Tree AnalyticsRules::Execute(const std::string& operation, const
 		{
 			save_(token, candidate);
 		}
+		catch (const ConfigValidationError&)
+		{
+			std::throw_with_nested(RuleFault("ConfigurationConflict", true));
+		}
 		catch (const std::exception&)
 		{
 			throw RuleFault("ConfigurationConflict", true);
@@ -461,6 +488,7 @@ AnalyticsRules::Tree AnalyticsRules::Execute(const std::string& operation, const
 		current.swap(candidate);
 		for (const auto& name : names)
 		{
+			if (controls_ && (operation == "CreateRules" || operation == "DeleteRules")) controls_->ForgetRule(token, name);
 			states_.erase({token, name});
 			inside_.erase({token, name});
 			std::erase_if(plates_, [&](const auto& entry) {
@@ -493,6 +521,7 @@ AnalyticsRules::Message AnalyticsRules::Notification(const std::string& token, c
 																										 const std::string& operation, bool state) const
 {
 	Message msg;
+	msg.analytics_configuration = token;
 	msg.topic = Topic;
 	msg.utc_time = datetime::system_utc_datetime();
 	msg.property_operation = operation;
@@ -598,6 +627,7 @@ std::deque<AnalyticsRules::Message> AnalyticsRules::SampleObject(const std::stri
 			if (it != tracks_.end() && line::Crossed(rule, it->second, {x, y}))
 			{
 				Message msg;
+				msg.analytics_configuration = token;
 				msg.topic = line::Topic;
 				msg.utc_time = datetime::system_utc_datetime();
 				msg.source_item_descriptions = {
@@ -655,6 +685,7 @@ AnalyticsRules::Message AnalyticsRules::CountNotification(const std::string& tok
 																													const std::string& operation, int count) const
 {
 	Message msg;
+	msg.analytics_configuration = token;
 	msg.topic = counting::Topic;
 	msg.utc_time = datetime::system_utc_datetime();
 	msg.property_operation = operation;
@@ -703,6 +734,7 @@ AnalyticsRules::Message AnalyticsRules::FieldNotification(const std::string& tok
 																													const std::string& operation, bool inside) const
 {
 	Message msg;
+	msg.analytics_configuration = token;
 	msg.topic = field::Topic;
 	msg.utc_time = datetime::system_utc_datetime();
 	msg.property_operation = operation;
@@ -794,6 +826,7 @@ std::deque<AnalyticsRules::Message> AnalyticsRules::SamplePlate(const std::strin
 				continue;
 			state.last = now;
 			Message msg;
+			msg.analytics_configuration = cfg.get<std::string>("token");
 			msg.topic = lpr::Topic;
 			msg.utc_time = datetime::system_utc_datetime();
 			msg.source_item_descriptions = {{"VideoSource", videoSource}, {"Rule", rule.get<std::string>("Name")}};
@@ -863,6 +896,7 @@ std::deque<AnalyticsRules::Message> AnalyticsRules::SampleFace(const std::string
 			if (rule.get<std::string>("Type") != face::Type || sample.likelihood < rule.get<double>("Threshold"))
 				continue;
 			Message msg;
+			msg.analytics_configuration = cfg.get<std::string>("token");
 			msg.topic = face::Topic;
 			msg.utc_time = datetime::system_utc_datetime();
 			msg.source_item_descriptions = {{"VideoSource", videoSource}, {"Rule", rule.get<std::string>("Name")}};

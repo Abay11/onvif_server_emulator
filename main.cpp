@@ -6,6 +6,13 @@
 
 #include "onvif_services/service_configs.h"
 
+#include <cerrno>
+#include <climits>
+#include <linux/close_range.h>
+#include <sys/syscall.h>
+#include <system_error>
+#include <unistd.h>
+
 #include <cstdlib>
 #include <string>
 
@@ -60,7 +67,15 @@ int main(int argc, char** argv)
 	{
 		// std::shared_ptr<osrv::IOnvifServer> server = std::make_shared<osrv::Server>(configs_dir, logger);
 		std::shared_ptr<osrv::Server> server{std::make_shared<osrv::Server>(configs_dir, logger)};
-		server->init();
+		server->init([argv, logger]() {
+			logger->Info("SystemReboot: restarting application and reloading configuration");
+			// Isolate this thread's descriptor table before marking all non-stdio FDs.
+			// This also covers sockets opened concurrently by GStreamer and event workers.
+			if (syscall(SYS_close_range, 3u, UINT_MAX, CLOSE_RANGE_UNSHARE | CLOSE_RANGE_CLOEXEC) != 0)
+				throw std::system_error(errno, std::generic_category(), "SystemReboot close_range");
+			execv("/proc/self/exe", argv);
+			throw std::system_error(errno, std::generic_category(), "SystemReboot execv");
+		});
 		server->run();
 	}
 	catch (const std::exception& e)

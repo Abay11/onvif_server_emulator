@@ -188,7 +188,8 @@ points. Media and Media2 serialize the same persisted values. Restart retains
 configuration and clears transient sampling/repeat history. Successful modification
 clears only that rule's history; failed batches/saves retain configuration and history.
 
-A dedicated one-second event generator cycles through five synthetic vehicles:
+A dedicated event generator (30-second default interval) cycles through five
+synthetic vehicles:
 
 | Plate | Country | Type | Brand / Model | Moving speed (m/s) | Plate width (%) | Likelihood |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -319,8 +320,8 @@ advertised nor emitted. Synchronization returns the current property as Initiali
 Creation queues Initialized(false), modification clears that rule's tracked objects
 and queues Changed(false), and deletion queues Deleted with the last value.
 Failed batches and failed saves preserve both rule configuration and occupancy.
-A one-second event timer drains lifecycle/disappearance notifications even when
-no object samples arrive. The shared object sampler can drain them sooner.
+A configurable event timer (30-second default interval) drains lifecycle/disappearance
+notifications even when no object samples arrive. The shared object sampler can drain them sooner.
 
 Field Detector uses the existing Line Detector synthetic object trajectory and
 `LineDetector.EventGenerationTimeout`; no separate trajectory or timeout is
@@ -459,7 +460,7 @@ Duration and time fractions have microsecond resolution, rounded upward.
 
 With a positive ReportTimeInterval, counts accumulate and Changed reports are
 limited to that interval, starting at rule creation or modification. A dedicated
-one-second timer checks resets and pending reports even when no objects cross.
+timer (30-second default interval) checks resets and pending reports even when no objects cross.
 Notifications therefore have timer resolution rather than hard real-time delivery.
 Synchronization always returns the latest evaluated count as Initialized.
 Creation queues Initialized, modification queues Changed, and deletion queues
@@ -524,7 +525,7 @@ backend. Omitted parameters on modification retain their previous values.
 Rules share the existing four-rule limit and persist in `media_profiles.config`.
 No face rule is enabled by default; create one with SOAP to start notifications.
 
-The dedicated one-second sampler cycles `TEST-PERSON-001` through
+The dedicated sampler (30-second default interval) cycles `TEST-PERSON-001` through
 `TEST-PERSON-003`, with labels `Whitelisted`, `Blacklisted`, `Temporary` and
 likelihood 0.98. Every event includes `VideoSource`, `Rule`, `Likelihood`,
 `EnrollmentID`, `Label`, `RefImageUri`, `BoundingBox`, `ObjectId`, and

@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "User accounts",
+  "type": "object",
+  "properties": {
+    "users": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "login": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^[^:\\x00-\\x1f\\x7f]+$"
+          },
+          "password": {
+            "type": "string"
+          },
+          "type": {
+            "enum": [
+              "administrator",
+              "operator",
+              "user"
+            ]
+          },
+          "enabled": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "login",
+          "password",
+          "type",
+          "enabled"
+        ],
+        "additionalProperties": false
+      },
+      "minItems": 1,
+      "description": "Shared plaintext accounts for HTTP Digest and WS-Security. Logins must be unique."
+    }
+  },
+  "required": [
+    "users"
+  ],
+  "additionalProperties": false
+}

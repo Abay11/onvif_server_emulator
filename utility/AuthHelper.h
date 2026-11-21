@@ -18,21 +18,22 @@ extern const char TYPE_USER_STR[];
 
 struct digest_failed : public std::runtime_error
 {
-	digest_failed() : runtime_error("HTTP Digest authentication failed!")
+	digest_failed() : runtime_error("Authentication or access check failed!")
 	{
 	}
 };
 
+// Distinct ONVIF access classes; their numeric values do not encode permissions.
 enum class SECURITY_LEVELS : unsigned char
 {
-	PRE_AUTH = 0,
-	READ_SYSTEM = 1,
-	READ_MEDIA = 1,
-	READ_SYSTEM_SENSITIVE = 2,
-	ACTUATE = 2,
-	READ_SYSTEM_SECRET = 3,
-	WRITE_SYSTEM = 3,
-	UNRECOVERABLE = 3,
+	PRE_AUTH,
+	READ_SYSTEM,
+	READ_MEDIA,
+	READ_SYSTEM_SENSITIVE,
+	ACTUATE,
+	READ_SYSTEM_SECRET,
+	WRITE_SYSTEM,
+	UNRECOVERABLE,
 };
 
 enum class USER_TYPE : unsigned char
@@ -48,6 +49,7 @@ struct UserAccount
 	std::string login;
 	std::string password;
 	USER_TYPE type;
+	bool enabled = true;
 
 	// by this contants should be read values from config files
 	static const std::string LOGIN;
@@ -55,10 +57,8 @@ struct UserAccount
 	static const std::string TYPE;
 };
 
-inline bool isUserHasAccess(USER_TYPE user, SECURITY_LEVELS lvl)
-{
-	return static_cast<int>(user) >= static_cast<int>(lvl);
-}
+// ONVIF Core 26.06, section 5.9.4, default access policy. Unknown values are denied.
+bool isUserHasAccess(USER_TYPE user, SECURITY_LEVELS lvl);
 
 // If could not found Username in users lists, ANON mode will be returned as default
 USER_TYPE get_usertype_by_username(const std::string& /*username*/,

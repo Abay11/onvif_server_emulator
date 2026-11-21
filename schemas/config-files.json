@@ -12,5 +12,6 @@
   "event.config": "event.schema.json",
   "io_sources.config": "io-sources.schema.json",
   "media_profiles.config": "media-profiles.schema.json",
-  "analytics.config": "analytics.schema.json"
+  "analytics.config": "analytics.schema.json",
+  "users.config": "users.schema.json"
 }

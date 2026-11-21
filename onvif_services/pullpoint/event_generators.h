@@ -5,6 +5,8 @@
 #include "../../onvif/Notification.h"
 
 #include <functional>
+#include <cstdint>
+#include <stdexcept>
 #include <deque>
 
 #include <boost/signals2.hpp>
@@ -22,30 +24,53 @@ namespace osrv
 		class IEventGenerator
 		{
 		public:
-			IEventGenerator(int interval, const std::string& topic, boost::asio::io_context& io_context, const ILogger& logger)
-				:
-				event_interval_(interval)
-				,notifications_topic_(topic)
-				,io_context_(io_context)
-				,alarm_timer_(io_context_)
-				,logger_(logger)
+			IEventGenerator(int interval, const std::string& topic, boost::asio::io_context& io_context,
+											const ILogger& logger)
+					: event_interval_(interval), notifications_topic_(topic), io_context_(io_context), alarm_timer_(io_context_),
+						logger_(logger)
 			{
 			}
 
-			virtual ~IEventGenerator() {}
+			virtual ~IEventGenerator()
+			{
+			}
 
-			//Before calling this method, no any events should be generated
+			// Accessed only on the EventSource worker, including manual generation.
 			void Run()
 			{
-				schedule_next_alarm();
+				if (running_)
+					return;
+				running_ = true;
+				if (automatic_)
+					schedule_next_alarm();
 			}
-
 			void Stop()
 			{
+				running_ = false;
+				++generation_;
 				alarm_timer_.cancel();
 			}
+			void Configure(int interval, bool automatic)
+			{
+				if (interval < 1)
+					throw std::invalid_argument("Invalid event interval");
+				event_interval_ = interval;
+				automatic_ = automatic;
+				++generation_;
+				alarm_timer_.cancel();
+				if (running_ && automatic_)
+					schedule_next_alarm();
+			}
+			void GenerateOnce()
+			{
+				generate_event();
+			}
+			const std::string& Topic() const
+			{
+				return notifications_topic_;
+			}
 
-			//This will be connected
+			// This will be connected
 			boost::signals2::connection Connect(std::function<void(NotificationMessage)> f)
 			{
 				return event_signal_.connect(f);
@@ -67,22 +92,24 @@ namespace osrv
 			void schedule_next_alarm()
 			{
 				alarm_timer_.expires_after(std::chrono::seconds(event_interval_));
-				alarm_timer_.async_wait([this](const boost::system::error_code& error) {
-							if(error == boost::asio::error::operation_aborted)
-								return;
-
-							generate_event();
-
-							schedule_next_alarm();
-						}
-					);
+				const auto generation = generation_;
+				alarm_timer_.async_wait([this, generation](const boost::system::error_code& error) {
+					if (error || !running_ || !automatic_ || generation != generation_)
+						return;
+					generate_event();
+					if (running_ && automatic_ && generation == generation_)
+						schedule_next_alarm();
+				});
 			}
 
 		protected:
 			boost::signals2::signal<void(NotificationMessage)> event_signal_;
 
 		protected:
-			const int event_interval_;
+			int event_interval_;
+			bool running_ = false;
+			bool automatic_ = true;
+			std::uint64_t generation_ = 0;
 			const std::string notifications_topic_;
 
 			boost::asio::io_context& io_context_;

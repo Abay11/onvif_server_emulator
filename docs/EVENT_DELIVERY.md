@@ -154,3 +154,13 @@ Both scripts accept host/port options. The event script creates two subscription
 checks matching live notifications and independent unsubscribe, and removes its
 subscriptions. The network script additionally exercises discovery and TCP/UDP
 video/audio. LAN/Windows/VMS acceptance remains separate from container tests.
+
+## Internal administration journal
+
+`EventSource` can receive an optional `SystemJournal` at construction. Live
+publications append a compact summary before external subscription enqueueing.
+This internal sink has no `EventSubscription`, synchronization or transport
+dependency; client snapshots are not republished into it. It cannot drain the
+queues used by PullPoint or metadata. See [WebUI journal](WEB_UI.md#live-system-event-journal)
+for bounds, retention gaps, cursors and tests. This adds an internal observation
+path without changing the ONVIF contract described above.

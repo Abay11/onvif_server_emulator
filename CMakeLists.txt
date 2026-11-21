@@ -22,8 +22,9 @@ find_package(Boost REQUIRED
 )
 include_directories(${Boost_INCLUDE_DIRS})
 add_definitions(-DBOOST_ASIO_USE_TS_EXECUTOR_AS_DEFAULT) # helps to solve errors while building Simple-Web-Server with BOOST.Asio version greater or equal 1.74
+find_package(OpenSSL REQUIRED)
 find_package(PkgConfig REQUIRED)
-pkg_check_modules(GSTREAMER REQUIRED gstreamer-rtsp-server-1.0 gstreamer-app-1.0 gstreamer-video-1.0)
+pkg_check_modules(GSTREAMER REQUIRED gstreamer-rtsp-server-1.0 gstreamer-rtsp-1.0 gstreamer-app-1.0 gstreamer-video-1.0)
 message(STATUS "gstreamer lib dir: ${GSTREAMER_LIBRARY_DIRS}")
 message(STATUS "gstreamer include dir ${GSTREAMER_INCLUDE_DIRS}")
 include_directories(${GSTREAMER_INCLUDE_DIRS})
@@ -126,6 +127,7 @@ FILE (GLOB UTILITY_SRC
 	"utility/DateTime.hpp"
 	"utility/EventService.cpp"
 	"utility/EventService.h"
+	"utility/RequestAuthentication.cpp"
 	"utility/HttpDigestHelper.cpp"
 	"utility/HttpDigestHelper.h"
 	"utility/HttpHelper.cpp"
@@ -154,6 +156,22 @@ add_library(onvif_server STATIC
 	src/IOnvifServer.cpp
 	Server.cpp
 	Server.h
+	web/AdminUi.cpp
+	web/AdminUi.h
+	web/WebAuthentication.cpp
+	web/WebAuthentication.h
+	utility/ConfigValidation.cpp
+	utility/ConfigValidation.h
+	utility/DetectorControls.cpp
+	utility/DetectorControls.h
+	web/ConfigurationUi.cpp
+	web/ConfigurationUi.h
+	web/DetectorUi.cpp
+	web/DetectorUi.h
+	utility/SystemJournal.cpp
+	utility/SystemJournal.h
+	utility/ApplicationReboot.cpp
+	utility/ApplicationReboot.h
 	RtspServer.cpp
 	RtspServer.h
 	rtsp/MetadataStream.cpp
@@ -170,6 +188,48 @@ add_library(onvif_server STATIC
 	include/MediaFormats.h
 )
 
+# The application reuses the bundled offline JSON Schema checker before writes.
+find_package(Python3 REQUIRED COMPONENTS Interpreter)
+execute_process(COMMAND "${Python3_EXECUTABLE}" -c "from jsonschema import Draft202012Validator; from referencing import Registry"
+    RESULT_VARIABLE CONFIG_VALIDATION_IMPORT_RESULT ERROR_QUIET)
+if(NOT CONFIG_VALIDATION_IMPORT_RESULT EQUAL 0)
+    message(FATAL_ERROR "Configuration validation requires Python jsonschema and referencing; install python3-jsonschema or schemas/requirements.txt for ${Python3_EXECUTABLE}")
+endif()
+set(CONFIG_VALIDATION_DIR "${CMAKE_CURRENT_BINARY_DIR}/config_validation")
+file(MAKE_DIRECTORY "${CONFIG_VALIDATION_DIR}/scripts" "${CONFIG_VALIDATION_DIR}/schemas")
+configure_file(scripts/validate_configs.py "${CONFIG_VALIDATION_DIR}/scripts/validate_configs.py" COPYONLY)
+file(GLOB VALIDATION_SCHEMAS CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/schemas/*.json")
+foreach(SCHEMA_FILE IN LISTS VALIDATION_SCHEMAS)
+    get_filename_component(SCHEMA_NAME "${SCHEMA_FILE}" NAME)
+    configure_file("${SCHEMA_FILE}" "${CONFIG_VALIDATION_DIR}/schemas/${SCHEMA_NAME}" COPYONLY)
+endforeach()
+target_compile_definitions(onvif_server PRIVATE
+    OSRV_CONFIG_VALIDATION_DIR="${CONFIG_VALIDATION_DIR}"
+    OSRV_VALIDATION_PYTHON="${Python3_EXECUTABLE}")
+
+# Embed the UI so native and container builds need no extra runtime asset mount.
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+    "${CMAKE_CURRENT_SOURCE_DIR}/web/index.html"
+    "${CMAKE_CURRENT_SOURCE_DIR}/web/login.html"
+    "${CMAKE_CURRENT_SOURCE_DIR}/web/login.js"
+    "${CMAKE_CURRENT_SOURCE_DIR}/web/session.js"
+    "${CMAKE_CURRENT_SOURCE_DIR}/web/app.css"
+    "${CMAKE_CURRENT_SOURCE_DIR}/web/app.js"
+    "${CMAKE_CURRENT_SOURCE_DIR}/web/detectors.js"
+    "${CMAKE_CURRENT_SOURCE_DIR}/web/configuration.js"
+    "${CMAKE_CURRENT_SOURCE_DIR}/web/users.js")
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/web/index.html" ADMIN_HTML)
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/web/login.html" LOGIN_HTML)
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/web/login.js" LOGIN_JS)
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/web/session.js" SESSION_JS)
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/web/app.css" ADMIN_CSS)
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/web/app.js" ADMIN_JS)
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/web/detectors.js" DETECTORS_JS)
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/web/configuration.js" CONFIGURATION_JS)
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/web/users.js" USERS_JS)
+configure_file(web/Assets.h.in generated/AdminAssets.h @ONLY)
+target_include_directories(onvif_server PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/generated")
+
 include_directories(main
 	"${CMAKE_CURRENT_SOURCE_DIR}/include"
 	"${CMAKE_CURRENT_SOURCE_DIR}/Simple-Web-Server"
@@ -177,6 +237,7 @@ include_directories(main
 )
 	
 target_compile_options(main PUBLIC "${GSTREAMER_CFLAGS}")
+target_link_libraries(onvif_server PUBLIC OpenSSL::Crypto)
 target_link_libraries(main PUBLIC
 	onvif_server
 	${GSTREAMER_LIBRARIES}

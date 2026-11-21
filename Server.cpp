@@ -1,4 +1,7 @@
+#include <filesystem>
+#include <set>
 #include "Server.h"
+#include "web/AdminUi.h"
 #include "../onvif_services/device_service.h"
 #include "../onvif_services/discovery_service.h"
 #include "../onvif_services/event_service.h"
@@ -65,7 +68,7 @@ Server::~Server()
 		delete rtspServer_;
 }
 
-void Server::init()
+void Server::init(std::function<void()> reboot)
 {
 	http_server_->default_resource["GET"] = [](std::shared_ptr<HttpServer::Response> response,
 																						 std::shared_ptr<HttpServer::Request> request) {
@@ -87,6 +90,8 @@ void Server::init()
 
 	auto configs_dir = configs_path_ + "/";
 	server_configs_ = read_server_configs(configs_dir + COMMON_CONFIGS_NAME);
+	server_configs_->reboot = std::move(reboot);
+	server_configs_->journal->Add("info", "system", "application", "Application initialization started");
 
 	http_server_->config.address = server_configs_->ipv4_address_;
 	http_server_->config.port = std::stoi(server_configs_->http_port_);
@@ -155,7 +160,7 @@ void Server::init()
 			{[detector = Rules()](const boost::property_tree::ptree& configs, boost::asio::io_context& io,
 														const ILogger& logger) {
 				 return std::make_shared<event::MotionRegionEventGenerator>(
-						 detector, configs.get<int>("MotionRegion.EventGenerationTimeout", 2), io, logger);
+						 detector, configs.get<int>("MotionRegion.EventGenerationTimeout", 30), io, logger);
 			 },
 			 {utility::AnalyticsRules::Topic,
 				{{"VideoSource", "tt:ReferenceToken"}, {"RuleName", "xsd:string"}},
@@ -163,7 +168,7 @@ void Server::init()
 			{[detector = Rules()](const boost::property_tree::ptree& configs, boost::asio::io_context& io,
 														const ILogger& logger) {
 				 return std::make_shared<event::LineDetectorEventGenerator>(
-						 detector, configs.get<int>("LineDetector.EventGenerationTimeout", 2), io, logger);
+						 detector, configs.get<int>("LineDetector.EventGenerationTimeout", 30), io, logger);
 			 },
 			 {utility::line::Topic,
 				{{"VideoSource", "tt:ReferenceToken"}, {"AnalyticsConfiguration", "tt:ReferenceToken"}, {"Rule", "xsd:string"}},
@@ -181,7 +186,8 @@ void Server::init()
 			 {utility::field::Topic,
 				{{"VideoSource", "tt:ReferenceToken"}, {"AnalyticsConfiguration", "tt:ReferenceToken"}, {"Rule", "xsd:string"}},
 				{{"IsInside", "xsd:boolean"}}}}};
-	event_source_ = std::make_shared<event::EventSource>(*logger_);
+	event_source_ = std::make_shared<event::EventSource>(*logger_, server_configs_->journal, server_configs_->detectors);
+	server_configs_->event_source = event_source_;
 	event::init_service(*http_server_, *server_configs_, configs_dir, *logger_, event_source_, event_generators);
 
 	// TODO: impl. logic for multichannel cannel
@@ -218,6 +224,7 @@ void Server::init()
 	});
 
 	server_configs_->io_context_ = io_context_;
+	RegisterAdminUi(*this);
 }
 
 void Server::run()
@@ -249,6 +256,7 @@ void Server::run()
 		auto port = listening.get();
 		rtspServer_->run();
 		logger_->Info("Server is successfully started on port: " + std::to_string(port));
+		server_configs_->journal->Add("info", "system", "application", "Application started; HTTP and RTSP listeners ready");
 		server_thread.join();
 	}
 	catch (...)
@@ -304,15 +312,24 @@ std::shared_ptr<ServerConfigs> read_server_configs(const std::string& config_pat
 	auto auth_scheme = configs_tree.get<std::string>("authentication");
 	read_configs->auth_scheme_ = str_to_auth(auth_scheme);
 
-	auto users_node = configs_tree.get_child("users");
+	pt::ptree users_tree;
+	pt::read_json((std::filesystem::path(config_path).parent_path() / "users.config").string(), users_tree);
+	auto users_node = users_tree.get_child("users");
+	std::set<std::string> logins;
 	if (users_node.empty())
 		throw std::runtime_error("Could not read Users list");
 
 	for (auto user : users_node)
 	{
+		const auto login = user.second.get<std::string>(auth::UserAccount::LOGIN);
+		if (login.empty() || login.find(':') != std::string::npos ||
+			std::any_of(login.begin(), login.end(), [](unsigned char c) { return c < 32 || c == 127; }) ||
+			!logins.insert(login).second)
+			throw std::runtime_error("User login must be nonempty, unique and contain no colon");
 		read_configs->system_users_.emplace_back(osrv::auth::UserAccount{
 				user.second.get<std::string>(auth::UserAccount::LOGIN), user.second.get<std::string>(auth::UserAccount::PASS),
-				osrv::auth::str_to_usertype(user.second.get<std::string>(auth::UserAccount::TYPE))});
+				osrv::auth::str_to_usertype(user.second.get<std::string>(auth::UserAccount::TYPE)),
+				user.second.get<bool>("enabled")});
 	}
 
 	read_configs->network_delay_simulation_ = configs_tree.get<unsigned short>("networkDelaySimulation.milliseconds");

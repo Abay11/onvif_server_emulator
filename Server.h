@@ -3,6 +3,8 @@
 #include "HttpServerFwd.h"
 #include "IOnvifServer.h"
 #include "Logger.h"
+#include "utility/SystemJournal.h"
+#include "utility/DetectorControls.h"
 #include "RtspServer.h"
 
 #include "utility/HttpDigestHelper.h"
@@ -12,6 +14,8 @@
 
 #include <boost/asio/io_context.hpp>
 
+#include <atomic>
+#include <functional>
 #include <memory>
 
 // namespace onvif server
@@ -31,6 +35,14 @@ using HttpServer = SimpleWeb::Server<socket_t>;
 
 struct ServerConfigs
 {
+	std::weak_ptr<event::EventSource> event_source;
+	std::shared_ptr<DetectorControls> detectors = std::make_shared<DetectorControls>();
+	std::shared_ptr<SystemJournal> journal = std::make_shared<SystemJournal>();
+
+	// Installed by the executable; invoked only after the reboot response is sent.
+	std::function<void()> reboot;
+	std::shared_ptr<std::atomic_bool> reboot_pending = std::make_shared<std::atomic_bool>(false);
+
 	std::string ipv4_address_;
 	std::string http_port_;
 	std::string rtsp_port_;
@@ -78,7 +90,7 @@ public:
 	Server(ILogger&&) = delete;
 	~Server();
 
-	void init();
+	void init(std::function<void()> reboot = {});
 
 	// throws exceptions in error
 	void run();

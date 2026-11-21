@@ -193,8 +193,8 @@ Remove this deployment's rules:
 Corporate policy can prevent local allow rules or loopback traffic. Ask the
 administrator to permit the scoped rules if effective policy blocks them; do not
 disable the firewall or set WSL's default inbound action to Allow. The shipped
-configuration has authentication disabled and example credentials: enable a
-supported authentication mode and change credentials before sharing it on a LAN.
+configuration uses Digest / WS-Security and example credentials: change the
+credentials before sharing it on a LAN.
 
 ## 5. Addresses, configuration and files
 
@@ -238,7 +238,9 @@ For a downloaded image, first [extract the bundled configuration](../README.md#c
 without cloning the repository. Mount the **complete** directory to
 `/app/server_configs` when customizing it. Use a writable mount to persist SOAP
 profile changes, or add `:ro` when those operations are not needed. Changes made
-by editing files require restarting the container. Do not edit only the ProbeMatch
+by editing files can be applied through ONVIF
+[`SystemReboot`](SYSTEM_REBOOT.md), which restarts the application inside the same
+container. Do not edit only the ProbeMatch
 XAddr or use a container's `172.x` address as the public endpoint.
 
 For file streaming, mount media separately:
@@ -285,6 +287,11 @@ then test UDP separately. In your ONVIF VMS, verify:
    and the emulator's replay behavior.
 4. UDP streaming including RTCP, multiple simultaneous clients and both streams.
 5. Repeat after WSL restart, with the actual VPN and Ethernet/Wi-Fi configuration.
+
+The [administration WebUI](WEB_UI.md) is available at
+`http://192.168.1.10:8080/admin/` on the same HTTP listener, with no extra port
+mapping or firewall rule. Sign in with the ONVIF login and password of any enabled `administrator`
+account from `users.config`, independently of the SOAP authentication setting.
 
 An HTTP GET on the device service may return 400: SOAP POST is expected. This
 alone is not a failed connectivity test. An open RTSP TCP port alone does not

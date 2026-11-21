@@ -13,7 +13,7 @@ namespace osrv
 
 	FaceRecognitionEventGenerator::FaceRecognitionEventGenerator(std::shared_ptr<utility::AnalyticsRules> detector,
 			boost::asio::io_context& io, const ILogger& logger)
-			: IEventGenerator(1, utility::face::Topic, io, logger), detector_(std::move(detector))
+			: IEventGenerator(30, utility::face::Topic, io, logger), detector_(std::move(detector))
 	{
 	}
 
@@ -32,7 +32,7 @@ namespace osrv
 
 	LicensePlateEventGenerator::LicensePlateEventGenerator(std::shared_ptr<utility::AnalyticsRules> detector,
 			boost::asio::io_context& io, const ILogger& logger)
-			: IEventGenerator(1, utility::lpr::Topic, io, logger), detector_(std::move(detector))
+			: IEventGenerator(30, utility::lpr::Topic, io, logger), detector_(std::move(detector))
 	{
 	}
 
@@ -95,7 +95,7 @@ namespace osrv
 
 	LineCountingEventGenerator::LineCountingEventGenerator(std::shared_ptr<utility::AnalyticsRules> detector,
 			boost::asio::io_context& io, const ILogger& logger)
-			: IEventGenerator(1, utility::counting::Topic, io, logger), detector_(std::move(detector))
+			: IEventGenerator(30, utility::counting::Topic, io, logger), detector_(std::move(detector))
 	{
 	}
 
@@ -111,7 +111,7 @@ namespace osrv
 	}
 	FieldDetectorEventGenerator::FieldDetectorEventGenerator(std::shared_ptr<utility::AnalyticsRules> detector,
 																													 boost::asio::io_context& io, const ILogger& logger)
-			: IEventGenerator(1, utility::field::Topic, io, logger), detector_(std::move(detector))
+			: IEventGenerator(30, utility::field::Topic, io, logger), detector_(std::move(detector))
 	{
 	}
 

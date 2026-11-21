@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>Administration · ONVIF Server Emulator</title>
+  <link rel="stylesheet" href="/admin/app.css">
+  <script src="/admin/session.js" defer></script>
+  <script src="/admin/app.js" defer></script>
+  <script src="/admin/detectors.js" defer></script>
+  <script src="/admin/configuration.js" defer></script>
+  <script src="/admin/users.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <aside class="sidebar" aria-label="Administration navigation">
+    <a class="brand" href="/admin/" aria-label="ONVIF Server Emulator home"><span class="brand-icon" aria-hidden="true">◈</span><span>ONVIF<span class="brand-subtitle">Server Emulator</span></span></a>
+    <div class="nav-label">WORKSPACE</div>
+    <nav>
+      <a class="nav-link" href="#overview"><span aria-hidden="true">▦</span> Overview</a>
+      <a class="nav-link" href="#configuration"><span aria-hidden="true">≡</span> Configuration</a>
+      <a class="nav-link" href="#users"><span aria-hidden="true">♙</span> Users &amp; authentication</a>
+      <a class="nav-link" href="#detectors"><span aria-hidden="true">◇</span> Detectors</a>
+      <a class="nav-link" href="#journal"><span aria-hidden="true">☷</span> Event journal</a>
+      <a class="nav-link" href="#system"><span aria-hidden="true">⏻</span> System</a>
+    </nav>
+    <div class="sidebar-footer"><span class="sidebar-caption">LOCAL ADMINISTRATION</span><span>Application control panel</span><span class="access-label">Administrator access</span></div>
+  </aside>
+  <div class="workspace">
+    <header class="topbar"><span><span class="muted">Workspace</span><span class="breadcrumb" aria-hidden="true">/</span>Administration</span><div class="topbar-actions"><span id="connection" class="connection connecting"><span class="status-dot"></span><span id="connection-label">Connecting</span></span><button class="button secondary" id="sign-out" type="button">Sign out</button></div></header>
+    <main id="main">
+      <section id="overview" aria-labelledby="page-title">
+        <div class="page-heading"><div><div class="eyebrow">SERVER EMULATOR</div><h1 id="page-title">System overview</h1><p class="intro">Your application, its configuration, and the controls you need.</p></div><button class="button secondary" id="refresh" type="button"><span aria-hidden="true">↻</span> Refresh</button></div>
+        <div id="notice" class="notice" role="status" aria-live="polite" hidden></div>
+        <div class="stats">
+          <article class="stat"><div class="stat-label">APPLICATION UPTIME<span class="stat-icon" aria-hidden="true">◷</span></div><div class="stat-value" id="uptime">—</div><div class="stat-foot" id="process">Waiting for application</div></article>
+          <article class="stat"><div class="stat-label">HTTP LISTENER<span class="stat-icon" aria-hidden="true">⌘</span></div><div class="stat-value mono" id="http-port">—</div><div class="stat-foot" id="http-bind">ONVIF &amp; administration</div></article>
+          <article class="stat"><div class="stat-label">MEDIA PROFILES<span class="stat-icon" aria-hidden="true">▤</span></div><div class="stat-value" id="profile-count">—</div><div class="stat-foot" id="metadata-status">Loading media configuration</div></article>
+        </div>
+        <div class="summary-grid"><article class="panel"><div class="panel-heading"><h2>Network endpoints</h2><span class="tag">Advertised</span></div><dl id="network-summary" class="key-values"><dt>Configuration</dt><dd>Loading…</dd></dl></article><article class="panel"><div class="panel-heading"><h2>Device identity</h2><span class="tag">Emulated device</span></div><dl id="device-summary" class="key-values"><dt>Configuration</dt><dd>Loading…</dd></dl></article></div>
+      </section>
+      <section id="configuration" aria-labelledby="configuration-title">
+        <div class="section-heading"><div><h2 id="configuration-title">Configuration</h2><p>Manage media profiles, ONVIF configurations and application settings.</p></div><button id="configuration-refresh" class="button secondary" type="button">Reload configuration</button></div>
+        <p id="configuration-message" class="notice" role="status" aria-live="polite" hidden></p>
+        <p id="configuration-restart" class="notice" role="status" hidden></p>
+        <div id="configuration-workspace" class="detector-layout">
+          <aside id="configuration-catalog" class="panel detector-catalog" aria-label="Configuration catalog"><p>Loading configuration…</p></aside>
+          <article class="panel"><div class="panel-heading"><h3 id="configuration-selected">Select a configuration</h3></div><div id="configuration-editor" class="detector-settings"><p>Select a profile, configuration or file.</p></div></article>
+        </div>
+        <h3>Active settings from this application run</h3>
+        <div class="panel config-panel" id="settings"><p class="loading">Loading application settings…</p></div>
+        <article class="panel table-panel"><div class="panel-heading"><h2>Media profiles</h2><span class="tag">Current associations</span></div><div class="table-scroll"><table><caption class="sr-only">Current media profile configuration associations</caption><thead><tr><th>Profile</th><th>Video encoder</th><th>Audio encoder</th><th>Metadata</th></tr></thead><tbody id="profiles-body"><tr><td colspan="4">Loading profiles…</td></tr></tbody></table></div><p class="table-note">Profile associations describe configuration; some streaming parameters are fixed by the emulator.</p></article>
+        <article class="panel table-panel"><div class="panel-heading"><h2>ONVIF services</h2><span class="tag">Configured endpoints</span></div><div class="table-scroll"><table><caption class="sr-only">Configured ONVIF services and advertisement settings</caption><thead><tr><th>Service</th><th>Endpoint</th><th>Discovery listing</th></tr></thead><tbody id="services-body"><tr><td colspan="3">Loading services…</td></tr></tbody></table></div></article>
+      </section>
+      <section id="users" aria-labelledby="users-title">
+        <div class="section-heading"><div><h2 id="users-title">Users &amp; authentication</h2><p>Manage accounts shared by ONVIF and WebUI. Saved changes apply after an application restart.</p></div><button id="users-refresh" class="button secondary" type="button">Reload users</button></div>
+        <p id="users-message" class="notice" role="status" aria-live="polite" hidden></p>
+        <div id="users-workspace">
+          <article class="panel"><div class="panel-heading"><h3>ONVIF authentication</h3></div><form id="authentication-form" class="detector-form detector-settings">
+            <p id="authentication-active" class="table-note">Loading active scheme…</p>
+            <label>Saved scheme<select id="authentication-scheme" required><option value="digest/ws-security">Digest / WS-Security</option><option value="digest">Digest</option><option value="ws-security">WS-Security</option><option value="none">None</option></select></label>
+            <button class="button secondary" type="submit">Save authentication scheme</button>
+          </form></article>
+          <article class="panel table-panel"><div class="panel-heading"><h3>Accounts</h3></div><div class="table-scroll"><table><thead><tr><th>Login</th><th>Role</th><th>Saved status</th><th>Actions</th></tr></thead><tbody id="users-body"></tbody></table></div></article>
+          <article class="panel"><div class="panel-heading"><h3>Create account</h3></div><form id="user-create" class="detector-form detector-settings">
+            <label>Login<input id="user-login" required autocomplete="off" pattern="[^:\x00-\x1f\x7f]+"></label>
+            <label>Password<input id="user-password" type="password" required autocomplete="new-password"></label>
+            <label>Role<select id="user-role"><option value="user">User</option><option value="operator">Operator</option><option value="administrator">Administrator</option></select></label>
+            <label><input id="user-enabled" type="checkbox" checked> Enabled</label>
+            <button class="button secondary" type="submit">Create account</button>
+          </form></article>
+        </div>
+      </section>
+      <section id="detectors" aria-labelledby="detector-title">
+        <div class="section-heading"><div><h2 id="detector-title">Detectors</h2><p>Inspect and control built-in detectors and rule-based analytics.</p></div><button id="detector-refresh" class="button secondary" type="button">Refresh detectors</button></div>
+        <p id="detector-message" class="notice" role="status" aria-live="polite">Loading detectors…</p>
+        <div class="detector-layout">
+          <aside class="panel detector-catalog" aria-label="Detector list" id="detector-catalog"></aside>
+          <article class="panel detector-editor">
+            <div class="panel-heading"><h3 id="detector-selected-title">Select a detector or rule</h3><span class="tag">Simulated scene</span></div>
+            <canvas id="detector-scene" width="960" height="540" aria-label="Configured detector geometry over a uniform simulated frame"></canvas>
+            <p id="detector-coordinate-note" class="table-note">The scene is a schematic, not live camera video.</p>
+            <div id="detector-settings" class="detector-settings"></div>
+          </article>
+        </div>
+        <p class="table-note">Rules are saved to media_profiles.config. Detector settings persist; rule engine and individual rule enable switches reset on application restart. Existing queued events remain available to clients.</p>
+      </section>
+      <section id="journal" aria-labelledby="journal-title">
+        <div class="section-heading"><div><h2 id="journal-title">System event journal</h2><p>Application activity and detector summaries, collected internally.</p></div><button id="journal-pause" class="button secondary" type="button" aria-pressed="false">Pause updates</button></div>
+        <article class="panel">
+          <form id="journal-filters" class="journal-filters" role="search" aria-label="Filter journal">
+            <label>Category<select id="journal-category"><option value="">All categories</option><option value="system">System</option><option value="client">Clients</option><option value="detector">Detectors</option></select></label>
+            <label>Level<select id="journal-level"><option value="">All levels</option><option value="info">Information</option><option value="warn">Warning</option><option value="error">Error</option></select></label>
+            <label class="journal-search">Search<input id="journal-search" type="search" maxlength="64" placeholder="Topic, rule or message"></label>
+            <button class="button secondary" type="submit">Apply filters</button>
+          </form>
+          <p id="journal-state" class="journal-state" role="status" aria-live="polite">Connecting to journal…</p>
+          <p id="journal-gap" class="journal-gap" role="status" hidden></p>
+          <div class="table-scroll journal-scroll" tabindex="0" aria-label="Event history">
+            <table><caption class="sr-only">System event journal, newest entries first</caption><thead><tr><th>Time</th><th>Level / category</th><th>Source</th><th>Summary</th></tr></thead><tbody id="journal-body"><tr><td colspan="4">Loading event history…</td></tr></tbody></table>
+          </div>
+          <p class="table-note">Recent history is kept in memory for this application run. Pausing the view does not stop collection.</p>
+        </article>
+      </section>
+      <section id="system" aria-labelledby="system-title"><div class="section-heading"><div><h2 id="system-title">System controls</h2><p>Apply configuration changes by restarting the application.</p></div></div><article class="panel restart-panel"><div class="restart-icon" aria-hidden="true">⏻</div><div class="restart-copy"><h3>Restart application</h3><p>Reload configuration files in the same container. Active streams and event subscriptions will disconnect.</p><span class="restart-note">The application PID and container stay the same.</span></div><button id="restart" class="button danger" type="button" disabled>Restart application</button></article></section>
+      <footer class="page-footer"><span>ONVIF Server Emulator<span class="footer-separator">·</span>Administration</span><span id="last-update">Not connected yet</span></footer>
+    </main>
+  </div>
+  <dialog id="configuration-saved-dialog" aria-labelledby="configuration-saved-title">
+    <h2 id="configuration-saved-title">Configuration saved</h2>
+    <p>These changes take full effect only after restarting the application. Use System / Restart application when you are ready.</p>
+    <form method="dialog" class="dialog-actions"><button class="button secondary" autofocus>Close</button></form>
+  </dialog>
+  <dialog id="config-error-dialog" aria-labelledby="config-error-title" aria-describedby="config-error-summary">
+    <h2 id="config-error-title">Settings could not be applied</h2>
+    <p id="config-error-summary"></p>
+    <ul id="config-error-details" class="validation-issues"></ul>
+    <form method="dialog" class="dialog-actions"><button class="button secondary" autofocus>Close</button></form>
+  </dialog>
+  <dialog id="restart-dialog" aria-labelledby="dialog-title" aria-describedby="dialog-description"><form method="dialog"><div class="dialog-icon" aria-hidden="true">⏻</div><h2 id="dialog-title">Restart application?</h2><p id="dialog-description">The application will reload its configuration files. Active streams and event subscriptions will disconnect and must be reconnected. You will need to sign in again.</p><p class="dialog-detail">If you changed the HTTP address or port, reopen administration at the new address. Invalid configuration can prevent startup.</p><div class="dialog-actions"><button class="button secondary" value="cancel" autofocus>Cancel</button><button id="confirm-restart" class="button danger" value="restart">Restart application</button></div></form></dialog>
+  <noscript><p class="noscript">Enable JavaScript to view current settings and restart the application.</p></noscript>
+</body>
+</html>

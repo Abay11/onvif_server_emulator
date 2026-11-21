@@ -45,7 +45,8 @@ Connect an ONVIF client to `http://192.168.1.10:8080/onvif/device_service` or us
 automatic discovery. In VLC, test
 `rtsp://192.168.1.10:8554/Live&HighStream` (quote the URL in a shell).
 Check HTTP with `curl --fail http://192.168.1.10:8080/snapshot.jpeg -o snapshot.jpeg`.
-The bundled configuration has authentication disabled.
+The bundled configuration uses Digest / WS-Security SOAP authentication. WebUI sign-in uses
+an enabled administrator account from `users.config`.
 
 ```bash
 docker logs -f onvif-emulator
@@ -97,6 +98,24 @@ This Compose file uses the published image and host networking with the ports
 listed above. It does not build source code. Run either the Compose deployment or
 the equivalent `docker run` deployment: both use the same host ports.
 
+### Administration WebUI
+
+Open `http://<emulator-host>:8080/admin/` (use the configured HTTP port if different)
+for application status, active settings, media profile associations, a live
+system/detector journal with filters, detector/rule management with geometry
+previews, editable media profiles and ONVIF configurations, a JSON configuration
+editor, and application restart. The page uses the same listener as ONVIF and
+is bundled into the executable.
+Sign in with any enabled `administrator` account from `users.config`, using the
+same login and password as ONVIF. WebUI sign-in is mandatory even when SOAP
+`authentication` is `none`. Sessions expire after eight hours and on application
+restart; Sign out revokes the current session. Account passwords are excluded
+from the status API. Rule edits persist to media_profiles.config;
+detector enable, auto generation and interval settings persist to event.config
+and apply live. Rule engine and individual rule enable switches are runtime controls. See
+[configuration administration](docs/CONFIGURATION_UI.md),
+[detector administration](docs/DETECTORS_UI.md) and [WebUI documentation](docs/WEB_UI.md).
+
 ### Custom configuration and persistence
 
 Extract the complete bundled configuration into a new local directory:
@@ -116,7 +135,9 @@ image name** in the `docker run` command:
 
 For Compose, uncomment the `volumes` block in `compose.yaml`; its relative path
 is resolved from the Compose file's directory. Mount the complete directory,
-including `responses` and `rs`. Restart the container after editing configuration.
+including `responses` and `rs`. After editing configuration, invoke ONVIF
+[`SystemReboot`](docs/SYSTEM_REBOOT.md) to restart the application and reread the
+files without restarting the container.
 The environment variables in the examples override the corresponding IPv4 settings.
 
 The application must be able to write `media_profiles.config` to persist SOAP
@@ -193,9 +214,11 @@ Existing configuration directories must use the same names: `device.config`,
 `recording_search.config`, and `replay_control.config`. Rename older capitalized
 filenames and replace spaces with underscores before running this version.
 
-Optional [JSON Schema validation](schemas/README.md) checks edited files before
-startup. Schemas cover every bundled `.config` file and can also be used by
-editors or a future GUI configurator. The checker reports structural errors;
+The server runs [JSON Schema validation](schemas/README.md) before persisting
+configuration changes. WebUI save errors open a modal with the file, field path
+and reason, keeping the draft for correction. The same checker can optionally
+check manually edited files before startup. Schemas cover every bundled `.config`
+file and can also be used by editors. The checker reports structural errors;
 cross-file token references and topology consistency need separate validation.
 
 Configuration support varies by operation. Some settings are hardcoded or only
@@ -205,10 +228,15 @@ SOAP operations do not necessarily change the RTSP pipelines.
 
 ### Common Settings (`common.config`)
 
-- `authentication`: selects the authentication mode. The configuration lists
-  `none`, `ws-security`, `digest`, and `digest/ws-security`, but the shared SOAP
-  dispatcher and Event service check credentials only in `digest` mode.
-  WS-Security and the combined mode are not implemented in those dispatchers.
+- `authentication`: selects `none`, `digest`, `ws-security`, or
+  `digest/ws-security` (the bundled default). Select the scheme and manage accounts
+  in WebUI **Users & authentication**; changes require restart. SOAP services and
+  Events/PullPoint enforce the selected mode. Combined mode accepts either mechanism; if both are supplied both are
+  verified. See [authentication](docs/AUTHENTICATION.md) for algorithms and faults.
+- Accounts are stored in **`users.config`**, with plaintext `login`, `password`,
+  `type` (`administrator`, `operator`, `user`) and boolean `enabled`.
+  Move existing `users` arrays out of `common.config` and add `enabled` to every
+  account. Both files are loaded on startup; changes require restart.
 - `authenticationMethods`: lists authentication mode names in the sample
   configuration; the list does not establish implementation support.
 - `loggingLevel`: sets the logging threshold. Available levels, from highest to

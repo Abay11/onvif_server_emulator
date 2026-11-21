@@ -7,12 +7,50 @@
 #include <filesystem>
 #include <format>
 #include <system_error>
+#include <set>
 #include <unistd.h>
 
 namespace pt = boost::property_tree;
 
 namespace utility::media
 {
+namespace
+{
+std::string Quote(const std::string& value)
+{
+	pt::ptree wrapper;
+	wrapper.put("value", value);
+	std::ostringstream output;
+	pt::write_json(output, wrapper, false);
+	const auto json = output.str();
+	return json.substr(json.find(':') + 1, json.rfind('}') - json.find(':') - 1);
+}
+std::string MediaJson(const pt::ptree& tree, const std::string& key, int depth)
+{
+	static const std::set<std::string> arrays{"Filters", "rules", "AnalyticsModules", "analyticsModules",
+		"compatibleModuleAnalytics", "CompatiblePtzNodes", "CompatibleAnalyticsConfigurations",
+		"BitrateList", "SampleRateList", "FrameRatesSupported", "ProfilesSupported", "ResetTime"};
+	if (tree.empty())
+	{
+		if (depth == 1 || arrays.contains(key)) return "[]";
+		if (key == "Namespaces") return "{}";
+		return Quote(tree.data());
+	}
+	const bool array = key != "Namespaces" && tree.front().first.empty();
+	std::string result = array ? "[" : "{";
+	bool first = true;
+	for (const auto& [name, child] : tree)
+	{
+		if (!first) result += ',';
+		first = false;
+		if (!array) result += Quote(name) + ':';
+		result += MediaJson(child, name, depth + 1);
+	}
+	return result + (array ? "]" : "}");
+}
+} // namespace
+std::string MediaConfigJson(const pt::ptree& tree) { return MediaJson(tree, "", 0); }
+
 ConfigsReaderWriter::ConfigsReaderWriter(const std::string& filePath) : filePath_(filePath)
 {
 }
@@ -42,6 +80,17 @@ void ConfigsReaderWriter::Save() const
 		return;
 	}
 
+	std::ostringstream candidate;
+	if (std::filesystem::path(filePath_).filename() == "media_profiles.config") candidate << MediaConfigJson(*configsTree_);
+	else pt::write_json(candidate, *configsTree_);
+	const auto json = candidate.str();
+	SaveJson(json);
+}
+
+void ConfigsReaderWriter::SaveJson(const std::string& json) const
+{
+	if (before_save_) before_save_(json);
+
 	auto temporary = filePath_ + ".XXXXXX";
 	auto descriptor = mkstemp(temporary.data());
 	if (descriptor < 0)
@@ -51,7 +100,7 @@ void ConfigsReaderWriter::Save() const
 	{
 		std::ofstream os(temporary);
 		os.exceptions(std::ios::failbit | std::ios::badbit);
-		pt::write_json(os, *configsTree_);
+		os << json;
 		os.close();
 		std::filesystem::permissions(temporary, std::filesystem::status(filePath_).permissions());
 		std::filesystem::rename(temporary, filePath_);

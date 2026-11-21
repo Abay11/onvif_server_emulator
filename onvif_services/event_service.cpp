@@ -1,3 +1,4 @@
+#include "../utility/RequestAuthentication.h"
 #include "event_service.h"
 
 #include "../Logger.h"
@@ -100,8 +101,8 @@ struct CreatePullPointSubscriptionHandler : public utility::http::RequestHandler
 void HandlePullPointRequest(std::shared_ptr<HttpServer::Response> response,
 																 std::shared_ptr<HttpServer::Request> request)
 {
-	// osrv::auth::SECURITY_LEVELS::READ_MEDIA
 	auto request_tree = exns::to_ptree(request->content.string());
+	utility::auth::Authenticate(*server_configs, *request, request_tree, osrv::auth::SECURITY_LEVELS::READ_MEDIA);
 
 	auto header_action = exns::find_hierarchy("Envelope.Header.Action", request_tree);
 	auto header_message_id = exns::find_hierarchy("Envelope.Header.MessageID", request_tree);
@@ -189,6 +190,10 @@ void PullPointPortDefaultHandler(std::shared_ptr<HttpServer::Response> response,
 	try
 	{
 		HandlePullPointRequest(response, request);
+	}
+	catch (const utility::auth::Rejected& e)
+	{
+		utility::auth::Reject(*response, *server_configs, e);
 	}
 	catch (const SubscriptionFault& fault)
 	{
@@ -368,12 +373,11 @@ void do_handler_request(std::shared_ptr<HttpServer::Response> response, std::sha
 	std::string method;
 	auto content = request->content.string();
 	std::istringstream is(content);
-	pt::ptree* tree = new exns::Parser();
+	exns::Parser tree;
 	try
 	{
-		pt::xml_parser::read_xml(is, *tree);
-		auto* ptr = static_cast<exns::Parser*>(tree);
-		method = static_cast<exns::Parser*>(tree)->___getMethod();
+		pt::xml_parser::read_xml(is, static_cast<pt::ptree&>(tree));
+		method = tree.___getMethod();
 	}
 	catch (const pt::xml_parser_error& e)
 	{
@@ -393,50 +397,28 @@ void do_handler_request(std::shared_ptr<HttpServer::Response> response, std::sha
 			auto handler_ptr = *handler_it;
 			log_->Debug("Handling EventService request: " + handler_ptr->get_name());
 
-			// extract user credentials
-			osrv::auth::USER_TYPE current_user = osrv::auth::USER_TYPE::ANON;
-			if (server_configs->auth_scheme_ == osrv::AUTH_SCHEME::DIGEST)
-			{
-				auto auth_header_it = request->header.find(utility::http::HEADER_AUTHORIZATION);
-				if (auth_header_it != request->header.end())
-				{
-					// do extract user creds
-					auto da_from_request = utility::digest::extract_DA(auth_header_it->second);
+			auto current_user =
+					utility::auth::Authenticate(*server_configs, *request, tree, handler_ptr->get_security_level());
 
-					bool isStaled;
-					auto isCredsOk = digest_session->verifyDigest(da_from_request, isStaled);
-
-					// if provided credentials are OK, upgrade UserType from Anon to appropriate Type
-					if (isCredsOk)
-					{
-						current_user =
-								osrv::auth::get_usertype_by_username(da_from_request.username, digest_session->get_users_list());
-					}
-				}
-
-				if (!osrv::auth::isUserHasAccess(current_user, handler_ptr->get_security_level()))
-				{
-					throw osrv::auth::digest_failed{};
-				}
-			}
-
+			server_configs->journal->Client("ONVIF", request->remote_endpoint().address().to_string(),
+					current_user == osrv::auth::USER_TYPE::ADMIN ? "administrator" :
+				current_user == osrv::auth::USER_TYPE::OPERATOR ? "operator" :
+				current_user == osrv::auth::USER_TYPE::USER ? "user" : "unauthenticated");
 			(*handler_ptr)(response, request);
 		}
-		catch (const osrv::auth::digest_failed& e)
+		catch (const utility::auth::Rejected& e)
 		{
+			server_configs->journal->Add("warn", "client", "ONVIF",
+					"Authentication or access check rejected a request from " +
+					request->remote_endpoint().address().to_string());
 			log_->Error(e.what());
 
-			*response << utility::http::RESPONSE_UNAUTHORIZED << "\r\n"
-								<< "Content-Type: application/soap+xml; charset=utf-8"
-								<< "\r\n"
-								<< "Content-Length: " << 0 << "\r\n"
-								<< utility::http::HEADER_WWW_AUTHORIZATION << ": " << digest_session->generateDigest().to_string()
-								<< "\r\n"
-								<< "\r\n";
+			utility::auth::Reject(*response, *server_configs, e);
 		}
 		catch (const std::exception& e)
 		{
 			log_->Error("A server's error occured in DeviceService while processing: " + method + ". Info: " + e.what());
+			server_configs->journal->Add("error", "system", "ONVIF events", "Event service request failed; see process log");
 
 			*response << "HTTP/1.1 500 Server error\r\nContent-Length: " << 0 << "\r\n\r\n";
 		}
@@ -478,10 +460,11 @@ void init_service(HttpServer& srv, const osrv::ServerConfigs& server_configs_ins
 	notifications_manager =
 			std::make_unique<osrv::event::NotificationsManager>(logger, XML_NAMESPACES, source);
 
-	// TODO: reading events generating interval from configs
+	for (const auto* id : {"DigitalInputsAlarm", "MotionAlarm", "CellMotion", "AudioDetection"})
+		server_configs->detectors->Register(id, EVENT_CONFIGS_TREE.get<std::string>(std::string(id) + ".Topic"), true);
 	// add event generators
 	auto di_event_generator = std::shared_ptr<osrv::event::DInputEventGenerator>(new event::DInputEventGenerator(
-			EVENT_CONFIGS_TREE.get<int>("DigitalInputsAlarm.EventGenerationTimeout"),
+			EVENT_CONFIGS_TREE.get<int>("DigitalInputsAlarm.EventGenerationTimeout", 30),
 			EVENT_CONFIGS_TREE.get<std::string>("DigitalInputsAlarm.Topic"), notifications_manager->GetIoContext(), *log_));
 	di_event_generator->SetDigitalInputsList(server_configs->digital_inputs_);
 	notifications_manager->AddGenerator(di_event_generator);
@@ -496,42 +479,53 @@ void init_service(HttpServer& srv, const osrv::ServerConfigs& server_configs_ins
 	}
 
 	// add motion alarms generator
-	if (EVENT_CONFIGS_TREE.get<bool>("MotionAlarm.GenerateEvents"))
+
 	{
 		auto ma_event_generator = std::make_shared<osrv::event::MotionAlarmEventGenerator>(
 				EVENT_CONFIGS_TREE.get<std::string>("MotionAlarm.Source"),
-				EVENT_CONFIGS_TREE.get<int>("MotionAlarm.EventGenerationTimeout"),
+				EVENT_CONFIGS_TREE.get<int>("MotionAlarm.EventGenerationTimeout", 30),
 				EVENT_CONFIGS_TREE.get<std::string>("MotionAlarm.Topic"), notifications_manager->GetIoContext(), *log_);
 
 		notifications_manager->AddGenerator(ma_event_generator);
 	}
 
 	// add cell motion alarms generator
-	if (EVENT_CONFIGS_TREE.get<bool>("CellMotion.GenerateEvents"))
+
 	{
 		auto cellmotion_generator = std::make_shared<osrv::event::CellMotionEventGenerator>(
 				EVENT_CONFIGS_TREE.get<std::string>("CellMotion.VideoSourceConfigurationToken"),
 				EVENT_CONFIGS_TREE.get<std::string>("CellMotion.VideoAnalyticsConfigurationToken"),
 				EVENT_CONFIGS_TREE.get<std::string>("CellMotion.Rule"),
 				EVENT_CONFIGS_TREE.get<std::string>("CellMotion.DataItemName"),
-				EVENT_CONFIGS_TREE.get<int>("CellMotion.EventGenerationTimeout"),
+				EVENT_CONFIGS_TREE.get<int>("CellMotion.EventGenerationTimeout", 30),
 				EVENT_CONFIGS_TREE.get<std::string>("CellMotion.Topic"), notifications_manager->GetIoContext(), *log_);
 
 		notifications_manager->AddGenerator(cellmotion_generator);
 	}
 
 	// add audio detection alarms generator
-	if (EVENT_CONFIGS_TREE.get<bool>("AudioDetection.GenerateEvents"))
+
 	{
 		auto audio_generator = std::make_shared<osrv::event::AudioDetectectionEventGenerator>(
 				EVENT_CONFIGS_TREE.get<std::string>("AudioDetection.SourceConfigurationToken"),
 				EVENT_CONFIGS_TREE.get<std::string>("AudioDetection.AnalyticsConfigurationToken"),
 				EVENT_CONFIGS_TREE.get<std::string>("AudioDetection.Rule"),
 				EVENT_CONFIGS_TREE.get<std::string>("AudioDetection.DataItemName"),
-				EVENT_CONFIGS_TREE.get<int>("AudioDetection.EventGenerationTimeout"),
+				EVENT_CONFIGS_TREE.get<int>("AudioDetection.EventGenerationTimeout", 30),
 				EVENT_CONFIGS_TREE.get<std::string>("AudioDetection.Topic"), notifications_manager->GetIoContext(), *log_);
 
 		notifications_manager->AddGenerator(audio_generator);
+	}
+
+	for (const auto* id : {"DigitalInputsAlarm", "MotionAlarm", "CellMotion", "AudioDetection",
+		"tt:MotionRegionDetector", "tt:LineDetector", "tt:LineCounting", "tt:FieldDetector",
+		"tt:LicensePlateRecognition", "tt:FaceRecognition"})
+	{
+		const auto section = DetectorControls::Section(id);
+		if (!source->HasDetector(id)) continue;
+		source->ConfigureDetector(id, EVENT_CONFIGS_TREE.get<int>(section + ".EventGenerationTimeout", 30),
+			EVENT_CONFIGS_TREE.get<bool>(section + ".AutoGenerateEvents", true),
+			EVENT_CONFIGS_TREE.get<bool>(section + ".Enabled", true));
 	}
 
 	notifications_manager->Run();

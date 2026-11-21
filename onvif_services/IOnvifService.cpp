@@ -1,3 +1,4 @@
+#include "../utility/RequestAuthentication.h"
 #include "IOnvifService.h"
 
 #include "../Logger.h"
@@ -40,13 +41,12 @@ public:
 	void operator()(std::shared_ptr<HttpServer::Response> response, std::shared_ptr<HttpServer::Request> request)
 	{
 		std::string method;
-		pt::ptree* tree = new exns::Parser();
+		exns::Parser tree;
 		try
 		{
 			std::istringstream is(request->content.string());
-			pt::xml_parser::read_xml(is, *tree);
-			auto* ptr = static_cast<exns::Parser*>(tree);
-			method = static_cast<exns::Parser*>(tree)->___getMethod();
+			pt::xml_parser::read_xml(is, static_cast<pt::ptree&>(tree));
+			method = tree.___getMethod();
 		}
 		catch (const pt::xml_parser_error& e)
 		{
@@ -66,46 +66,22 @@ public:
 				auto handler_ptr = *handler_it;
 				log_->Debug("Handling " + service_->ServiceName() + " request: " + handler_ptr->name());
 
-				// extract user credentials
-				osrv::auth::USER_TYPE current_user = osrv::auth::USER_TYPE::ANON;
-				if (srv_cfg->auth_scheme_ == AUTH_SCHEME::DIGEST)
-				{
-					auto auth_header_it = request->header.find(utility::http::HEADER_AUTHORIZATION);
-					if (auth_header_it != request->header.end())
-					{
-						// do extract user creds
-						auto da_from_request = utility::digest::extract_DA(auth_header_it->second);
+				auto current_user = utility::auth::Authenticate(*srv_cfg, *request, tree, handler_ptr->security_level());
 
-						bool isStaled;
-						auto isCredsOk = srv_cfg->digest_session_->verifyDigest(da_from_request, isStaled);
-
-						// if provided credentials are OK, upgrade UserType from Anon to appropriate Type
-						if (isCredsOk)
-						{
-							current_user = osrv::auth::get_usertype_by_username(da_from_request.username,
-																																	srv_cfg->digest_session_->get_users_list());
-						}
-					}
-
-					if (!osrv::auth::isUserHasAccess(current_user, handler_ptr->security_level()))
-					{
-						throw osrv::auth::digest_failed{};
-					}
-				}
-
+				srv_cfg->journal->Client("ONVIF", request->remote_endpoint().address().to_string(),
+					current_user == osrv::auth::USER_TYPE::ADMIN ? "administrator" :
+					current_user == osrv::auth::USER_TYPE::OPERATOR ? "operator" :
+					current_user == osrv::auth::USER_TYPE::USER ? "user" : "unauthenticated");
 				(*handler_ptr)(response, request);
 			}
-			catch (const osrv::auth::digest_failed& e)
+			catch (const utility::auth::Rejected& e)
 			{
+				srv_cfg->journal->Add("warn", "client", "ONVIF",
+						"Authentication or access check rejected a request from " +
+						request->remote_endpoint().address().to_string());
 				log_->Error(e.what());
 
-				*response << utility::http::RESPONSE_UNAUTHORIZED << "\r\n"
-									<< "Content-Type: application/soap+xml; charset=utf-8"
-									<< "\r\n"
-									<< "Content-Length: " << 0 << "\r\n"
-									<< utility::http::HEADER_WWW_AUTHORIZATION << ": "
-									<< srv_cfg->digest_session_->generateDigest().to_string() << "\r\n"
-									<< "\r\n";
+				utility::auth::Reject(*response, *srv_cfg, e);
 			}
 			catch (const osrv::well_formed& e) {
 				auto envelope_tree = utility::soap::getEnvelopeTree(xml_ns_);
@@ -313,6 +289,7 @@ public:
 				oss << "A server's error occured in " << service_->ServiceName() << " while processing: " << method
 						<< ". Info: " << e.what();
 				log_->Error(oss.str());
+				srv_cfg->journal->Add("error", "system", "ONVIF", "SOAP request processing failed; see process log");
 
 				*response << "HTTP/1.1 500 Server error\r\nContent-Length: " << 0 << "\r\n\r\n";
 			}

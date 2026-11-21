@@ -190,8 +190,41 @@ gchar* check_requirements_callback(GstRTSPClient* self, GstRTSPContext* ctx, cha
 	return g_string_free(unsupported, FALSE);
 }
 
+namespace
+{
+using JournalHandle = std::shared_ptr<osrv::SystemJournal>;
+void release_journal(gpointer data, GClosure*)
+{
+	delete static_cast<JournalHandle*>(data);
+}
+struct ClientJournal
+{
+	JournalHandle journal;
+	std::string peer;
+};
+void release_client_journal(gpointer data, GClosure*)
+{
+	delete static_cast<ClientJournal*>(data);
+}
+void journal_client_closed(GstRTSPClient*, gpointer data)
+{
+	auto& client = *static_cast<ClientJournal*>(data);
+	client.journal->Add("info", "client", "RTSP", "RTSP client disconnected: " + client.peer);
+}
+} // namespace
+
 void client_connected_callback(GstRTSPServer* self, GstRTSPClient* object, gpointer user_data)
 {
+	if (user_data)
+	{
+		auto journal = *static_cast<JournalHandle*>(user_data);
+		auto connection = gst_rtsp_client_get_connection(object);
+		const char* peer = connection ? gst_rtsp_connection_get_ip(connection) : nullptr;
+		journal->Add("info", "client", "RTSP", std::string("RTSP client connected: ") + (peer ? peer : "unknown"));
+		g_signal_connect_data(object, "closed", G_CALLBACK(journal_client_closed),
+													new ClientJournal{journal, peer ? peer : "unknown"}, release_client_journal,
+													GConnectFlags(0));
+	}
 	g_signal_connect(object, "check-requirements", G_CALLBACK(check_requirements_callback), NULL);
 	g_signal_connect(object, "play-request", G_CALLBACK(osrv::rtsp::MetadataStreams::OnPlay), nullptr);
 }
@@ -241,7 +274,8 @@ Server::Server(ILogger* logger, ServerConfigs& server_configs, const AudioInfo& 
 	gst_rtsp_server_set_address(server_, server_configs_->ipv4_address_.c_str());
 	gst_rtsp_server_set_service(server_, server_configs_->rtsp_port_.c_str());
 
-	g_signal_connect(server_, "client-connected", G_CALLBACK(client_connected_callback), NULL);
+	g_signal_connect_data(server_, "client-connected", G_CALLBACK(client_connected_callback),
+		new JournalHandle(server_configs_->journal), release_journal, GConnectFlags(0));
 
 	mounts_ = gst_rtsp_server_get_mount_points(server_);
 

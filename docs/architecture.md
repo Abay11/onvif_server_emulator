@@ -52,6 +52,10 @@ an official conformance claim; see the
 | `include/IOnvifServer.h`, `src/IOnvifServer.cpp` | Shared context, factory and lazy SOAP service creation, media profile manager |
 | `onvif_services/` | SOAP services, operation handlers, discovery, and events |
 | `onvif/` | Base ONVIF request handler, recording/search models, notification serialization and scene snapshots |
+| `web/` | Embedded administration page, settings/status, detector/rule editing, journal and application restart |
+| `utility/DetectorControls.*` | Runtime detector/type/rule notification gates shared by all consumers |
+| `utility/SystemJournal.*` | Bounded internal operational history, cursors, filtering and detector summaries |
+| `utility/ApplicationReboot.*` | Shared response completion and pending restart guard for SOAP and WebUI |
 | `RtspServer.h`, `RtspServer.cpp` | GStreamer RTSP server, live streams, synthetic replay |
 | `rtsp/` | Metadata appsrc bridge, subscriptions, scene readers and media lifecycle |
 | `utility/` | XML/SOAP/HTTP, authorization, media profiles, audio/video/PTZ configuration readers, date and time |
@@ -76,6 +80,8 @@ flowchart TD
     Server --> EventSource[Shared event source]
     EventSource --> Events
     EventSource --> RTSP
+    EventSource --> Journal[Internal system journal]
+    Journal --> Admin[WebUI JSON journal]
     Events --> HTTP
     Server --> Discovery[IPv4 WS-Discovery / UDP]
     Server --> RTSP[GStreamer / RTSP / RTP]
@@ -104,6 +110,37 @@ with PullPoint timers on that context. RTSP runs a GLib main loop in a separate
 thread. An additional Asio
 context in `Server` handles simulated network delays in the Event service.
 
+## Administration WebUI
+
+`Server::init()` registers the embedded WebUI at `/admin/` on the shared HTTP
+server. Its JSON API selects non-secret startup settings and reads current media
+profile associations from the manager's shared tree. The configuration editor
+validates complete JSON documents, checks media references and native metadata/analytics
+semantics, then persists before replacing the shared media tree. Other service files
+are saved for restart. Opaque revisions reject stale edits, and write errors have
+a separate HTTP 507 response. See [Configuration administration](CONFIGURATION_UI.md).
+It exposes reachability,
+uptime and a per-run instance ID. The restart API and ONVIF `SystemReboot` use the
+same response-completion helper and pending flag, replacing the process image
+only after sending the acknowledgement. WebUI routes require a browser session
+for an enabled ONVIF administrator account, independently of the SOAP authentication
+mode. The Users & authentication panel saves account creation, deletion, enabled
+flags and the selected SOAP scheme through the configuration API for restart;
+active accounts and sessions retain their startup values until then. Account
+saves must retain an enabled administrator. `WebAuthentication` owns eight-hour sessions in memory; page/API guards run
+before their handlers. Restart discards sessions. A separate
+`SystemJournal` records structured lifecycle/client events and detector summaries
+directly from the publication path, ahead of external consumer queues. The WebUI
+reads this bounded history by cursor over its own JSON API, without an ONVIF
+subscription or metadata bridge. The detector panel uses the shared AnalyticsRules
+model for persisted rule CRUD and separate notification gates before
+journal/subscriber enqueueing. Detector settings are schema-validated and saved
+to event.config before rescheduling timers on the event worker. Manual steps use
+the same generator method as timer ticks and respect enabled gates while
+bypassing automatic mode. Canvas geometry editing uses canonical source
+bounds and native rule parameters; see [Detector administration](DETECTORS_UI.md). See
+[Administration WebUI](WEB_UI.md) for endpoints, access, assets and validation.
+
 ## SOAP Request Handling
 
 Most services inherit from `IOnvifService`. `OnvifServiceFactory` maps a service URI
@@ -116,7 +153,10 @@ A typical request follows this path:
 1. The HTTP route passes the body to `exns::Parser` from `utility/XmlParser.*`.
 2. The shared `RequestHandler` in `IOnvifService.cpp` extracts the operation name
    from the SOAP body and finds a handler in the service's `Handlers()` list.
-3. In `DIGEST` mode, credentials and the handler's access level are checked.
+3. The shared authentication helper verifies HTTP Digest or WS-Security credentials
+   and the handler's access class according to the selected mode. A separate
+   authorization step applies the explicit ONVIF default role policy before handler
+   execution; insufficient rights produce HTTP 400 with Sender/ter:NotAuthorized.
 4. A handler derived from `OnvifRequestBase` builds the response using
    Boost.PropertyTree and the `SoapHelper` / `HttpHelper` functions.
 5. Known media profile errors become SOAP faults. An unknown operation returns
@@ -127,10 +167,13 @@ The Event service is implemented separately through `event::init_service()` and
 Its dispatch, authentication, and error handling need separate review when changing
 shared SOAP service behavior.
 
-`AUTH_SCHEME` and configuration list `none`, `ws-security`, `digest`, and
-`digest/ws-security`, but the shared dispatchers for ordinary services and the
-Event service check credentials only for `AUTH_SCHEME::DIGEST`. The mode list does
-not establish that WS-Security or the combined mode is implemented.
+`AUTH_SCHEME` supports `none`, `ws-security`, `digest`, and `digest/ws-security`
+(the bundled default).
+Both dispatchers call `utility/RequestAuthentication` and share one Digest/UsernameToken
+session for nonce tracking. The session implements MD5, SHA-256, SHA-512-256 and
+WS-Security UsernameToken PasswordDigest/PasswordText. Roles and disabled accounts
+apply to both mechanisms. See [authentication](AUTHENTICATION.md) for the protocol
+references, credential file format, replay windows, and scope limits.
 
 ## Configuration and State
 
@@ -139,10 +182,13 @@ Names are case-sensitive and use lowercase snake_case without spaces, such as
 `device.config`, `device_io.config`, `media2.config`, `recording_search.config`,
 and `replay_control.config`.
 Settings are read during component construction or initialization; there is no
-shared hot-reload mechanism.
+shared hot-reload mechanism. Device `SystemReboot` restarts the executable with
+Linux `execv` after sending its response, rereading all configuration on startup;
+see [Application Reboot](SYSTEM_REBOOT.md).
 
-- `common.config`: bind/advertised endpoints, RTP range, users, authentication,
+- `common.config`: bind/advertised endpoints, RTP range, authentication,
   logging, delay and channel simulation, and the RTSP input file.
+- `users.config`: plaintext accounts, roles, and enabled flags shared by both authentication mechanisms.
 - `device.config`: device description, service list and XAddrs, and emulated digital
   inputs. `Enabled` in `GetServices` controls service advertisement;
   `Server::init()` still calls `Run()` on all nine services.
@@ -154,7 +200,11 @@ shared hot-reload mechanism.
 - Other service `.config` files: data for the corresponding SOAP operations.
 
 `MediaProfilesManager` uses `ConfigsReaderWriter` and persists profile changes to
-the JSON file. Profile mutation requires write access to the configuration
+the JSON file. The server installs a pre-save hook that validates the serialized
+full candidate with the bundled JSON Schema checker before creating a temporary
+configuration file. The validated bytes are then atomically renamed into place.
+WebUI schema errors carry field paths into a modal while retaining the draft;
+see [configuration validation](../schemas/README.md#server-save-gate-and-webui-errors). Profile mutation requires write access to the configuration
 location; a read-only mount is suitable for scenarios without those operations.
 Snapshots are served from `rs/snapshot.jpeg`, rather than extracted from the
 current RTSP stream.
@@ -229,9 +279,9 @@ configuration, without accessing the media manager. Metadata settings separately
 select events and analytics. Line crossing notifications are non-property events and have no
 synchronization state. `utility::counting::State` tracks counts, per-object passages,
 report deadlines and daily resets; only its rule configuration is persisted.
-Counting reuses the Line Detector synthetic object samples. A separate one-second
-event timer flushes aggregated counts and evaluates reset schedules even without
-object motion. Counting is a property and participates in synchronization through
+Counting reuses the Line Detector synthetic object samples. A separate configurable
+event timer (30 seconds by default) flushes aggregated counts and evaluates reset
+schedules even without object motion. Counting is a property and participates in synchronization through
 its own generator. The injected clock in `AnalyticsRules` makes deadlines testable
 without sleeping. Field Detector uses the same object samples and tracks zone occupancy
 across objects, with its own synchronization and lifecycle event generator.
@@ -287,8 +337,11 @@ guard of its own Asio context, and joins that context's thread. RTSP destruction
 closes clients/sessions, stops metadata subscriptions, quits its private GLib loop
 and joins its worker. A complete application signal shutdown remains unfinished,
 and the separate PullPoint HTTP listener runs in a detached thread. The Event service keeps file-level state and rejects
-reinitialization. Correct restart of all subsystems and independence of multiple
-servers in a single process cannot currently be assumed.
+reinitialization. Correct reinitialization of all subsystems and independence of multiple
+servers in a single process cannot currently be assumed. `SystemReboot` replaces
+the process image rather than reinitializing these objects. Linux closes all
+non-stdio descriptors at exec and removes the old worker threads; PID, arguments,
+environment and working directory are retained.
 
 ## Build and Validation
 
