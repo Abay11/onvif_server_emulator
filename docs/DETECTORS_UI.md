@@ -33,8 +33,9 @@ automatic mode and interval and provide a link to the detector settings.
 `Enabled` defaults to true independently of `AutoGenerateEvents`. Disabling auto
 generation leaves manual execution available. `AutoGenerateEvents` is the
 only supported configuration key for automatic generation. The singular per-input
-`GenerateEvent` in `device.config` remains a separate input simulation flag. New configuration sections for LineCounting, FieldDetector,
-LicensePlateRecognition and FaceRecognition default to a one-second interval.
+`GenerateEvent` in `device.config` remains a separate input simulation flag.
+All detectors and rule types default to a 30-second event generation interval.
+Individual rules inherit the interval of their detector type.
 
 Saved detector/type settings survive application restart. The rule engine and
 individual rule enable switches remain runtime controls and reset on restart.

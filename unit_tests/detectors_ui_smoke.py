@@ -67,8 +67,9 @@ def main():
         shutil.copytree(repo / "server_configs", configs)
         events_file = configs / "event.config"
         events = json.loads(events_file.read_text())
-        for key in ("MotionAlarm", "CellMotion", "AudioDetection", "MotionRegion", "LineDetector"):
-            events[key]["EventGenerationTimeout"] = 1
+        for section in events.values():
+            if isinstance(section, dict) and "EventGenerationTimeout" in section:
+                section["EventGenerationTimeout"] = 1
         events_file.write_text(json.dumps(events))
         env = dict(os.environ, ONVIF_ADVERTISED_IPV4="127.0.0.1", ONVIF_DISCOVERY_INTERFACE_IPV4="127.0.0.1")
         with (Path(directory) / "process.log").open("w+") as log:

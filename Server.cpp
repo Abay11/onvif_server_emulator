@@ -158,7 +158,7 @@ void Server::init(std::function<void()> reboot)
 			{[detector = Rules()](const boost::property_tree::ptree& configs, boost::asio::io_context& io,
 														const ILogger& logger) {
 				 return std::make_shared<event::MotionRegionEventGenerator>(
-						 detector, configs.get<int>("MotionRegion.EventGenerationTimeout", 2), io, logger);
+						 detector, configs.get<int>("MotionRegion.EventGenerationTimeout", 30), io, logger);
 			 },
 			 {utility::AnalyticsRules::Topic,
 				{{"VideoSource", "tt:ReferenceToken"}, {"RuleName", "xsd:string"}},
@@ -166,7 +166,7 @@ void Server::init(std::function<void()> reboot)
 			{[detector = Rules()](const boost::property_tree::ptree& configs, boost::asio::io_context& io,
 														const ILogger& logger) {
 				 return std::make_shared<event::LineDetectorEventGenerator>(
-						 detector, configs.get<int>("LineDetector.EventGenerationTimeout", 2), io, logger);
+						 detector, configs.get<int>("LineDetector.EventGenerationTimeout", 30), io, logger);
 			 },
 			 {utility::line::Topic,
 				{{"VideoSource", "tt:ReferenceToken"}, {"AnalyticsConfiguration", "tt:ReferenceToken"}, {"Rule", "xsd:string"}},

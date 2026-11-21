@@ -262,9 +262,9 @@ configuration, without accessing the media manager. Metadata settings separately
 select events and analytics. Line crossing notifications are non-property events and have no
 synchronization state. `utility::counting::State` tracks counts, per-object passages,
 report deadlines and daily resets; only its rule configuration is persisted.
-Counting reuses the Line Detector synthetic object samples. A separate one-second
-event timer flushes aggregated counts and evaluates reset schedules even without
-object motion. Counting is a property and participates in synchronization through
+Counting reuses the Line Detector synthetic object samples. A separate configurable
+event timer (30 seconds by default) flushes aggregated counts and evaluates reset
+schedules even without object motion. Counting is a property and participates in synchronization through
 its own generator. The injected clock in `AnalyticsRules` makes deadlines testable
 without sleeping. Field Detector uses the same object samples and tracks zone occupancy
 across objects, with its own synchronization and lifecycle event generator.

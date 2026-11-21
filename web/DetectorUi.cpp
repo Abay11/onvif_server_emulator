@@ -24,9 +24,7 @@ Tree Settings(const Tree& events, const std::string& id, const std::shared_ptr<D
 	Tree settings = events.get_child(section, Tree{});
 	settings.put("Enabled", controls->Enabled(id));
 	settings.put("AutoGenerateEvents", events.get<bool>(section + ".AutoGenerateEvents", true));
-	settings.put("EventGenerationTimeout",
-							 events.get<int>(section + ".EventGenerationTimeout",
-															 id == "tt:MotionRegionDetector" || id == "tt:LineDetector" ? 2 : 1));
+	settings.put("EventGenerationTimeout", events.get<int>(section + ".EventGenerationTimeout", 30));
 	return settings;
 }
 std::string Json(const Tree& value)
@@ -185,8 +183,7 @@ void DetectorUi::Change(const Tree& command)
 		file.ConfigsTree() = current;
 		file.BeforeSave([&](const std::string& json) {
 			utility::ValidateConfig("event.config", json);
-			interval = current.get<int>(section + ".EventGenerationTimeout",
-																	section == "MotionRegion" || section == "LineDetector" ? 2 : 1);
+			interval = current.get<int>(section + ".EventGenerationTimeout", 30);
 			automatic = current.get<bool>(section + ".AutoGenerateEvents", true);
 			enabled = current.get<bool>(section + ".Enabled", true);
 			if (interval < 1)

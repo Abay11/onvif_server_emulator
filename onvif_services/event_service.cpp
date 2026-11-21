@@ -490,7 +490,7 @@ void init_service(HttpServer& srv, const osrv::ServerConfigs& server_configs_ins
 		server_configs->detectors->Register(id, EVENT_CONFIGS_TREE.get<std::string>(std::string(id) + ".Topic"), true);
 	// add event generators
 	auto di_event_generator = std::shared_ptr<osrv::event::DInputEventGenerator>(new event::DInputEventGenerator(
-			EVENT_CONFIGS_TREE.get<int>("DigitalInputsAlarm.EventGenerationTimeout"),
+			EVENT_CONFIGS_TREE.get<int>("DigitalInputsAlarm.EventGenerationTimeout", 30),
 			EVENT_CONFIGS_TREE.get<std::string>("DigitalInputsAlarm.Topic"), notifications_manager->GetIoContext(), *log_));
 	di_event_generator->SetDigitalInputsList(server_configs->digital_inputs_);
 	notifications_manager->AddGenerator(di_event_generator);
@@ -509,7 +509,7 @@ void init_service(HttpServer& srv, const osrv::ServerConfigs& server_configs_ins
 	{
 		auto ma_event_generator = std::make_shared<osrv::event::MotionAlarmEventGenerator>(
 				EVENT_CONFIGS_TREE.get<std::string>("MotionAlarm.Source"),
-				EVENT_CONFIGS_TREE.get<int>("MotionAlarm.EventGenerationTimeout"),
+				EVENT_CONFIGS_TREE.get<int>("MotionAlarm.EventGenerationTimeout", 30),
 				EVENT_CONFIGS_TREE.get<std::string>("MotionAlarm.Topic"), notifications_manager->GetIoContext(), *log_);
 
 		notifications_manager->AddGenerator(ma_event_generator);
@@ -523,7 +523,7 @@ void init_service(HttpServer& srv, const osrv::ServerConfigs& server_configs_ins
 				EVENT_CONFIGS_TREE.get<std::string>("CellMotion.VideoAnalyticsConfigurationToken"),
 				EVENT_CONFIGS_TREE.get<std::string>("CellMotion.Rule"),
 				EVENT_CONFIGS_TREE.get<std::string>("CellMotion.DataItemName"),
-				EVENT_CONFIGS_TREE.get<int>("CellMotion.EventGenerationTimeout"),
+				EVENT_CONFIGS_TREE.get<int>("CellMotion.EventGenerationTimeout", 30),
 				EVENT_CONFIGS_TREE.get<std::string>("CellMotion.Topic"), notifications_manager->GetIoContext(), *log_);
 
 		notifications_manager->AddGenerator(cellmotion_generator);
@@ -537,7 +537,7 @@ void init_service(HttpServer& srv, const osrv::ServerConfigs& server_configs_ins
 				EVENT_CONFIGS_TREE.get<std::string>("AudioDetection.AnalyticsConfigurationToken"),
 				EVENT_CONFIGS_TREE.get<std::string>("AudioDetection.Rule"),
 				EVENT_CONFIGS_TREE.get<std::string>("AudioDetection.DataItemName"),
-				EVENT_CONFIGS_TREE.get<int>("AudioDetection.EventGenerationTimeout"),
+				EVENT_CONFIGS_TREE.get<int>("AudioDetection.EventGenerationTimeout", 30),
 				EVENT_CONFIGS_TREE.get<std::string>("AudioDetection.Topic"), notifications_manager->GetIoContext(), *log_);
 
 		notifications_manager->AddGenerator(audio_generator);
@@ -549,8 +549,7 @@ void init_service(HttpServer& srv, const osrv::ServerConfigs& server_configs_ins
 	{
 		const auto section = DetectorControls::Section(id);
 		if (!source->HasDetector(id)) continue;
-		source->ConfigureDetector(id, EVENT_CONFIGS_TREE.get<int>(section + ".EventGenerationTimeout",
-				section == "MotionRegion" || section == "LineDetector" ? 2 : 1),
+		source->ConfigureDetector(id, EVENT_CONFIGS_TREE.get<int>(section + ".EventGenerationTimeout", 30),
 			EVENT_CONFIGS_TREE.get<bool>(section + ".AutoGenerateEvents", true),
 			EVENT_CONFIGS_TREE.get<bool>(section + ".Enabled", true));
 	}
