@@ -8,6 +8,8 @@
 #include "../utility/MediaProfilesManager.h"
 #include "AdminAssets.h"
 #include "DetectorUi.h"
+#include "ConfigurationUi.h"
+#include <system_error>
 #include "../utility/ConfigValidation.h"
 
 #include <boost/property_tree/json_parser.hpp>
@@ -264,6 +266,63 @@ void RegisterAdminUi(IOnvifServer& server)
 	asset(R"(^/admin/app\.css$)", admin_assets::Css, "text/css; charset=utf-8");
 	asset(R"(^/admin/app\.js$)", admin_assets::Js, "text/javascript; charset=utf-8");
 	asset(R"(^/admin/detectors\.js$)", admin_assets::Detectors, "text/javascript; charset=utf-8");
+	asset(R"(^/admin/configuration\.js$)", admin_assets::Configuration, "text/javascript; charset=utf-8");
+	auto configuration_ui = std::make_shared<ConfigurationUi>(server);
+	http->resource["^/admin/api/configuration$"]["GET"] = [configuration_ui](Response response, Request) {
+		try { Json(response, Status::success_ok, configuration_ui->Read()); }
+		catch (const std::exception&) { Json(response, Status::server_error_internal_server_error,
+			R"({"error":"ConfigurationUnavailable","message":"Configuration files could not be read"})"); }
+	};
+	http->resource["^/admin/api/configuration$"]["POST"] = [configuration_ui](Response response, Request request) {
+		if (!SameOrigin(request, "configuration"))
+		{
+			Json(response, Status::client_error_forbidden, R"({"error":"Same-origin admin request required"})");
+			return;
+		}
+		auto type = request->header.find("Content-Type");
+		if (type == request->header.end() || type->second != "application/json")
+		{
+			Json(response, Status::client_error_unsupported_media_type, R"({"error":"Expected application/json"})");
+			return;
+		}
+		try
+		{
+			const auto body = request->content.string();
+			if (body.size() > 1024 * 1024) throw std::invalid_argument("Configuration is too large");
+			Tree command;
+			std::istringstream input(body);
+			boost::property_tree::read_json(input, command);
+			Json(response, Status::success_ok, configuration_ui->Change(command));
+		}
+		catch (const utility::ConfigValidationError& error)
+		{
+			Tree result;
+			result.put("error", error.unavailable ? "ValidationUnavailable" : "ConfigValidationFailed");
+			result.put("message", "Configuration was not saved");
+			result.put_child("validation_errors", error.issues);
+			Json(response, error.unavailable ? Status::server_error_service_unavailable : Status::client_error_unprocessable_entity, Encode(result));
+		}
+		catch (const std::system_error&)
+		{
+			Json(response, Status::server_error_insufficient_storage,
+				R"({"error":"ConfigurationWriteFailed","message":"Configuration was not saved. Check that the configuration directory is writable and the mount is not read-only; also check disk space."})");
+		}
+		catch (const utility::RuleFault& error)
+		{
+			Tree result;
+			result.put("error", error.detail);
+			result.put("message", error.detail == "SettingsChanged" ? "Settings changed in another client or on disk. Reload before saving." : error.detail);
+			Json(response, error.receiver ? Status::client_error_conflict : Status::client_error_bad_request, Encode(result));
+		}
+		catch (const std::exception& error)
+		{
+			Tree result;
+			result.put("error", "InvalidConfiguration");
+			// Do not echo arbitrary input values, paths or account credentials.
+			result.put("message", "Configuration was not saved. Check profile references, compatible source bindings, fixed profiles and metadata filters.");
+			Json(response, Status::client_error_bad_request, Encode(result));
+		}
+	};
 	auto detector_ui = std::make_shared<DetectorUi>(server);
 	http->resource["^/admin/api/detectors$"]["GET"] = [detector_ui](Response response, Request) {
 		try
@@ -305,6 +364,11 @@ void RegisterAdminUi(IOnvifServer& server)
 			error.put("message", "Configuration was not saved");
 			error.put_child("validation_errors", e.issues);
 			Json(response, e.unavailable ? Status::server_error_service_unavailable : Status::client_error_unprocessable_entity, Encode(error));
+		}
+		catch (const std::system_error&)
+		{
+			Json(response, Status::server_error_insufficient_storage,
+				R"({"error":"ConfigurationWriteFailed","message":"Configuration was not saved. Check directory write permissions, read-only mounts and free disk space."})");
 		}
 		catch (const utility::RuleFault& e)
 		{

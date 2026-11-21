@@ -370,4 +370,131 @@ BOOST_AUTO_TEST_CASE(detector_settings_validate_before_persistence_and_apply_wit
 
 }
 
+
+BOOST_AUTO_TEST_CASE(configuration_editor_validates_references_preserves_fixed_profiles_and_reports_restart)
+{
+	Endpoint endpoint;
+	auto get = [&]() {
+		auto response = endpoint.Request("GET", "/admin/api/configuration");
+		BOOST_REQUIRE_EQUAL(response->status_code, "200 OK");
+		BOOST_TEST(response->content.string().find("admin-secret-must-not-leak") == std::string::npos);
+		Tree result;
+		boost::property_tree::read_json(response->content, result);
+		return result;
+	};
+	auto entry = [](const Tree& view, const std::string& name) {
+		for (const auto& [_, file] : view.get_child("files")) if (file.get<std::string>("name") == name) return file;
+		throw std::runtime_error("Missing file");
+	};
+	auto post = [&](const Tree& command, const std::string& expected = "200 OK") {
+		std::ostringstream body;
+		boost::property_tree::write_json(body, command);
+		auto response = endpoint.Request("POST", "/admin/api/configuration", body.str(),
+			{{"Content-Type", "application/json"}, {"X-ONVIF-Admin", "configuration"}});
+		BOOST_REQUIRE_EQUAL(response->status_code, expected);
+		Tree result;
+		boost::property_tree::read_json(response->content, result);
+		return result;
+	};
+	auto view = get();
+	BOOST_TEST(view.get_child("files").size() == 14u);
+	Tree command;
+	command.put("file", "media_profiles.config");
+	command.put("revision", entry(view, "media_profiles.config").get<std::string>("revision"));
+	auto candidate = endpoint.server->MediaProfilesManager()->ReaderWriter()->ConfigsTree();
+	auto original = candidate;
+	Tree profile;
+	profile.put("token", "WebProfile"); profile.put("Name", "Web profile"); profile.put("fixed", false);
+	profile.put("VideoSource", "VideoSrcConfigToken0"); profile.put("Metadata", "MetadataToken0");
+	candidate.get_child("MediaProfiles").push_back({"", profile});
+	command.put("document", utility::media::MediaConfigJson(candidate));
+	BOOST_TEST(!post(command).get<bool>("restart_required"));
+	BOOST_TEST(endpoint.server->MediaProfilesManager()->GetProfileByToken("WebProfile").get<std::string>("Metadata") == "MetadataToken0");
+	post(command, "409 Conflict");
+	command.put("revision", entry(get(), "media_profiles.config").get<std::string>("revision"));
+	auto invalid = candidate;
+	invalid.get_child("MediaProfiles").back().second.put("Metadata", "missing");
+	command.put("document", utility::media::MediaConfigJson(invalid));
+	post(command, "400 Bad Request");
+	invalid = candidate;
+	invalid.get_child("MediaProfiles").pop_front();
+	command.put("document", utility::media::MediaConfigJson(invalid));
+	post(command, "400 Bad Request");
+	invalid = candidate;
+	invalid.get_child("MediaProfiles").back().second.erase("VideoSource");
+	command.put("document", utility::media::MediaConfigJson(invalid));
+	post(command, "400 Bad Request");
+	invalid = candidate;
+	invalid.get_child("Metadata").front().second.put("Name", "");
+	command.put("document", utility::media::MediaConfigJson(invalid));
+	post(command, "422 Unprocessable Entity");
+	candidate.get_child("Metadata").front().second.put("Events", false);
+	candidate.get_child("Metadata").front().second.put_child("Filters", Tree{});
+	command.put("document", utility::media::MediaConfigJson(candidate));
+	BOOST_TEST(!post(command).get<bool>("restart_required"));
+	// Later native ONVIF mutations must preserve an empty Filters array.
+	endpoint.server->MediaProfilesManager()->Create("Native profile after WebUI save");
+	command.put("revision", entry(get(), "media_profiles.config").get<std::string>("revision"));
+	candidate = endpoint.server->MediaProfilesManager()->ReaderWriter()->ConfigsTree();
+	candidate.get_child("VideoSource").front().second.put("Name", "Updated source");
+	command.put("document", utility::media::MediaConfigJson(candidate));
+	BOOST_TEST(post(command).get<bool>("restart_required"));
+	BOOST_TEST(get().get<bool>("restart_required"));
+	BOOST_TEST(endpoint.Request("POST", "/admin/api/configuration", "{}")->status_code == "403 Forbidden");
+}
+
+BOOST_AUTO_TEST_CASE(configuration_passwords_are_write_only_and_numeric_types_survive_save)
+{
+	Endpoint endpoint;
+	// Keep real JSON numeric types; older fixtures rewritten by PropertyTree use strings.
+	std::ifstream source("../../server_configs/common.config");
+	std::string common((std::istreambuf_iterator<char>(source)), {});
+	common.replace(common.find("\"a1\""), 4, "\"admin-secret-must-not-leak\"");
+	std::ofstream(endpoint.path + "/common.config") << common;
+	auto response = endpoint.Request("GET", "/admin/api/configuration");
+	const auto body = response->content.string();
+	BOOST_TEST(body.find("admin-secret-must-not-leak") == std::string::npos);
+	Tree view, file;
+	boost::property_tree::read_json(response->content, view);
+	for (const auto& [_, item] : view.get_child("files")) if (item.get<std::string>("name") == "common.config") file = item;
+	BOOST_TEST(file.get<std::string>("document").find("__UNCHANGED_SECRET__") != std::string::npos);
+	Tree command;
+	command.put("file", "common.config");
+	command.put("revision", file.get<std::string>("revision"));
+	command.put("document", file.get<std::string>("document"));
+	std::ostringstream json;
+	boost::property_tree::write_json(json, command);
+	response = endpoint.Request("POST", "/admin/api/configuration", json.str(),
+		{{"Content-Type", "application/json"}, {"X-ONVIF-Admin", "configuration"}});
+	BOOST_REQUIRE_EQUAL(response->status_code, "200 OK");
+	Tree result;
+	boost::property_tree::read_json(response->content, result);
+	BOOST_TEST(result.get<bool>("restart_required"));
+	Tree saved;
+	boost::property_tree::read_json(endpoint.path + "/common.config", saved);
+	BOOST_TEST(saved.get_child("users").front().second.get<std::string>("password") == "admin-secret-must-not-leak");
+	// The saved bytes must still satisfy the schema's integer-only RTP fields.
+	std::ifstream input(endpoint.path + "/common.config");
+	utility::ValidateConfig("common.config", std::string((std::istreambuf_iterator<char>(input)), {}));
+}
+
+
+BOOST_AUTO_TEST_CASE(media_json_preserves_default_namespace_objects_and_empty_filter_arrays)
+{
+	Tree media;
+	boost::property_tree::read_json("../../server_configs/media_profiles.config", media);
+	Tree filter, namespaces, filters;
+	filter.put("Kind", "TopicExpression");
+	filter.put("Dialect", "http://www.onvif.org/ver10/tev/topicExpression/ConcreteSet");
+	filter.put("Expression", "topic:RuleEngine//.");
+	namespaces.push_back({"", Tree("urn:default")});
+	namespaces.push_back({"topic", Tree("http://www.onvif.org/ver10/topics")});
+	filter.put_child("Namespaces", namespaces);
+	filters.push_back({"", filter});
+	media.get_child("Metadata").front().second.put_child("Filters", filters);
+	BOOST_CHECK_NO_THROW(utility::ValidateConfig("media_profiles.config", utility::media::MediaConfigJson(media)));
+	media.get_child("Metadata").front().second.put_child("Filters", Tree{});
+	BOOST_CHECK_NO_THROW(utility::ValidateConfig("media_profiles.config", utility::media::MediaConfigJson(media)));
+}
+
 BOOST_AUTO_TEST_SUITE_END()

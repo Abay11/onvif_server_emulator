@@ -8,6 +8,7 @@
   <link rel="stylesheet" href="/admin/app.css">
   <script src="/admin/app.js" defer></script>
   <script src="/admin/detectors.js" defer></script>
+  <script src="/admin/configuration.js" defer></script>
 </head>
 <body>
   <a class="skip-link" href="#main">Skip to content</a>
@@ -37,7 +38,14 @@
         <div class="summary-grid"><article class="panel"><div class="panel-heading"><h2>Network endpoints</h2><span class="tag">Advertised</span></div><dl id="network-summary" class="key-values"><dt>Configuration</dt><dd>Loading…</dd></dl></article><article class="panel"><div class="panel-heading"><h2>Device identity</h2><span class="tag">Emulated device</span></div><dl id="device-summary" class="key-values"><dt>Configuration</dt><dd>Loading…</dd></dl></article></div>
       </section>
       <section id="configuration" aria-labelledby="configuration-title">
-        <div class="section-heading"><div><h2 id="configuration-title">Current configuration</h2><p>Active values from this application run. File edits take effect after a restart.</p></div><span class="tag">Read only</span></div>
+        <div class="section-heading"><div><h2 id="configuration-title">Configuration</h2><p>Manage media profiles, ONVIF configurations and application settings.</p></div><button id="configuration-refresh" class="button secondary" type="button">Reload configuration</button></div>
+        <p id="configuration-message" class="notice" role="status" aria-live="polite" hidden></p>
+        <p id="configuration-restart" class="notice" role="status" hidden></p>
+        <div id="configuration-workspace" class="detector-layout">
+          <aside id="configuration-catalog" class="panel detector-catalog" aria-label="Configuration catalog"><p>Loading configuration…</p></aside>
+          <article class="panel"><div class="panel-heading"><h3 id="configuration-selected">Select a configuration</h3></div><div id="configuration-editor" class="detector-settings"><p>Select a profile, configuration or file.</p></div></article>
+        </div>
+        <h3>Active settings from this application run</h3>
         <div class="panel config-panel" id="settings"><p class="loading">Loading application settings…</p></div>
         <article class="panel table-panel"><div class="panel-heading"><h2>Media profiles</h2><span class="tag">Current associations</span></div><div class="table-scroll"><table><caption class="sr-only">Current media profile configuration associations</caption><thead><tr><th>Profile</th><th>Video encoder</th><th>Audio encoder</th><th>Metadata</th></tr></thead><tbody id="profiles-body"><tr><td colspan="4">Loading profiles…</td></tr></tbody></table></div><p class="table-note">Profile associations describe configuration; some streaming parameters are fixed by the emulator.</p></article>
         <article class="panel table-panel"><div class="panel-heading"><h2>ONVIF services</h2><span class="tag">Configured endpoints</span></div><div class="table-scroll"><table><caption class="sr-only">Configured ONVIF services and advertisement settings</caption><thead><tr><th>Service</th><th>Endpoint</th><th>Discovery listing</th></tr></thead><tbody id="services-body"><tr><td colspan="3">Loading services…</td></tr></tbody></table></div></article>
@@ -54,7 +62,7 @@
             <div id="detector-settings" class="detector-settings"></div>
           </article>
         </div>
-        <p class="table-note">Rules are saved to media_profiles.config. Enable switches are runtime controls and reset on application restart. Existing queued events remain available to clients.</p>
+        <p class="table-note">Rules are saved to media_profiles.config. Detector settings persist; rule engine and individual rule enable switches reset on application restart. Existing queued events remain available to clients.</p>
       </section>
       <section id="journal" aria-labelledby="journal-title">
         <div class="section-heading"><div><h2 id="journal-title">System event journal</h2><p>Application activity and detector summaries, collected internally.</p></div><button id="journal-pause" class="button secondary" type="button" aria-pressed="false">Pause updates</button></div>
@@ -77,6 +85,11 @@
       <footer class="page-footer"><span>ONVIF Server Emulator<span class="footer-separator">·</span>Administration</span><span id="last-update">Not connected yet</span></footer>
     </main>
   </div>
+  <dialog id="configuration-saved-dialog" aria-labelledby="configuration-saved-title">
+    <h2 id="configuration-saved-title">Configuration saved</h2>
+    <p>These changes take full effect only after restarting the application. Use System / Restart application when you are ready.</p>
+    <form method="dialog" class="dialog-actions"><button class="button secondary" autofocus>Close</button></form>
+  </dialog>
   <dialog id="config-error-dialog" aria-labelledby="config-error-title" aria-describedby="config-error-summary">
     <h2 id="config-error-title">Settings could not be applied</h2>
     <p id="config-error-summary"></p>

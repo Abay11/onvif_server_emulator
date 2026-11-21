@@ -20,7 +20,9 @@ The first version provides:
 - Application restart with a confirmation dialog, progress, reconnection and a
   check that the application instance changed.
 
-The overview settings are read only; the [detector panel](DETECTORS_UI.md)
+The overview shows active settings; [configuration administration](CONFIGURATION_UI.md)
+supports media profile/configuration editing and validated JSON file saves.
+Restart requirements and write failures are reported explicitly. The [detector panel](DETECTORS_UI.md)
 provides persisted rule editing, live detector settings and manual simulation steps.
 The status API selects explicit fields and excludes account
 lists, passwords, arbitrary config contents and the media input file/URI.

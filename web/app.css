@@ -914,3 +914,8 @@ dialog p {
 .button.detector-disabled { background: #812f39; border-color: #c86670; color: #fff4f4; }
 .button.detector-enabled:hover { background: #1b734d; }
 .button.detector-disabled:hover { background: #a33b48; }
+
+#configuration-workspace { margin-bottom: 24px; }
+.configuration-bindings { display: grid; gap: 16px; }
+.configuration-json { font-family: ui-monospace, monospace !important; min-height: 420px; resize: vertical; }
+#configuration-restart { border-left: 4px solid #be861a; background: #fff6d9; color: #65450b; }

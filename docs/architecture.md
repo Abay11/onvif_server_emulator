@@ -114,7 +114,12 @@ context in `Server` handles simulated network delays in the Event service.
 
 `Server::init()` registers the embedded WebUI at `/admin/` on the shared HTTP
 server. Its JSON API selects non-secret startup settings and reads current media
-profile associations from the manager's shared tree. It exposes reachability,
+profile associations from the manager's shared tree. The configuration editor
+validates complete JSON documents, checks media references and native metadata/analytics
+semantics, then persists before replacing the shared media tree. Other service files
+are saved for restart. Opaque revisions reject stale edits, and write errors have
+a separate HTTP 507 response. See [Configuration administration](CONFIGURATION_UI.md).
+It exposes reachability,
 uptime and a per-run instance ID. The restart API and ONVIF `SystemReboot` use the
 same response-completion helper and pending flag, replacing the process image
 only after sending the acknowledgement. WebUI routes are separate from SOAP and

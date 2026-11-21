@@ -102,13 +102,15 @@ the equivalent `docker run` deployment: both use the same host ports.
 Open `http://<emulator-host>:8080/admin/` (use the configured HTTP port if different)
 for application status, active settings, media profile associations, a live
 system/detector journal with filters, detector/rule management with geometry
-previews, and application restart. The page uses the same listener as ONVIF and
+previews, editable media profiles and ONVIF configurations, a JSON configuration
+editor, and application restart. The page uses the same listener as ONVIF and
 is bundled into the executable.
 This initial version has no login; WebUI access, including restart, is available to
 clients that can reach that port even when SOAP Digest is enabled. Account passwords
 are excluded from the status API. Rule edits persist to media_profiles.config;
 detector enable, auto generation and interval settings persist to event.config
 and apply live. Rule engine and individual rule enable switches are runtime controls. See
+[configuration administration](docs/CONFIGURATION_UI.md),
 [detector administration](docs/DETECTORS_UI.md) and [WebUI documentation](docs/WEB_UI.md).
 
 ### Custom configuration and persistence
