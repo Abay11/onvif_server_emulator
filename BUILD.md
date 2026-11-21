@@ -41,6 +41,9 @@ To build OnvifServerEmulator:
 * cmake 3.16 or later to generate build files
 * C++ compiler with decent C++20 support
 * Python 3 with jsonschema 4.18+ and referencing for pre-write configuration validation
+  (also required at runtime; transitive packages include attrs,
+  jsonschema-specifications and rpds-py)
+* Simple-Web-Server v3.1.1, provided by the Git submodule
 * Boost libraries 1.72 or later:
 	- system
 	- date_time
@@ -58,6 +61,29 @@ To build OnvifServerEmulator:
 	- plugins-ugly
 	- plugins-bad
 	- x264
+
+The default enabled metadata feature raises the effective GStreamer requirement
+to **1.20+** and needs the pinned gst-plugins-rs ONVIF plugin **0.13.7**.
+Building that plugin requires Rust 1.71+ and Cargo; the documented Docker build
+provides them. RTSP Server, app, video and RTSP development libraries are required
+by CMake. Streaming additionally uses GLib/GObject, Pango/Cairo and fonts;
+AAC/G726 encoding and file decoding use gst-libav/FFmpeg. The Dockerfile installs
+the base/good/bad/ugly/x/libav plugin packages and DejaVu fonts explicitly.
+
+Boost.Test is needed for CTest. Optional XML checks use lxml, xmlschema,
+elementpath and, for the Python metadata server, PyGObject/introspection.
+Browser checks use Selenium with Chromium/ChromeDriver; these browser tools are
+not installed by the normal `dev` target.
+
+See the [complete dependency inventory](docs/DEPENDENCIES.md) for actual use,
+licenses, optional tools and build-specific dependency inventories. In particular, the
+current x264 and inspected FFmpeg build introduce GPL distribution obligations;
+GStreamer's LGPL license does not cover every codec loaded through its plugins.
+
+The application uses GPL-3.0-only. Before distributing a binary or image, follow
+[the source and notice packaging instructions](docs/DISTRIBUTION.md). The Docker
+`source-bundle` target exports exact dependency sources separately from the
+runtime, and tag releases must publish that companion before pushing the image.
 
 # Building
 
@@ -92,11 +118,17 @@ sudo apt install -y \
   gstreamer1.0-rtsp \
   libgstrtspserver-1.0-dev \
   gstreamer1.0-plugins-good \
+  gstreamer1.0-plugins-bad \
   gstreamer1.0-plugins-ugly \
   gstreamer1.0-x \
   gstreamer1.0-libav \
   gstreamer1.0-tools
 ```
+
+Install `fonts-dejavu-core` for overlays and build/install the pinned metadata
+plugin as described in [the metadata guide](docs/RTSP_METADATA.md), or use the
+documented `dev` container, which includes both. The apt package list alone does
+not install the Rust metadata payloader required by the default configuration.
 
 **Step 3.** Install Boost libraries:
 

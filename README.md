@@ -10,6 +10,24 @@ full range of ONVIF features.
 See the [architecture overview](docs/architecture.md) for implementation details
 and current limitations.
 
+See the [dependency and third-party inventory](docs/DEPENDENCIES.md) for runtime,
+build and test components, their licenses, and inspected package versions.
+
+## License
+
+Copyright (C) 2020-2026 Alim Abaev. The project's original code, documentation,
+configuration and project-created assets are licensed under **GPL-3.0-only**,
+to the extent copyright applies. Commercial use and redistribution are permitted
+under its terms. This program comes without warranty. See [LICENSE](LICENSE)
+and [NOTICE](NOTICE). Third-party components retain their own licenses; see
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
+For binary/container releases, download the matching source companion from the
+[project's releases](https://github.com/Abay11/onvif_server_emulator/releases).
+[Distribution instructions](docs/DISTRIBUTION.md) describe the archives, exact
+dependency sources and native-build obligations. These new files do not repair
+previously published images automatically.
+
 ## Run the Published Docker Image
 
 The public image includes the application, default configuration and runtime

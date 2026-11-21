@@ -3,3 +3,4 @@ CMakeLists.txt~
 build/*
 .venv-config-validation/
 __pycache__/
+output/

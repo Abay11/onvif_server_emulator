@@ -1,4 +1,28 @@
-# Synthetic LPR test resource
+# Synthetic image test resources
+
+## Neutral snapshot
+
+`snapshot.jpeg` was generated from scratch on 2026-11-21 with the built-in
+image_gen tool using the imagegen skill. No reference images or third-party
+image assets were supplied. It depicts a fictional empty courtyard with a plain
+building, walkway, tree and lawn, without people, vehicles or brands, and carries
+the label SYNTHETIC TEST IMAGE. It is a software fixture, not a real camera capture.
+It replaces the older snapshot whose provenance had not been established; this
+replacement does not establish redistribution rights for copies of the old image
+remaining in Git history or previously built images.
+
+Generation prompt:
+
+> Use case: stylized-concept. Asset type: neutral JPEG snapshot fixture for a software camera emulator. Generate a brand-new synthetic landscape image, 4:3 composition. A quiet generic empty courtyard with a plain light grey building wall, a simple walkway, a small tree and muted green lawn, viewed from a fixed elevated security camera. Clean understated illustration with soft natural daylight and clear shapes. No people, vehicles, license plates, brands, logos, recognizable locations, copyrighted characters or reference photographs. Add a small clear label exactly 'SYNTHETIC TEST IMAGE' in the bottom left. This must be visibly a neutral software test scene, not an actual camera capture. Opaque background.
+
+The generated PNG was resized to 1280x960 and converted to an opaque baseline
+JPEG with FFmpeg (`-vf scale=1280:960 -frames:v 1 -q:v 2 -pix_fmt yuvj420p
+-map_metadata -1`). No visual elements were added during conversion.
+The result is served by the existing `/snapshot.jpeg` route.
+
+SHA-256: `d95af8bb9125593b2dc324c09d46cd5479df966200ef28d9264f8e0cfbe0231f`.
+
+## Synthetic LPR test resource
 
 `lpr-test.png` is an AI-generated software test card, not a camera capture.
 It was created on 2026-11-19 using the built-in image_gen tool (imagegen skill).

@@ -6,3 +6,14 @@ cmake-build-*/
 .vscode/
 **/*.log
 **/*~
+**/__pycache__/
+**/*.pyc
+.venv*/
+.agents/
+.aws/
+.codex/
+.devcontainer/
+docker/.devcontainer/
+.env
+.env.*
+output/
