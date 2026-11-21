@@ -300,6 +300,7 @@ void RegisterAdminUi(IOnvifServer& server)
 	asset(R"(^/admin/app\.js$)", admin_assets::Js, "text/javascript; charset=utf-8");
 	asset(R"(^/admin/detectors\.js$)", admin_assets::Detectors, "text/javascript; charset=utf-8");
 	asset(R"(^/admin/configuration\.js$)", admin_assets::Configuration, "text/javascript; charset=utf-8");
+	asset(R"(^/admin/users\.js$)", admin_assets::Users, "text/javascript; charset=utf-8");
 	asset("^/admin/login/?$", admin_assets::Login, "text/html; charset=utf-8");
 	asset(R"(^/admin/login\.js$)", admin_assets::LoginJs, "text/javascript; charset=utf-8");
 	asset(R"(^/admin/session\.js$)", admin_assets::SessionJs, "text/javascript; charset=utf-8");
@@ -408,7 +409,11 @@ void RegisterAdminUi(IOnvifServer& server)
 		{
 			Tree result;
 			result.put("error", error.detail);
-			result.put("message", error.detail == "SettingsChanged" ? "Settings changed in another client or on disk. Reload before saving." : error.detail);
+			result.put("message", error.detail == "LastAdministrator"
+													? "Keep at least one enabled administrator account."
+													: error.detail == "SettingsChanged"
+															? "Settings changed in another client or on disk. Reload before saving."
+															: error.detail);
 			Json(response, error.receiver ? Status::client_error_conflict : Status::client_error_bad_request, Encode(result));
 		}
 		catch (const std::exception& error)

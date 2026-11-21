@@ -124,7 +124,10 @@ uptime and a per-run instance ID. The restart API and ONVIF `SystemReboot` use t
 same response-completion helper and pending flag, replacing the process image
 only after sending the acknowledgement. WebUI routes require a browser session
 for an enabled ONVIF administrator account, independently of the SOAP authentication
-mode. `WebAuthentication` owns eight-hour sessions in memory; page/API guards run
+mode. The Users & authentication panel saves account creation, deletion, enabled
+flags and the selected SOAP scheme through the configuration API for restart;
+active accounts and sessions retain their startup values until then. Account
+saves must retain an enabled administrator. `WebAuthentication` owns eight-hour sessions in memory; page/API guards run
 before their handlers. Restart discards sessions. A separate
 `SystemJournal` records structured lifecycle/client events and detector summaries
 directly from the publication path, ahead of external consumer queues. The WebUI
@@ -164,7 +167,8 @@ The Event service is implemented separately through `event::init_service()` and
 Its dispatch, authentication, and error handling need separate review when changing
 shared SOAP service behavior.
 
-`AUTH_SCHEME` supports `none`, `ws-security`, `digest`, and `digest/ws-security`.
+`AUTH_SCHEME` supports `none`, `ws-security`, `digest`, and `digest/ws-security`
+(the bundled default).
 Both dispatchers call `utility/RequestAuthentication` and share one Digest/UsernameToken
 session for nonce tracking. The session implements MD5, SHA-256, SHA-512-256 and
 WS-Security UsernameToken PasswordDigest/PasswordText. Roles and disabled accounts

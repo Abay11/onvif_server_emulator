@@ -80,7 +80,7 @@
       target.append(group);
     }
     const files = node("details"); files.append(node("summary", "Configuration files · advanced"));
-    for (const entry of state.files) files.append(button(entry.name, () => { if (leave()) editFile(entry); }));
+    for (const entry of state.files.filter((item) => item.name !== "users.config")) files.append(button(entry.name, () => { if (leave()) editFile(entry); }));
     target.append(files);
   }
   function form(title, note) {
@@ -206,5 +206,6 @@
     if (await load()) { selection = null; $("configuration-editor").replaceChildren(node("p", "Select a profile, configuration or file.")); message(""); }
   });
   window.addEventListener("beforeunload", (event) => { if (dirty) { event.preventDefault(); event.returnValue = ""; } });
+  window.addEventListener("admin-configuration-saved", () => { if (!dirty && !busy) load(); });
   load();
 })();

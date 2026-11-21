@@ -244,6 +244,12 @@ std::string ConfigurationUi::Change(const Tree& command)
 	{
 		const auto previous = Parse(found->second.bytes);
 		RestorePasswords(candidate, previous);
+		const auto& users = candidate.get_child("users");
+		if (std::none_of(users.begin(), users.end(), [](const auto& entry) {
+			return entry.second.template get<std::string>("type") == "administrator" &&
+					 entry.second.template get<bool>("enabled");
+		}))
+			throw utility::RuleFault("LastAdministrator", false);
 		bytes = PasswordJson(bytes, candidate, false);
 		utility::ValidateConfig(file, bytes);
 	}

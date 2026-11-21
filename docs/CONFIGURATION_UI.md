@@ -1,8 +1,8 @@
 # Configuration administration
 
 Open `/admin/#configuration` on the ONVIF HTTP port. The catalog contains media
-profiles, ONVIF configuration entities and an advanced editor for every supported
-JSON `.config` file. The active settings and association tables below the editor
+profiles, ONVIF configuration entities and an advanced editor for supported
+JSON `.config` files. The active settings and association tables below the editor
 remain a view of the running application. Account passwords are never returned.
 
 ## Media profiles and configurations
@@ -41,7 +41,13 @@ an advertised encoder setting does not guarantee the actual media changes.
 
 ## Configuration files and restart
 
-The advanced editor exposes all files registered in `schemas/config-files.json`.
+The advanced editor exposes registered files except `users.config`, managed in
+**Users & authentication**. That section provides account creation, deletion and
+enable/disable controls plus the ONVIF authentication selector. It shows the active
+scheme separately from the saved scheme; both account and scheme edits require
+restart through System. Existing passwords remain write-only and are preserved
+when other accounts change. The server rejects removal or disabling of the last
+enabled administrator. Concurrent edits return a conflict and require reload.
 File names are selected from a server whitelist; arbitrary paths are rejected.
 Each editor has Save configuration and Cancel edits controls. Raw JSON editors
 preserve JSON types and empty objects/arrays. Full-document JSON Schema validation

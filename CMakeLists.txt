@@ -216,7 +216,8 @@ set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/web/app.css"
     "${CMAKE_CURRENT_SOURCE_DIR}/web/app.js"
     "${CMAKE_CURRENT_SOURCE_DIR}/web/detectors.js"
-    "${CMAKE_CURRENT_SOURCE_DIR}/web/configuration.js")
+    "${CMAKE_CURRENT_SOURCE_DIR}/web/configuration.js"
+    "${CMAKE_CURRENT_SOURCE_DIR}/web/users.js")
 file(READ "${CMAKE_CURRENT_SOURCE_DIR}/web/index.html" ADMIN_HTML)
 file(READ "${CMAKE_CURRENT_SOURCE_DIR}/web/login.html" LOGIN_HTML)
 file(READ "${CMAKE_CURRENT_SOURCE_DIR}/web/login.js" LOGIN_JS)
@@ -225,6 +226,7 @@ file(READ "${CMAKE_CURRENT_SOURCE_DIR}/web/app.css" ADMIN_CSS)
 file(READ "${CMAKE_CURRENT_SOURCE_DIR}/web/app.js" ADMIN_JS)
 file(READ "${CMAKE_CURRENT_SOURCE_DIR}/web/detectors.js" DETECTORS_JS)
 file(READ "${CMAKE_CURRENT_SOURCE_DIR}/web/configuration.js" CONFIGURATION_JS)
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/web/users.js" USERS_JS)
 configure_file(web/Assets.h.in generated/AdminAssets.h @ONLY)
 target_include_directories(onvif_server PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/generated")
 

@@ -575,6 +575,47 @@ BOOST_AUTO_TEST_CASE(configuration_passwords_are_write_only_and_boolean_types_su
 }
 
 
+BOOST_AUTO_TEST_CASE(account_management_preserves_passwords_and_rejects_administrator_lockout)
+{
+	Endpoint endpoint;
+	auto save = [&](const std::string& document, const std::string& expected = "200 OK") {
+		auto response = endpoint.Request("GET", "/admin/api/configuration");
+		Tree view, command;
+		boost::property_tree::read_json(response->content, view);
+		for (const auto& [_, item] : view.get_child("files"))
+			if (item.get<std::string>("name") == "users.config")
+				command.put("revision", item.get<std::string>("revision"));
+		command.put("file", "users.config");
+		command.put("document", document);
+		std::ostringstream json;
+		boost::property_tree::write_json(json, command);
+		response = endpoint.Request("POST", "/admin/api/configuration", json.str(),
+			{{"Content-Type", "application/json"}, {"X-ONVIF-Admin", "configuration"}});
+		BOOST_REQUIRE_EQUAL(response->status_code, expected);
+		return response->content.string();
+	};
+	const std::string admin = R"({"login":"a","password":"__UNCHANGED_SECRET__","type":"administrator","enabled":true})";
+	const std::string created = R"({"login":"new-account","password":"new-secret","type":"operator","enabled":true})";
+	save("{\"users\":[" + admin + "," + created + "]}");
+	Tree stored;
+	boost::property_tree::read_json(endpoint.path + "/users.config", stored);
+	BOOST_TEST(stored.get_child("users").size() == 2u);
+	BOOST_TEST(stored.get_child("users").front().second.get<std::string>("password") == "admin-secret-must-not-leak");
+	BOOST_TEST(stored.get_child("users").back().second.get<std::string>("password") == "new-secret");
+	const auto rejected = save(R"({"users":[{"login":"a","password":"__UNCHANGED_SECRET__","type":"administrator","enabled":false}]})", "400 Bad Request");
+	BOOST_TEST(rejected.find("LastAdministrator") != std::string::npos);
+	boost::property_tree::read_json(endpoint.path + "/users.config", stored);
+	BOOST_TEST(stored.get_child("users").size() == 2u);
+	BOOST_TEST(stored.get_child("users").front().second.get<bool>("enabled"));
+	save("{\"users\":[" + admin + R"(,{"login":"new-account","password":"__UNCHANGED_SECRET__","type":"operator","enabled":false}]})");
+	boost::property_tree::read_json(endpoint.path + "/users.config", stored);
+	BOOST_TEST(!stored.get_child("users").back().second.get<bool>("enabled"));
+	BOOST_TEST(stored.get_child("users").back().second.get<std::string>("password") == "new-secret");
+	save("{\"users\":[" + admin + "]}");
+	boost::property_tree::read_json(endpoint.path + "/users.config", stored);
+	BOOST_TEST(stored.get_child("users").size() == 1u);
+}
+
 BOOST_AUTO_TEST_CASE(media_json_preserves_default_namespace_objects_and_empty_filter_arrays)
 {
 	Tree media;

@@ -1,7 +1,13 @@
 # Authentication
 
 `common.config.authentication` selects SOAP authentication for all ordinary
-services and the separate Event/PullPoint dispatcher:
+services and the separate Event/PullPoint dispatcher. The bundled default is
+`digest/ws-security`. Use WebUI **Users & authentication** to select a scheme,
+create/delete accounts and enable/disable accounts. Changes require a restart:
+SOAP and browser sessions retain their startup accounts until then. At least one
+enabled administrator must remain when saving accounts through WebUI.
+
+Supported modes:
 
 | Mode | Accepted credentials |
 | --- | --- |

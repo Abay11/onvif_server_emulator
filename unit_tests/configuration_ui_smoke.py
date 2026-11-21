@@ -110,6 +110,9 @@ def main():
     with tempfile.TemporaryDirectory(prefix="configuration-ui-") as directory:
         configs = Path(directory) / "configs"
         shutil.copytree(root / "server_configs", configs)
+        common_path = configs / "common.config"
+        common = json.loads(common_path.read_text()); common["authentication"] = "none"
+        common_path.write_text(json.dumps(common))
         environment = dict(os.environ, ONVIF_ADVERTISED_IPV4="127.0.0.1", ONVIF_DISCOVERY_INTERFACE_IPV4="127.0.0.1")
         with (Path(directory) / "server.log").open("w+") as log:
             process = subprocess.Popen([str(args.binary.resolve()), str(configs)], env=environment,

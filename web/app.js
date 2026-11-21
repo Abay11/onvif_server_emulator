@@ -69,6 +69,7 @@
   function render(data) {
     current = data;
     const settings = data.settings;
+    byId("authentication-active").textContent = `Active scheme: ${settings.application.onvif_authentication}`;
     const profiles = data.profiles;
     byId("uptime").textContent = uptime(data.uptime_seconds);
     byId("process").textContent = `Process ${data.pid} · Current run`;
@@ -98,7 +99,7 @@
       details.dataset.section = key;
       details.open = opened.has(key) || (firstRender && key === "application");
       const values = node("dl", undefined, "key-values");
-      list(values, Object.entries(settings[key]));
+      list(values, Object.entries(settings[key]).filter(([name]) => name !== "onvif_authentication"));
       details.append(node("summary", labels[key]), values);
       container.append(details);
     }

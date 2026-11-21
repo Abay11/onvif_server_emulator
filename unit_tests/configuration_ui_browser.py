@@ -10,6 +10,7 @@ import subprocess
 import tempfile
 
 from selenium import webdriver
+from selenium.common.exceptions import StaleElementReferenceException
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
@@ -25,7 +26,7 @@ def exercise(screenshot=None, read_only=False):
     options.set_capability("goog:loggingPrefs", {"browser": "ALL"})
     browser = webdriver.Chrome(service=Service("/usr/bin/chromedriver"), options=options)
     try:
-        ready = WebDriverWait(browser, 25)
+        ready = WebDriverWait(browser, 25, ignored_exceptions=(StaleElementReferenceException,))
         browser.execute_cdp_cmd("Emulation.setEmulatedMedia", {"features": [{"name": "prefers-reduced-motion", "value": "reduce"}]})
         browser_login(browser)
         browser.get("http://127.0.0.1:8080/admin/#configuration")
@@ -94,6 +95,34 @@ def exercise(screenshot=None, read_only=False):
         name.send_keys("Event metadata")
         save()
 
+        browser.get("http://127.0.0.1:8080/admin/#users")
+        ready.until(lambda driver: len(driver.find_elements(By.CSS_SELECTOR, "#users-body tr")) == 3)
+        assert "digest/ws-security" in browser.find_element(By.ID, "authentication-active").text
+        def account_row(login):
+            return next(row for row in browser.find_elements(By.CSS_SELECTOR, "#users-body tr")
+                        if row.find_element(By.TAG_NAME, "td").text == login)
+        assert all(not item.is_enabled() for item in account_row("a").find_elements(By.TAG_NAME, "button"))
+        browser.find_element(By.ID, "user-login").send_keys("browser-user")
+        browser.find_element(By.ID, "user-password").send_keys("browser-secret")
+        browser.find_element(By.CSS_SELECTOR, "#user-create button").click()
+        ready.until(lambda driver: len(driver.find_elements(By.CSS_SELECTOR, "#users-body tr")) == 4)
+        assert browser.find_element(By.ID, "user-password").get_property("value") == ""
+        assert all(user["password"] == "__UNCHANGED_SECRET__" for user in json.loads(entry("users.config")["document"])["users"])
+        account_row("browser-user").find_elements(By.TAG_NAME, "button")[0].click()
+        ready.until(lambda _: "Disabled" in account_row("browser-user").text)
+        account_row("browser-user").find_elements(By.TAG_NAME, "button")[0].click()
+        ready.until(lambda _: "Enabled" in account_row("browser-user").text)
+        account_row("browser-user").find_elements(By.TAG_NAME, "button")[1].click()
+        browser.switch_to.alert.accept()
+        ready.until(lambda driver: len(driver.find_elements(By.CSS_SELECTOR, "#users-body tr")) == 3)
+        scheme = browser.find_element(By.ID, "authentication-scheme")
+        next(option for option in scheme.find_elements(By.TAG_NAME, "option") if option.get_attribute("value") == "digest").click()
+        browser.find_element(By.CSS_SELECTOR, "#authentication-form button").click()
+        ready.until(lambda _: json.loads(entry("common.config")["document"])["authentication"] == "digest")
+        ready.until(lambda driver: "Restart the application" in driver.find_element(By.ID, "users-message").text)
+        assert "digest/ws-security" in browser.find_element(By.ID, "authentication-active").text
+        browser.get("http://127.0.0.1:8080/admin/#configuration")
+        ready.until(lambda driver: len(driver.find_elements(By.CSS_SELECTOR, "#configuration-catalog button")) > 15)
         open_group("Configuration files · advanced")
         catalog_button("common.config").click()
         text = browser.find_element(By.CSS_SELECTOR, "#configuration-editor textarea.configuration-json")
@@ -111,7 +140,8 @@ def exercise(screenshot=None, read_only=False):
         assert not [item for item in browser.get_log("browser") if item["level"] == "SEVERE" and "/favicon.ico" not in item["message"]
                     and "422 (Unprocessable Entity)" not in item["message"]]
         print("PASS Chromium: fixed profile protection, profile creation/deletion, configuration attachment, "
-              "metadata editing, schema error dialog, retained draft, write-only passwords and restart notification")
+              "metadata editing, schema error dialog, retained draft, account create/enable/disable/delete, "
+              "authentication scheme selection, write-only passwords and restart notification")
     except BaseException:
         if screenshot:
             browser.save_screenshot(str(screenshot))

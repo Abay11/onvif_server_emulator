@@ -193,8 +193,8 @@ Remove this deployment's rules:
 Corporate policy can prevent local allow rules or loopback traffic. Ask the
 administrator to permit the scoped rules if effective policy blocks them; do not
 disable the firewall or set WSL's default inbound action to Allow. The shipped
-configuration has authentication disabled and example credentials: enable a
-supported authentication mode and change credentials before sharing it on a LAN.
+configuration uses Digest / WS-Security and example credentials: change the
+credentials before sharing it on a LAN.
 
 ## 5. Addresses, configuration and files
 

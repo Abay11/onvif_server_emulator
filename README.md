@@ -45,7 +45,7 @@ Connect an ONVIF client to `http://192.168.1.10:8080/onvif/device_service` or us
 automatic discovery. In VLC, test
 `rtsp://192.168.1.10:8554/Live&HighStream` (quote the URL in a shell).
 Check HTTP with `curl --fail http://192.168.1.10:8080/snapshot.jpeg -o snapshot.jpeg`.
-The bundled configuration has SOAP authentication disabled. WebUI sign-in uses
+The bundled configuration uses Digest / WS-Security SOAP authentication. WebUI sign-in uses
 an enabled administrator account from `users.config`.
 
 ```bash
@@ -229,8 +229,9 @@ SOAP operations do not necessarily change the RTSP pipelines.
 ### Common Settings (`common.config`)
 
 - `authentication`: selects `none`, `digest`, `ws-security`, or
-  `digest/ws-security`. SOAP services and Events/PullPoint enforce the selected
-  mode. Combined mode accepts either mechanism; if both are supplied both are
+  `digest/ws-security` (the bundled default). Select the scheme and manage accounts
+  in WebUI **Users & authentication**; changes require restart. SOAP services and
+  Events/PullPoint enforce the selected mode. Combined mode accepts either mechanism; if both are supplied both are
   verified. See [authentication](docs/AUTHENTICATION.md) for algorithms and faults.
 - Accounts are stored in **`users.config`**, with plaintext `login`, `password`,
   `type` (`administrator`, `operator`, `user`) and boolean `enabled`.

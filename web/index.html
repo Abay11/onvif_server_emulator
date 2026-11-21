@@ -10,6 +10,7 @@
   <script src="/admin/app.js" defer></script>
   <script src="/admin/detectors.js" defer></script>
   <script src="/admin/configuration.js" defer></script>
+  <script src="/admin/users.js" defer></script>
 </head>
 <body>
   <a class="skip-link" href="#main">Skip to content</a>
@@ -19,6 +20,7 @@
     <nav>
       <a class="nav-link" href="#overview"><span aria-hidden="true">▦</span> Overview</a>
       <a class="nav-link" href="#configuration"><span aria-hidden="true">≡</span> Configuration</a>
+      <a class="nav-link" href="#users"><span aria-hidden="true">♙</span> Users &amp; authentication</a>
       <a class="nav-link" href="#detectors"><span aria-hidden="true">◇</span> Detectors</a>
       <a class="nav-link" href="#journal"><span aria-hidden="true">☷</span> Event journal</a>
       <a class="nav-link" href="#system"><span aria-hidden="true">⏻</span> System</a>
@@ -50,6 +52,25 @@
         <div class="panel config-panel" id="settings"><p class="loading">Loading application settings…</p></div>
         <article class="panel table-panel"><div class="panel-heading"><h2>Media profiles</h2><span class="tag">Current associations</span></div><div class="table-scroll"><table><caption class="sr-only">Current media profile configuration associations</caption><thead><tr><th>Profile</th><th>Video encoder</th><th>Audio encoder</th><th>Metadata</th></tr></thead><tbody id="profiles-body"><tr><td colspan="4">Loading profiles…</td></tr></tbody></table></div><p class="table-note">Profile associations describe configuration; some streaming parameters are fixed by the emulator.</p></article>
         <article class="panel table-panel"><div class="panel-heading"><h2>ONVIF services</h2><span class="tag">Configured endpoints</span></div><div class="table-scroll"><table><caption class="sr-only">Configured ONVIF services and advertisement settings</caption><thead><tr><th>Service</th><th>Endpoint</th><th>Discovery listing</th></tr></thead><tbody id="services-body"><tr><td colspan="3">Loading services…</td></tr></tbody></table></div></article>
+      </section>
+      <section id="users" aria-labelledby="users-title">
+        <div class="section-heading"><div><h2 id="users-title">Users &amp; authentication</h2><p>Manage accounts shared by ONVIF and WebUI. Saved changes apply after an application restart.</p></div><button id="users-refresh" class="button secondary" type="button">Reload users</button></div>
+        <p id="users-message" class="notice" role="status" aria-live="polite" hidden></p>
+        <div id="users-workspace">
+          <article class="panel"><div class="panel-heading"><h3>ONVIF authentication</h3></div><form id="authentication-form" class="detector-form detector-settings">
+            <p id="authentication-active" class="table-note">Loading active scheme…</p>
+            <label>Saved scheme<select id="authentication-scheme" required><option value="digest/ws-security">Digest / WS-Security</option><option value="digest">Digest</option><option value="ws-security">WS-Security</option><option value="none">None</option></select></label>
+            <button class="button secondary" type="submit">Save authentication scheme</button>
+          </form></article>
+          <article class="panel table-panel"><div class="panel-heading"><h3>Accounts</h3></div><div class="table-scroll"><table><thead><tr><th>Login</th><th>Role</th><th>Saved status</th><th>Actions</th></tr></thead><tbody id="users-body"></tbody></table></div></article>
+          <article class="panel"><div class="panel-heading"><h3>Create account</h3></div><form id="user-create" class="detector-form detector-settings">
+            <label>Login<input id="user-login" required autocomplete="off" pattern="[^:\x00-\x1f\x7f]+"></label>
+            <label>Password<input id="user-password" type="password" required autocomplete="new-password"></label>
+            <label>Role<select id="user-role"><option value="user">User</option><option value="operator">Operator</option><option value="administrator">Administrator</option></select></label>
+            <label><input id="user-enabled" type="checkbox" checked> Enabled</label>
+            <button class="button secondary" type="submit">Create account</button>
+          </form></article>
+        </div>
       </section>
       <section id="detectors" aria-labelledby="detector-title">
         <div class="section-heading"><div><h2 id="detector-title">Detectors</h2><p>Inspect and control built-in detectors and rule-based analytics.</p></div><button id="detector-refresh" class="button secondary" type="button">Refresh detectors</button></div>
