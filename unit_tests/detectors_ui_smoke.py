@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Exercise detector controls and rule persistence against a source-built process."""
+from admin_session import urlopen, set_credentials
 import argparse
 from copy import deepcopy
 import json
@@ -24,7 +25,7 @@ def api(path="/admin/api/detectors", command=None, expected=200):
     request = urllib.request.Request(BASE + path, None if command is None else json.dumps(command).encode(),
                                      {} if command is None else {"Content-Type": "application/json", "X-ONVIF-Admin": "detectors"})
     try:
-        response = urllib.request.urlopen(request, timeout=10)
+        response = urlopen(request, timeout=10)
     except urllib.error.HTTPError as error:
         response = error
     with response:
@@ -78,7 +79,7 @@ def main():
             try:
                 catalog = wait(process, lambda: api())
                 assert len(catalog["simple"]) == 4 and len(catalog["families"]) == 6
-                with urllib.request.urlopen(BASE + "/admin/detectors.js", timeout=5) as response:
+                with urlopen(BASE + "/admin/detectors.js", timeout=5) as response:
                     assert response.status == 200 and b"pointermove" in response.read()
                 cfg = catalog["configurations"][0]
                 token = cfg["token"]
@@ -147,7 +148,7 @@ def main():
                 instance = api("/admin/api/status")["instance_id"]
                 req = urllib.request.Request(BASE + "/admin/api/reboot", b'{"confirm":true}',
                                              {"Content-Type": "application/json", "X-ONVIF-Admin": "reboot"})
-                with urllib.request.urlopen(req, timeout=5) as response:
+                with urlopen(req, timeout=5) as response:
                     assert response.status == 202
                 wait(process, lambda: api("/admin/api/status")["instance_id"] != instance)
                 assert api()["rules_enabled"] is True

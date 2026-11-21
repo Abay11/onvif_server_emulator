@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Check pre-write schema rejection and packaged validator resources on a real server."""
+from admin_session import urlopen, set_credentials
 import argparse
 from copy import deepcopy
 import json
@@ -18,7 +19,7 @@ def request(path, command=None, expected=200, marker="detectors"):
                                  None if command is None else json.dumps(command).encode(),
                                  {} if command is None else {"Content-Type": "application/json", "X-ONVIF-Admin": marker})
     try:
-        response = urllib.request.urlopen(req, timeout=15)
+        response = urlopen(req, timeout=15)
     except urllib.error.HTTPError as error:
         response = error
     with response:
@@ -66,7 +67,7 @@ def main():
                                        stdout=log, stderr=subprocess.STDOUT)
             try:
                 state = wait(process)
-                with urllib.request.urlopen("http://127.0.0.1:8080/admin/") as response:
+                with urlopen("http://127.0.0.1:8080/admin/") as response:
                     assert b'id="config-error-dialog"' in response.read()
                 catalog = request("/admin/api/detectors")["configurations"][0]
                 rule = deepcopy(catalog["templates"][0])

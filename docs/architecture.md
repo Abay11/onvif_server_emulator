@@ -122,8 +122,10 @@ a separate HTTP 507 response. See [Configuration administration](CONFIGURATION_U
 It exposes reachability,
 uptime and a per-run instance ID. The restart API and ONVIF `SystemReboot` use the
 same response-completion helper and pending flag, replacing the process image
-only after sending the acknowledgement. WebUI routes are separate from SOAP and
-currently have no authorization, including in SOAP Digest mode. A separate
+only after sending the acknowledgement. WebUI routes require a browser session
+for an enabled ONVIF administrator account, independently of the SOAP authentication
+mode. `WebAuthentication` owns eight-hour sessions in memory; page/API guards run
+before their handlers. Restart discards sessions. A separate
 `SystemJournal` records structured lifecycle/client events and detector summaries
 directly from the publication path, ahead of external consumer queues. The WebUI
 reads this bounded history by cursor over its own JSON API, without an ONVIF
@@ -148,7 +150,10 @@ A typical request follows this path:
 1. The HTTP route passes the body to `exns::Parser` from `utility/XmlParser.*`.
 2. The shared `RequestHandler` in `IOnvifService.cpp` extracts the operation name
    from the SOAP body and finds a handler in the service's `Handlers()` list.
-3. In `DIGEST` mode, credentials and the handler's access level are checked.
+3. The shared authentication helper verifies HTTP Digest or WS-Security credentials
+   and the handler's access class according to the selected mode. A separate
+   authorization step applies the explicit ONVIF default role policy before handler
+   execution; insufficient rights produce HTTP 400 with Sender/ter:NotAuthorized.
 4. A handler derived from `OnvifRequestBase` builds the response using
    Boost.PropertyTree and the `SoapHelper` / `HttpHelper` functions.
 5. Known media profile errors become SOAP faults. An unknown operation returns
@@ -159,10 +164,12 @@ The Event service is implemented separately through `event::init_service()` and
 Its dispatch, authentication, and error handling need separate review when changing
 shared SOAP service behavior.
 
-`AUTH_SCHEME` and configuration list `none`, `ws-security`, `digest`, and
-`digest/ws-security`, but the shared dispatchers for ordinary services and the
-Event service check credentials only for `AUTH_SCHEME::DIGEST`. The mode list does
-not establish that WS-Security or the combined mode is implemented.
+`AUTH_SCHEME` supports `none`, `ws-security`, `digest`, and `digest/ws-security`.
+Both dispatchers call `utility/RequestAuthentication` and share one Digest/UsernameToken
+session for nonce tracking. The session implements MD5, SHA-256, SHA-512-256 and
+WS-Security UsernameToken PasswordDigest/PasswordText. Roles and disabled accounts
+apply to both mechanisms. See [authentication](AUTHENTICATION.md) for the protocol
+references, credential file format, replay windows, and scope limits.
 
 ## Configuration and State
 
@@ -175,8 +182,9 @@ shared hot-reload mechanism. Device `SystemReboot` restarts the executable with
 Linux `execv` after sending its response, rereading all configuration on startup;
 see [Application Reboot](SYSTEM_REBOOT.md).
 
-- `common.config`: bind/advertised endpoints, RTP range, users, authentication,
+- `common.config`: bind/advertised endpoints, RTP range, authentication,
   logging, delay and channel simulation, and the RTSP input file.
+- `users.config`: plaintext accounts, roles, and enabled flags shared by both authentication mechanisms.
 - `device.config`: device description, service list and XAddrs, and emulated digital
   inputs. `Enabled` in `GetServices` controls service advertisement;
   `Server::init()` still calls `Run()` on all nine services.

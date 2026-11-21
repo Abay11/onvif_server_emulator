@@ -170,9 +170,9 @@ class ConfigSchemaTests(unittest.TestCase):
         self.check("media.config", config, False)
 
     def test_candidate_validation_reports_paths_without_exposing_values(self):
-        candidate = deepcopy(self.configs["common.config"])
+        candidate = deepcopy(self.configs["users.config"])
         candidate["users"][0]["password"] = {"sensitive": "never-echo-this-secret"}
-        report = validation.validate_candidate("common.config", json.dumps(candidate), self.validators)
+        report = validation.validate_candidate("users.config", json.dumps(candidate), self.validators)
         self.assertFalse(report["valid"])
         self.assertTrue(any(e["path"] == "/users/0/password" for e in report["errors"]))
         self.assertNotIn("never-echo-this-secret", json.dumps(report))

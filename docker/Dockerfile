@@ -18,6 +18,7 @@ RUN apt-get update \
         libboost-regex1.83.0 \
         libboost-system1.83.0 \
         libboost-thread1.83.0 \
+        libssl3t64 \
         libgstrtspserver-1.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
@@ -39,6 +40,7 @@ RUN apt-get update \
         libgstreamer1.0-dev \
         libgstreamer-plugins-base1.0-dev \
         libgstrtspserver-1.0-dev \
+        libssl-dev \
         pkg-config \
     && rm -rf /var/lib/apt/lists/*
 

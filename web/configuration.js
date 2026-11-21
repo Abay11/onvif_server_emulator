@@ -41,7 +41,7 @@
   }
   async function load() {
     try {
-      const response = await fetch("/admin/api/configuration", {cache: "no-store", signal: AbortSignal.timeout(10000)});
+      const response = await window.adminFetch("/admin/api/configuration", {cache: "no-store", signal: AbortSignal.timeout(10000)});
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       state = await response.json(); media = JSON.parse(mediaEntry().document);
       restartNotice(state.restart_required); catalog();
@@ -53,7 +53,7 @@
     busy = true; $("configuration-workspace").inert = true;
     try {
       const entry = state.files.find((item) => item.name === file);
-      const response = await fetch("/admin/api/configuration", {
+      const response = await window.adminFetch("/admin/api/configuration", {
         method: "POST", headers: {"Content-Type": "application/json", "X-ONVIF-Admin": "configuration"},
         body: JSON.stringify({file, revision: entry.revision, document}), signal: AbortSignal.timeout(20000)
       });

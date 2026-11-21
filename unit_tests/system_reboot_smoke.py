@@ -131,7 +131,7 @@ def main():
                         reboot(18080, credentials)
                         raise AssertionError("Non-administrator reboot accepted")
                     except urllib.error.HTTPError as error:
-                        assert error.code == 401
+                        assert error.code == (401 if credentials is None else 400)
                 manufacturer = "Authenticated reboot"
                 device["GetDeviceInformation"]["Manufacturer"] = manufacturer
                 device_file.write_text(json.dumps(device))

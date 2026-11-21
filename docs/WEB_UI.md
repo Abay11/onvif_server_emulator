@@ -36,21 +36,39 @@ responding, rather than a health probe of every subsystem.
 
 ## Access and restart
 
-As requested for this initial version, **the WebUI and its JSON API have no login
-or authorization**, including when SOAP Digest authentication is enabled. Any
-client that can reach the HTTP listener can inspect the selected settings and
-request an application restart. The page labels access as without sign-in.
-Login/password authorization is a future stage; the current SOAP authentication
-setting applies to SOAP and does not protect `/admin/`.
+`/admin/` redirects unauthenticated browsers to `/admin/login`. Use the login
+and password of any enabled account with `type: "administrator"` in `users.config`.
+Operator, User, disabled accounts and incorrect credentials are rejected with the
+same generic sign-in error. This is mandatory even when SOAP authentication is
+`none`; the account snapshot is shared with ONVIF and is reloaded on restart.
+
+POST `/admin/api/login` accepts JSON `{ "login": "...", "password": "..." }`
+with `X-ONVIF-Admin: login`. Successful sign-in creates a random 256-bit session
+and sets `onvif_admin_session` with Path `/admin`, HttpOnly, SameSite=Strict and
+Max-Age=28800. Sessions expire after eight hours, are kept only in server memory,
+and disappear on application restart. The cookie uses the existing HTTP listener;
+there is no new TLS termination or trust in proxy forwarding headers.
+The server retains at most 1024 unexpired sessions. At capacity, sign-in returns
+503 until sessions expire or users sign out.
+
+All registered page/API handlers check the session before executing. Public
+resources are the sign-in page/API and non-secret CSS/JavaScript assets. APIs
+return HTTP 401 with `AuthenticationRequired` when a session is missing or expired;
+client code returns to sign-in. No credentials or session tokens are stored in
+localStorage or sessionStorage. POST `/admin/api/logout` with
+`X-ONVIF-Admin: logout` revokes the session and clears its cookie. Login/logout and
+all existing writes retain same-origin checks. An administrator can edit
+`users.config` through the existing editor; saved account changes take effect for
+both SOAP and WebUI on restart. Ensure an enabled administrator remains available;
+if none remain, restore one in `users.config` outside the WebUI and restart.
 
 Restart uses the same callback and pending guard as ONVIF
 [`SystemReboot`](SYSTEM_REBOOT.md). The response is written before the callback
 executes. This restarts the application inside its container, preserving its PID,
 arguments and environment. Streams and subscriptions disconnect. Invalid edited
 configuration may prevent startup. A changed HTTP address or port requires
-opening the new address manually. The UI waits up to 45 seconds for a changed
-instance ID, then reports that restart could not be confirmed. It does not report
-success merely because the old instance responds. Exec errors remain in the
+opening the new address manually. Restart invalidates all browser sessions;
+when the listener returns, the page requests administrator sign-in again. Exec errors remain in the
 application log because the acknowledgement has already been sent.
 
 Reboot requires a POST with a custom header and explicit JSON confirmation.
@@ -67,7 +85,10 @@ These are emulator administration endpoints, separate from the ONVIF contract.
 
 | Request | Response |
 | --- | --- |
-| `GET /admin/` | Embedded HTML administration page |
+| `GET /admin/` | HTML for an administrator session; otherwise redirect to `/admin/login` |
+| `GET /admin/login` | Public sign-in form |
+| `POST /admin/api/login` | Verify administrator credentials and create a browser session |
+| `POST /admin/api/logout` | Revoke the session and clear its cookie |
 | `GET /admin/app.css` | Embedded stylesheet |
 | `GET /admin/app.js` | Embedded browser script |
 | `GET /admin/api/status` | Status and selected active settings |
@@ -84,14 +105,19 @@ rather than runtime enablement of SOAP handlers.
 For a non-browser client:
 
 ```bash
-curl --fail-with-body http://127.0.0.1:8080/admin/api/status
-curl --fail-with-body http://127.0.0.1:8080/admin/api/reboot \
+# Replace the bundled example credentials with an enabled ONVIF administrator.
+curl --fail-with-body -c /tmp/onvif-admin.cookies \
+  -H 'Content-Type: application/json' -H 'X-ONVIF-Admin: login' \
+  --data '{"login":"a","password":"a1"}' http://127.0.0.1:8080/admin/api/login
+curl --fail-with-body -b /tmp/onvif-admin.cookies http://127.0.0.1:8080/admin/api/status
+curl --fail-with-body -b /tmp/onvif-admin.cookies http://127.0.0.1:8080/admin/api/reboot \
   -H 'Content-Type: application/json' \
   -H 'X-ONVIF-Admin: reboot' \
   --data '{"confirm":true}'
 ```
 
-A reboot request without the required custom header, or with a mismatched Origin
+With a valid administrator session, a reboot request without the required custom
+header, or with a mismatched Origin
 or cross-site Fetch Metadata, receives 403. A wrong Content-Type receives 415;
 missing/invalid confirmation receives 400; an unavailable reboot callback receives
 503. GET on the reboot endpoint receives 405 and cannot restart the application.
@@ -144,9 +170,10 @@ The journal collects structured operational events rather than copying stdout
 or reading log files. Sources currently include initialization/listener readiness,
 restart requests and failures, SOAP processing failures and access rejections,
 WebUI/ONVIF client activity, RTSP connection/disconnection, and detector event
-summaries. HTTP activity is not a login or persistent connection session. With
-Digest enabled, roles are recorded after verification; otherwise activity is
-labelled unauthenticated. Repeated HTTP activity for the same peer/protocol/role
+summaries. HTTP activity is not a login or persistent connection session.
+Authenticated WebUI page visits are recorded with the administrator role. SOAP
+roles are recorded after verification when authentication is enabled; otherwise
+SOAP activity is labelled unauthenticated. Repeated HTTP activity for the same peer/protocol/role
 is coalesced for one minute, with at most 256 coalescing keys. Polling status and
 journal endpoints does not generate activity records itself. A Digest challenge
 can appear as an access rejection before the authenticated retry.
@@ -183,8 +210,8 @@ shutdown record. Existing console/file logging remains separate and unchanged.
 Parameters are optional: `after` (nonnegative sequence ID, default 0), `limit`
 (1–200, default 100), `category`, `level`, and `q` (at most 256 bytes; the UI allows
 64 characters). Unknown, duplicate or invalid parameters receive 400. Reboot and
-status APIs are unaffected. This endpoint has the same unauthenticated access as
-the existing WebUI.
+status APIs are unaffected. This endpoint requires the same administrator
+session as the rest of the WebUI.
 
 ```bash
 curl 'http://127.0.0.1:8080/admin/api/journal?category=detector&after=0&limit=100'
@@ -237,3 +264,13 @@ JSON Schema validator before creating any temporary config file. Draft values
 remain available for correction. Missing validation dependencies/resources block
 the save as well. See [save validation](../schemas/README.md#server-save-gate-and-webui-errors)
 for runtime packaging, HTTP 422/503 details and tests.
+
+## Sign-in validation
+
+`python3 unit_tests/web_login_browser.py --binary build/main` checks desktop/mobile
+layout in Chromium, both administrator accounts, incorrect/disabled/non-admin
+credentials, HttpOnly cookies, replay after logout and sign-in after restart.
+Screenshots default to `/tmp/web-login-preview`. `admin_ui_tests.cpp` covers
+page/API guards before mutations, same-origin login/logout, session rotation and
+expiry with an injected clock. Existing Python WebUI checks use `admin_session.py`
+and accept `OSRV_TEST_ADMIN_LOGIN` / `OSRV_TEST_ADMIN_PASSWORD` for custom accounts.

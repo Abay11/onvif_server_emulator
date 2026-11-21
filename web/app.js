@@ -132,7 +132,7 @@
   }
 
   async function getStatus() {
-    const response = await fetch("/admin/api/status", {cache: "no-store", signal: AbortSignal.timeout(4000)});
+    const response = await window.adminFetch("/admin/api/status", {cache: "no-store", signal: AbortSignal.timeout(4000)});
     if (!response.ok) throw new Error(`Status request failed (HTTP ${response.status}).`);
     return response.json();
   }
@@ -167,7 +167,7 @@
     notify("Restarting the application. Waiting for it to reconnect…");
     try {
       try {
-        const response = await fetch("/admin/api/reboot", {
+        const response = await window.adminFetch("/admin/api/reboot", {
           method: "POST", headers: {"Content-Type": "application/json", "X-ONVIF-Admin": "reboot"},
           body: JSON.stringify({confirm: true}), signal: AbortSignal.timeout(5000)
         });
@@ -251,7 +251,7 @@
     let delay = 1000;
     try {
       const query = new URLSearchParams({...journalFilter, after: String(journalCursor), limit: "100"});
-      const response = await fetch(`/admin/api/journal?${query}`, {cache: "no-store", signal: controller.signal});
+      const response = await window.adminFetch(`/admin/api/journal?${query}`, {cache: "no-store", signal: controller.signal});
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const batch = await response.json();
       if (generation !== journalGeneration) return;

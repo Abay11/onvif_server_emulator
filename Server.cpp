@@ -1,3 +1,5 @@
+#include <filesystem>
+#include <set>
 #include "Server.h"
 #include "web/AdminUi.h"
 #include "../onvif_services/device_service.h"
@@ -310,15 +312,24 @@ std::shared_ptr<ServerConfigs> read_server_configs(const std::string& config_pat
 	auto auth_scheme = configs_tree.get<std::string>("authentication");
 	read_configs->auth_scheme_ = str_to_auth(auth_scheme);
 
-	auto users_node = configs_tree.get_child("users");
+	pt::ptree users_tree;
+	pt::read_json((std::filesystem::path(config_path).parent_path() / "users.config").string(), users_tree);
+	auto users_node = users_tree.get_child("users");
+	std::set<std::string> logins;
 	if (users_node.empty())
 		throw std::runtime_error("Could not read Users list");
 
 	for (auto user : users_node)
 	{
+		const auto login = user.second.get<std::string>(auth::UserAccount::LOGIN);
+		if (login.empty() || login.find(':') != std::string::npos ||
+			std::any_of(login.begin(), login.end(), [](unsigned char c) { return c < 32 || c == 127; }) ||
+			!logins.insert(login).second)
+			throw std::runtime_error("User login must be nonempty, unique and contain no colon");
 		read_configs->system_users_.emplace_back(osrv::auth::UserAccount{
 				user.second.get<std::string>(auth::UserAccount::LOGIN), user.second.get<std::string>(auth::UserAccount::PASS),
-				osrv::auth::str_to_usertype(user.second.get<std::string>(auth::UserAccount::TYPE))});
+				osrv::auth::str_to_usertype(user.second.get<std::string>(auth::UserAccount::TYPE)),
+				user.second.get<bool>("enabled")});
 	}
 
 	read_configs->network_delay_simulation_ = configs_tree.get<unsigned short>("networkDelaySimulation.milliseconds");

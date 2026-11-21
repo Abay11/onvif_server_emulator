@@ -1,9 +1,11 @@
 #pragma once
 
 #include <algorithm>
+#include <boost/property_tree/ptree.hpp>
 #include <chrono>
 #include <map>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <vector>
 
@@ -32,10 +34,13 @@ struct DigestResponseHeader
 	std::string realm;
 	std::string nonce;
 	std::string qop;
+	std::string algorithm = "MD5";
+	bool stale = false;
 
 	std::string to_string() const
 	{
-		return "Digest realm=\"" + realm + "\"" + ", qop=\"" + qop + "\"" + ", nonce=\"" + nonce + "\"";
+		return std::string("Digest algorithm=") + algorithm + (stale ? ", stale=true" : "") + ", realm=\"" + realm + "\"" +
+					 ", qop=\"" + qop + "\"" + ", nonce=\"" + nonce + "\"";
 	}
 };
 
@@ -46,7 +51,9 @@ struct DigestRequestHeader
 	std::string nonce;
 	std::string digest_uri;
 
-	// this fialds are optional actually, so they could be empty
+	// Actual HTTP method and target are supplied by the request dispatcher.
+	std::string method;
+	std::string target;
 	std::string response;
 	std::string algorithm;
 	std::string cnonce;
@@ -54,6 +61,8 @@ struct DigestRequestHeader
 	std::string message_qop;
 	std::string nonce_count;
 };
+
+bool hasSecurityHeader(const boost::property_tree::ptree& soap);
 
 DigestRequestHeader extract_DA(const std::string& /*www_auth_line*/);
 
@@ -69,6 +78,8 @@ public:
 	// when result is false, implementation should indicate
 	// whether a nonce is staled or not using @isStaled flag
 	virtual bool verifyDigest(const DigestRequestHeader& digestInfo, bool& isStaled) = 0;
+	virtual std::string verifyUsernameToken(const boost::property_tree::ptree& soap) = 0;
+	std::string challenges(bool stale = false);
 
 	void set_users_list(const std::vector<osrv::auth::UserAccount>& users_list)
 	{
@@ -89,7 +100,14 @@ protected:
 	std::vector<osrv::auth::UserAccount> system_users;
 
 	// the pool is used to hold all generated nonce
-	std::map<std::string, std::chrono::milliseconds> nonce_pool;
+	struct NonceState
+	{
+		std::chrono::steady_clock::time_point expires;
+		std::map<std::string, unsigned long> counts;
+	};
+	std::map<std::string, NonceState> nonce_pool;
+	std::map<std::string, std::chrono::steady_clock::time_point> token_nonces;
+	std::mutex mutex_;
 
 	const std::string realm_;
 	const std::string qop_;
@@ -103,17 +121,9 @@ public:
 	{
 	}
 
-	DigestResponseHeader generateDigest() override
-	{
-		DigestResponseHeader result;
-		result.nonce = "need_to_fix_nonce"; // FIX: generate normally
-		result.realm = realm_;
-		result.qop = qop_;
-
-		return result;
-	}
-
+	DigestResponseHeader generateDigest() override;
 	bool verifyDigest(const DigestRequestHeader& digestInfo, bool& isStaled) override;
+	std::string verifyUsernameToken(const boost::property_tree::ptree& soap) override;
 };
 
 } // namespace digest

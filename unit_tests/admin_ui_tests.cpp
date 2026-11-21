@@ -6,6 +6,7 @@
 #include "../utility/ConfigValidation.h"
 #include "../utility/MediaProfilesManager.h"
 #include "../web/AdminUi.h"
+#include "../web/WebAuthentication.h"
 #include "../onvif_services/EventSource.h"
 #include "../onvif_services/pullpoint/event_generators.h"
 #include <atomic>
@@ -40,13 +41,26 @@ struct Endpoint
 	std::thread worker;
 	std::unique_ptr<SimpleWeb::Client<SimpleWeb::HTTP>> client;
 	std::atomic_uint reboots{0};
-	Endpoint(bool available = true)
+	std::string cookie;
+	Endpoint(bool available = true, bool signed_in = true)
 	{
 		fs::copy("../../server_configs", path, fs::copy_options::recursive);
 		Tree common;
 		boost::property_tree::read_json(path + "/common.config", common);
 		// Use a distinctive secret so accidental raw configuration exposure is visible.
-		common.get_child("users").front().second.put("password", "admin-secret-must-not-leak");
+		Tree users;
+		boost::property_tree::read_json(path + "/users.config", users);
+		users.get_child("users").front().second.put("password", "admin-secret-must-not-leak");
+		if (!signed_in)
+		{
+			Tree other;
+			other.put("login", "second-admin"); other.put("password", "second-secret");
+			other.put("type", "administrator"); other.put("enabled", true);
+			users.get_child("users").push_back({"", other});
+			other.put("login", "disabled-admin"); other.put("enabled", false);
+			users.get_child("users").push_back({"", other});
+		}
+		boost::property_tree::write_json(path + "/users.config", users);
 		boost::property_tree::write_json(path + "/common.config", common);
 		server = std::make_shared<TestServer>(path, available ? std::function<void()>([this] { ++reboots; })
 																													: std::function<void()>{});
@@ -60,6 +74,15 @@ struct Endpoint
 				std::thread([http, &port] { http->start([&port](unsigned short assigned) { port.set_value(assigned); }); });
 		client = std::make_unique<SimpleWeb::Client<SimpleWeb::HTTP>>("127.0.0.1:" + std::to_string(ready.get()));
 		client->config.timeout = 5;
+		if (signed_in)
+		{
+			auto response = client->request("POST", "/admin/api/login",
+				R"({"login":"a","password":"admin-secret-must-not-leak"})",
+				{{"Content-Type", "application/json"}, {"X-ONVIF-Admin", "login"}, {"Connection", "close"}});
+			BOOST_CHECK_EQUAL(response->status_code, "200 OK");
+			if (auto stored = response->header.find("Set-Cookie"); stored != response->header.end())
+				cookie = stored->second.substr(0, stored->second.find(';'));
+		}
 	}
 	~Endpoint()
 	{
@@ -71,6 +94,7 @@ struct Endpoint
 	auto Request(const std::string& method, const std::string& target, const std::string& body = "", Headers headers = {})
 	{
 		headers.emplace("Connection", "close");
+		if (!cookie.empty()) headers.emplace("Cookie", cookie);
 		return client->request(method, target, body, headers);
 	}
 	Tree Status()
@@ -86,6 +110,78 @@ const Headers RebootHeaders{{"Content-Type", "application/json"}, {"X-ONVIF-Admi
 } // namespace
 
 BOOST_AUTO_TEST_SUITE(AdminUi)
+BOOST_AUTO_TEST_CASE(administration_requires_enabled_administrator_and_revokes_sessions)
+{
+	Endpoint endpoint(true, false);
+	auto page = endpoint.Request("GET", "/admin/");
+	BOOST_TEST(page->status_code == "302 Found");
+	BOOST_TEST(page->header.find("Location")->second == "/admin/login");
+	BOOST_TEST(endpoint.Request("GET", "/admin/login")->content.string().find("autocomplete=\"current-password\"") != std::string::npos);
+	for (const auto* path : {"/admin/api/status", "/admin/api/configuration", "/admin/api/detectors", "/admin/api/journal", "/admin/api/reboot"})
+	{
+		BOOST_TEST(endpoint.Request("GET", path)->status_code == "401 Unauthorized");
+		if (std::string(path) != "/admin/api/journal")
+			BOOST_TEST(endpoint.Request("POST", path, "{}")->status_code == "401 Unauthorized");
+	}
+	BOOST_TEST(endpoint.reboots == 0u);
+	const Headers headers{{"Content-Type", "application/json"}, {"X-ONVIF-Admin", "login"}};
+	for (const auto* body : {R"({"login":"a","password":"wrong"})", R"({"login":"o","password":"o1"})",
+		R"({"login":"u","password":"u1"})", R"({"login":"disabled-admin","password":"second-secret"})"})
+	{
+		auto response = endpoint.Request("POST", "/admin/api/login", body, headers);
+		BOOST_TEST(response->status_code == "401 Unauthorized");
+		BOOST_TEST(response->header.count("Set-Cookie") == 0u);
+	}
+	BOOST_TEST(endpoint.Request("POST", "/admin/api/login", "{}", headers)->status_code == "400 Bad Request");
+	auto crossSite = headers;
+	crossSite.emplace("Origin", "http://untrusted.example");
+	BOOST_TEST(endpoint.Request("POST", "/admin/api/login", R"({"login":"a","password":"admin-secret-must-not-leak"})", crossSite)->status_code == "403 Forbidden");
+	std::string previous;
+	for (const auto* body : {R"({"login":"a","password":"admin-secret-must-not-leak"})", R"({"login":"second-admin","password":"second-secret"})"})
+	{
+		auto response = endpoint.Request("POST", "/admin/api/login", body, headers);
+		BOOST_REQUIRE_EQUAL(response->status_code, "200 OK");
+		const auto cookie = response->header.find("Set-Cookie")->second;
+		BOOST_TEST(cookie.find("HttpOnly") != std::string::npos);
+		BOOST_TEST(cookie.find("SameSite=Strict") != std::string::npos);
+		BOOST_TEST(cookie.find("Path=/admin") != std::string::npos);
+		endpoint.cookie = cookie.substr(0, cookie.find(';'));
+		BOOST_TEST(endpoint.Request("GET", "/admin/api/status")->status_code == "200 OK");
+		BOOST_TEST(endpoint.Request("GET", "/admin/")->status_code == "200 OK");
+		if (!previous.empty())
+			BOOST_TEST(endpoint.client->request("GET", "/admin/api/status", "", {{"Cookie", previous}})->status_code == "401 Unauthorized");
+		previous = endpoint.cookie;
+	}
+	BOOST_TEST(endpoint.Request("POST", "/admin/api/logout")->status_code == "403 Forbidden");
+	auto logout = endpoint.Request("POST", "/admin/api/logout", "", {{"X-ONVIF-Admin", "logout"}});
+	BOOST_TEST(logout->status_code == "200 OK");
+	BOOST_TEST(logout->header.find("Set-Cookie")->second.find("Max-Age=0") != std::string::npos);
+	BOOST_TEST(endpoint.Request("GET", "/admin/api/status")->status_code == "401 Unauthorized");
+}
+
+BOOST_AUTO_TEST_CASE(browser_sessions_expire_and_share_onvif_accounts)
+{
+	auto now = std::chrono::steady_clock::now();
+	osrv::WebAuthentication sessions({{"admin-one", "secret-one", osrv::auth::USER_TYPE::ADMIN},
+		{"admin-two", "secret-two", osrv::auth::USER_TYPE::ADMIN}, {"operator", "secret", osrv::auth::USER_TYPE::OPERATOR},
+		{"disabled", "secret", osrv::auth::USER_TYPE::ADMIN, false}}, [&] { return now; });
+	BOOST_TEST(sessions.Login("operator", "secret").empty());
+	BOOST_TEST(sessions.Login("disabled", "secret").empty());
+	BOOST_TEST(sessions.Login("admin-one", "wrong").empty());
+	const auto one = sessions.Login("admin-one", "secret-one");
+	const auto two = sessions.Login("admin-two", "secret-two");
+	BOOST_REQUIRE(!one.empty()); BOOST_REQUIRE(!two.empty());
+	BOOST_TEST(one != two);
+	BOOST_TEST(sessions.Username(one) == "admin-one");
+	BOOST_TEST(sessions.Username(two) == "admin-two");
+	sessions.Logout(one);
+	BOOST_TEST(sessions.Username(one).empty());
+	BOOST_TEST(sessions.Username(two) == "admin-two");
+	now += std::chrono::hours(9);
+	BOOST_TEST(sessions.Username(two).empty());
+	BOOST_TEST(!sessions.Login("admin-one", "secret-one").empty());
+}
+
 BOOST_AUTO_TEST_CASE(embedded_assets_and_status_are_served_without_exposing_credentials)
 {
 	Endpoint endpoint;
@@ -397,7 +493,7 @@ BOOST_AUTO_TEST_CASE(configuration_editor_validates_references_preserves_fixed_p
 		return result;
 	};
 	auto view = get();
-	BOOST_TEST(view.get_child("files").size() == 14u);
+	BOOST_TEST(view.get_child("files").size() == 15u);
 	Tree command;
 	command.put("file", "media_profiles.config");
 	command.put("revision", entry(view, "media_profiles.config").get<std::string>("revision"));
@@ -443,23 +539,23 @@ BOOST_AUTO_TEST_CASE(configuration_editor_validates_references_preserves_fixed_p
 	BOOST_TEST(endpoint.Request("POST", "/admin/api/configuration", "{}")->status_code == "403 Forbidden");
 }
 
-BOOST_AUTO_TEST_CASE(configuration_passwords_are_write_only_and_numeric_types_survive_save)
+BOOST_AUTO_TEST_CASE(configuration_passwords_are_write_only_and_boolean_types_survive_save)
 {
 	Endpoint endpoint;
-	// Keep real JSON numeric types; older fixtures rewritten by PropertyTree use strings.
-	std::ifstream source("../../server_configs/common.config");
+	// Preserve the enabled flag as a JSON boolean while restoring redacted passwords.
+	std::ifstream source("../../server_configs/users.config");
 	std::string common((std::istreambuf_iterator<char>(source)), {});
 	common.replace(common.find("\"a1\""), 4, "\"admin-secret-must-not-leak\"");
-	std::ofstream(endpoint.path + "/common.config") << common;
+	std::ofstream(endpoint.path + "/users.config") << common;
 	auto response = endpoint.Request("GET", "/admin/api/configuration");
 	const auto body = response->content.string();
 	BOOST_TEST(body.find("admin-secret-must-not-leak") == std::string::npos);
 	Tree view, file;
 	boost::property_tree::read_json(response->content, view);
-	for (const auto& [_, item] : view.get_child("files")) if (item.get<std::string>("name") == "common.config") file = item;
+	for (const auto& [_, item] : view.get_child("files")) if (item.get<std::string>("name") == "users.config") file = item;
 	BOOST_TEST(file.get<std::string>("document").find("__UNCHANGED_SECRET__") != std::string::npos);
 	Tree command;
-	command.put("file", "common.config");
+	command.put("file", "users.config");
 	command.put("revision", file.get<std::string>("revision"));
 	command.put("document", file.get<std::string>("document"));
 	std::ostringstream json;
@@ -471,11 +567,11 @@ BOOST_AUTO_TEST_CASE(configuration_passwords_are_write_only_and_numeric_types_su
 	boost::property_tree::read_json(response->content, result);
 	BOOST_TEST(result.get<bool>("restart_required"));
 	Tree saved;
-	boost::property_tree::read_json(endpoint.path + "/common.config", saved);
+	boost::property_tree::read_json(endpoint.path + "/users.config", saved);
 	BOOST_TEST(saved.get_child("users").front().second.get<std::string>("password") == "admin-secret-must-not-leak");
-	// The saved bytes must still satisfy the schema's integer-only RTP fields.
-	std::ifstream input(endpoint.path + "/common.config");
-	utility::ValidateConfig("common.config", std::string((std::istreambuf_iterator<char>(input)), {}));
+	// The saved bytes must still satisfy the schema's boolean-only enabled fields.
+	std::ifstream input(endpoint.path + "/users.config");
+	utility::ValidateConfig("users.config", std::string((std::istreambuf_iterator<char>(input)), {}));
 }
 
 

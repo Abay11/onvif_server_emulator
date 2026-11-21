@@ -3,6 +3,7 @@
 
 Run in an isolated dev container; default service ports must be available.
 """
+from admin_session import urlopen, set_credentials
 import argparse
 import json
 import os
@@ -21,7 +22,7 @@ from system_reboot_smoke import call, wait_for
 def request(path, body=None, headers=None, expected=200):
     req = urllib.request.Request(f"http://127.0.0.1:8080{path}", body, headers or {})
     try:
-        response = urllib.request.urlopen(req, timeout=5)
+        response = urlopen(req, timeout=5)
     except urllib.error.HTTPError as error:
         response = error
     with response:
@@ -69,7 +70,11 @@ def main():
         shutil.copytree(repo / "server_configs", configs)
         common_file = configs / "common.config"
         common = json.loads(common_file.read_text())
-        common["users"][0]["password"] = "admin-secret-must-not-leak"
+        users_file = configs / "users.config"
+        users = json.loads(users_file.read_text())
+        users["users"][0]["password"] = "admin-secret-must-not-leak"
+        set_credentials("a", "admin-secret-must-not-leak")
+        users_file.write_text(json.dumps(users))
         common["advertised"]["ipv4"] = "192.0.2.123"
         common_file.write_text(json.dumps(common))
         device_file = configs / "device.config"
@@ -113,13 +118,13 @@ def main():
                 call(8080, "SystemReboot")
                 latest = wait_instance(process, after["instance_id"])
                 assert latest["pid"] == before["pid"]
-                # WebUI access is intentionally independent of SOAP Digest in stage one.
+                # WebUI sessions remain mandatory independently of SOAP Digest.
                 common["authentication"] = "digest"
                 common_file.write_text(json.dumps(common))
                 request("/admin/api/reboot", body, reboot_headers, expected=202)
                 protected = wait_instance(process, latest["instance_id"])
                 assert protected["settings"]["application"]["onvif_authentication"] == "digest"
-                assert protected["settings"]["application"]["web_authentication"] == "none"
+                assert protected["settings"]["application"]["web_authentication"] == "administrator-session"
                 print("PASS embedded assets, typed status, effective environment overrides, secret exclusion, "
                       "cross-origin rejection, actual WebUI config reload, new instance with stable PID, "
                       "and SOAP reboot coexistence")

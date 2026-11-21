@@ -45,7 +45,8 @@ Connect an ONVIF client to `http://192.168.1.10:8080/onvif/device_service` or us
 automatic discovery. In VLC, test
 `rtsp://192.168.1.10:8554/Live&HighStream` (quote the URL in a shell).
 Check HTTP with `curl --fail http://192.168.1.10:8080/snapshot.jpeg -o snapshot.jpeg`.
-The bundled configuration has authentication disabled.
+The bundled configuration has SOAP authentication disabled. WebUI sign-in uses
+an enabled administrator account from `users.config`.
 
 ```bash
 docker logs -f onvif-emulator
@@ -105,9 +106,11 @@ system/detector journal with filters, detector/rule management with geometry
 previews, editable media profiles and ONVIF configurations, a JSON configuration
 editor, and application restart. The page uses the same listener as ONVIF and
 is bundled into the executable.
-This initial version has no login; WebUI access, including restart, is available to
-clients that can reach that port even when SOAP Digest is enabled. Account passwords
-are excluded from the status API. Rule edits persist to media_profiles.config;
+Sign in with any enabled `administrator` account from `users.config`, using the
+same login and password as ONVIF. WebUI sign-in is mandatory even when SOAP
+`authentication` is `none`. Sessions expire after eight hours and on application
+restart; Sign out revokes the current session. Account passwords are excluded
+from the status API. Rule edits persist to media_profiles.config;
 detector enable, auto generation and interval settings persist to event.config
 and apply live. Rule engine and individual rule enable switches are runtime controls. See
 [configuration administration](docs/CONFIGURATION_UI.md),
@@ -225,10 +228,14 @@ SOAP operations do not necessarily change the RTSP pipelines.
 
 ### Common Settings (`common.config`)
 
-- `authentication`: selects the authentication mode. The configuration lists
-  `none`, `ws-security`, `digest`, and `digest/ws-security`, but the shared SOAP
-  dispatcher and Event service check credentials only in `digest` mode.
-  WS-Security and the combined mode are not implemented in those dispatchers.
+- `authentication`: selects `none`, `digest`, `ws-security`, or
+  `digest/ws-security`. SOAP services and Events/PullPoint enforce the selected
+  mode. Combined mode accepts either mechanism; if both are supplied both are
+  verified. See [authentication](docs/AUTHENTICATION.md) for algorithms and faults.
+- Accounts are stored in **`users.config`**, with plaintext `login`, `password`,
+  `type` (`administrator`, `operator`, `user`) and boolean `enabled`.
+  Move existing `users` arrays out of `common.config` and add `enabled` to every
+  account. Both files are loaded on startup; changes require restart.
 - `authenticationMethods`: lists authentication mode names in the sample
   configuration; the list does not establish implementation support.
 - `loggingLevel`: sets the logging threshold. Available levels, from highest to

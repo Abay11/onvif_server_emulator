@@ -18,9 +18,9 @@ namespace
 using Tree = boost::property_tree::ptree;
 const Tree Empty;
 const std::vector<std::string> Files{
-		"common.config", "device.config",			"device_io.config",				 "imaging.config",				"media.config",
-		"media2.config", "ptz.config",				"recording_search.config", "replay_control.config", "discovery.config",
-		"event.config",	 "io_sources.config", "media_profiles.config",	 "analytics.config"};
+		"common.config", "users.config", "device.config", "device_io.config", "imaging.config", "media.config",
+		"media2.config", "ptz.config", "recording_search.config", "replay_control.config", "discovery.config",
+		"event.config", "io_sources.config", "media_profiles.config", "analytics.config"};
 constexpr const char* Secret = "__UNCHANGED_SECRET__";
 std::string Json(const Tree& tree)
 {
@@ -112,10 +112,6 @@ void RestorePasswords(Tree& candidate, const Tree& previous)
 			throw std::invalid_argument("A new account needs a password");
 		account.put("password", old->get<std::string>("password"));
 	}
-	const auto low = candidate.get<unsigned>("rtp.port_min", 50000);
-	const auto high = candidate.get<unsigned>("rtp.port_max", 50199);
-	if (low == 0 || low % 2 != 0 || high <= low || high % 2 != 1)
-		throw std::invalid_argument("Invalid RTP port range");
 }
 const Tree& Find(const Tree& media, const std::string& type, const std::string& token)
 {
@@ -209,7 +205,7 @@ std::string ConfigurationUi::Read()
 		Tree entry;
 		entry.put("name", file);
 		entry.put("revision", snapshot.revision);
-		if (file == "common.config")
+		if (file == "users.config")
 		{
 			entry.put("document", PasswordJson(bytes, Parse(bytes), true));
 		}
@@ -238,6 +234,13 @@ std::string ConfigurationUi::Change(const Tree& command)
 	utility::ValidateConfig(file, bytes);
 	auto candidate = Parse(bytes);
 	if (file == "common.config")
+	{
+		const auto low = candidate.get<unsigned>("rtp.port_min", 50000);
+		const auto high = candidate.get<unsigned>("rtp.port_max", 50199);
+		if (low == 0 || low % 2 != 0 || high <= low || high % 2 != 1)
+			throw std::invalid_argument("Invalid RTP port range");
+	}
+	if (file == "users.config")
 	{
 		const auto previous = Parse(found->second.bytes);
 		RestorePasswords(candidate, previous);

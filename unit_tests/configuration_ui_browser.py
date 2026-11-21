@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Optional Chromium acceptance for profiles, entity settings, restart hints and failed saves."""
+from admin_session import browser_login
 import argparse
 import json
 import os
@@ -26,6 +27,7 @@ def exercise(screenshot=None, read_only=False):
     try:
         ready = WebDriverWait(browser, 25)
         browser.execute_cdp_cmd("Emulation.setEmulatedMedia", {"features": [{"name": "prefers-reduced-motion", "value": "reduce"}]})
+        browser_login(browser)
         browser.get("http://127.0.0.1:8080/admin/#configuration")
         ready.until(lambda driver: len(driver.find_elements(By.CSS_SELECTOR, "#configuration-catalog button")) > 15)
 
@@ -96,7 +98,8 @@ def exercise(screenshot=None, read_only=False):
         catalog_button("common.config").click()
         text = browser.find_element(By.CSS_SELECTOR, "#configuration-editor textarea.configuration-json")
         common = json.loads(text.get_property("value"))
-        assert all(item["password"] == "__UNCHANGED_SECRET__" for item in common["users"])
+        users = json.loads(entry("users.config")["document"])
+        assert all(item["password"] == "__UNCHANGED_SECRET__" for item in users["users"])
         common["loggingLevel"] = "INFO"
         text.clear(); text.send_keys(json.dumps(common))
         save()

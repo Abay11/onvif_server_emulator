@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Verify internal detector journaling before any ONVIF/metadata consumer exists."""
+from admin_session import urlopen, set_credentials
 import argparse
 import json
 import os
@@ -19,7 +20,7 @@ from system_reboot_smoke import call
 
 def journal(**parameters):
     url = "http://127.0.0.1:8080/admin/api/journal?" + urlencode(parameters)
-    with urllib.request.urlopen(url, timeout=5) as response:
+    with urlopen(url, timeout=5) as response:
         assert response.headers["Cache-Control"] == "no-store"
         result = json.load(response)
     assert isinstance(result["entries"], list)
@@ -54,8 +55,17 @@ def main():
         common_file = configs / "common.config"
         common = json.loads(common_file.read_text())
         common["rtsp_metadata"]["enabled"] = False
-        common["users"][0]["password"] = "journal-secret-must-not-leak"
+        users_file = configs / "users.config"
+        users = json.loads(users_file.read_text())
+        users["users"][0]["password"] = "journal-secret-must-not-leak"
+        set_credentials("a", "journal-secret-must-not-leak")
+        users_file.write_text(json.dumps(users))
         common_file.write_text(json.dumps(common))
+        # Bound event arrival independently of the user's configured generator intervals.
+        event_file = configs / "event.config"
+        events = json.loads(event_file.read_text())
+        events["MotionAlarm"].update(EventGenerationTimeout=1, AutoGenerateEvents=True, Enabled=True)
+        event_file.write_text(json.dumps(events))
         env = dict(os.environ, ONVIF_ADVERTISED_IPV4="127.0.0.1", ONVIF_DISCOVERY_INTERFACE_IPV4="127.0.0.1")
         with (Path(directory) / "process.log").open("w+") as log:
             process = subprocess.Popen([str(args.binary.resolve()), str(configs)], env=env,

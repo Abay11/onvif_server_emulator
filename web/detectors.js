@@ -55,7 +55,7 @@
     el("detector-settings").inert = true;
     el("detector-catalog").inert = true;
     try {
-      const response = await fetch("/admin/api/detectors", {
+      const response = await window.adminFetch("/admin/api/detectors", {
         method: "POST", headers: {"Content-Type": "application/json", "X-ONVIF-Admin": "detectors"},
         body: JSON.stringify(command), signal: AbortSignal.timeout(10000)
       });
@@ -421,7 +421,7 @@
     let finish;
     loadDone = new Promise((resolve) => { finish = resolve; });
     try {
-      const response = await fetch("/admin/api/detectors", {cache: "no-store", signal: AbortSignal.timeout(5000)});
+      const response = await window.adminFetch("/admin/api/detectors", {cache: "no-store", signal: AbortSignal.timeout(5000)});
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       data = await response.json(); catalog();
       if (selected?.simple) showSimple(data.simple.find((item) => item.id === selected.simple));

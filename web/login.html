@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>Sign in · ONVIF Server Emulator</title>
+  <link rel="stylesheet" href="/admin/app.css">
+  <script src="/admin/login.js" defer></script>
+</head>
+<body class="login-page">
+  <main class="login-card" aria-labelledby="login-title">
+    <div class="login-brand"><span class="brand-icon" aria-hidden="true">◈</span><span>ONVIF Server Emulator</span></div>
+    <div class="eyebrow">ADMINISTRATION</div>
+    <h1 id="login-title">Sign in</h1>
+    <p class="intro">Use your ONVIF administrator account to manage this emulator.</p>
+    <form id="login-form" method="post" action="/admin/api/login">
+      <label for="login-username">Username</label>
+      <input id="login-username" name="username" type="text" autocomplete="username" required autofocus>
+      <label for="login-password">Password</label>
+      <input id="login-password" name="password" type="password" autocomplete="current-password" required>
+      <p id="login-error" class="notice error" role="alert" hidden></p>
+      <button id="login-submit" class="button primary" type="submit">Sign in</button>
+      <noscript><p class="notice">Enable JavaScript to sign in.</p></noscript>
+    </form>
+  </main>
+</body>
+</html>

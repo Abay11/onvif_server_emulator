@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Optional Chromium/Selenium check for save validation modals and retained drafts."""
+from admin_session import browser_login
 import argparse
 import json
 import os
@@ -43,6 +44,7 @@ def main():
                 browser = webdriver.Chrome(service=Service("/usr/bin/chromedriver"), options=options)
                 ready = WebDriverWait(browser, 20)
                 browser.execute_cdp_cmd("Emulation.setEmulatedMedia", {"features": [{"name": "prefers-reduced-motion", "value": "reduce"}]})
+                browser_login(browser)
                 browser.get("http://127.0.0.1:8080/admin/#detectors")
                 ready.until(lambda driver: len(driver.find_elements(By.CSS_SELECTOR, "#detector-catalog details")) == 6)
                 family = browser.find_elements(By.CSS_SELECTOR, "#detector-catalog details")[0]
@@ -73,6 +75,15 @@ def main():
                 target.write_text(json.dumps(config))
                 request("/admin/api/reboot", {"confirm": True}, expected=202, marker="reboot")
                 wait(process, state["instance_id"])
+                # Restart invalidates the browser session; sign in and re-enter the test draft.
+                browser_login(browser)
+                browser.get("http://127.0.0.1:8080/admin/#detectors")
+                ready.until(lambda driver: len(driver.find_elements(By.CSS_SELECTOR, "#detector-catalog details")) == 6)
+                family = browser.find_elements(By.CSS_SELECTOR, "#detector-catalog details")[0]
+                family.find_element(By.TAG_NAME, "summary").click()
+                next(button for button in family.find_elements(By.TAG_NAME, "button") if button.text == "Create rule").click()
+                name = ready.until(lambda driver: driver.find_element(By.CSS_SELECTOR, "#detector-settings input[data-validation-path='Name']"))
+                name.clear(); name.send_keys("Popup browser test")
                 browser.find_element(By.CSS_SELECTOR, "#detector-settings button[type='submit']").click()
                 ready.until(lambda _: any(rule["Name"] == "Popup browser test"
                                           for rule in json.loads(target.read_text())["Analytics"][0]["rules"]))

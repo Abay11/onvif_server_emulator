@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Optional Chromium acceptance for detector settings, status colors and manual steps."""
+from admin_session import browser_login
 import argparse
 import json
 import os
@@ -40,6 +41,7 @@ def main():
                 browser = webdriver.Chrome(service=Service("/usr/bin/chromedriver"), options=options)
                 ready = WebDriverWait(browser, 20)
                 browser.execute_cdp_cmd("Emulation.setEmulatedMedia", {"features": [{"name": "prefers-reduced-motion", "value": "reduce"}]})
+                browser_login(browser)
                 browser.get("http://127.0.0.1:8080/admin/#detectors")
                 ready.until(lambda driver: len(driver.find_elements(By.CSS_SELECTOR, "#detector-catalog details")) == 6)
                 assert not browser.find_elements(By.CSS_SELECTOR, "#detector-catalog input[type=checkbox]")

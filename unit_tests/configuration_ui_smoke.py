@@ -43,7 +43,7 @@ def exercise(read_only=False):
         assert request("/admin/api/status")["profiles"] == before_profiles
         print("PASS read-only mount: HTTP 507, explicit write failure, original file unchanged")
         return
-    assert len(view()["files"]) == 14
+    assert len(view()["files"]) == 15
     profile = deepcopy(media["MediaProfiles"][0])
     profile.update(token="ConfigurationWebProfile", Name="Configuration Web profile", fixed=False, Metadata="MetadataToken0")
     media["MediaProfiles"].append(profile)
@@ -82,8 +82,10 @@ def exercise(read_only=False):
     assert save("media_profiles.config", media)["restart_required"] is True
     assert view()["restart_required"] is True
     common = json.loads(entry("common.config")["document"])
-    assert all(item["password"] == "__UNCHANGED_SECRET__" for item in common["users"])
-    common["users"].reverse()
+    users = json.loads(entry("users.config")["document"])
+    assert all(item["password"] == "__UNCHANGED_SECRET__" for item in users["users"])
+    users["users"].reverse()
+    assert save("users.config", users)["restart_required"] is True
     common["loggingLevel"] = "INFO"
     assert save("common.config", common)["restart_required"] is True
     assert isinstance(json.loads(entry("common.config")["document"])["rtp"]["port_min"], int)
@@ -115,7 +117,7 @@ def main():
             try:
                 wait(process)
                 exercise()
-                common = json.loads((configs / "common.config").read_text())
+                common = json.loads((configs / "users.config").read_text())
                 assert {user["login"]: user["password"] for user in common["users"]} == {"a": "a1", "o": "o1", "u": "u1"}
             except BaseException:
                 log.flush(); log.seek(0); print(log.read())

@@ -6,6 +6,7 @@
   <meta name="color-scheme" content="light">
   <title>Administration · ONVIF Server Emulator</title>
   <link rel="stylesheet" href="/admin/app.css">
+  <script src="/admin/session.js" defer></script>
   <script src="/admin/app.js" defer></script>
   <script src="/admin/detectors.js" defer></script>
   <script src="/admin/configuration.js" defer></script>
@@ -22,10 +23,10 @@
       <a class="nav-link" href="#journal"><span aria-hidden="true">☷</span> Event journal</a>
       <a class="nav-link" href="#system"><span aria-hidden="true">⏻</span> System</a>
     </nav>
-    <div class="sidebar-footer"><span class="sidebar-caption">LOCAL ADMINISTRATION</span><span>Application control panel</span><span class="access-label">Access without sign-in</span></div>
+    <div class="sidebar-footer"><span class="sidebar-caption">LOCAL ADMINISTRATION</span><span>Application control panel</span><span class="access-label">Administrator access</span></div>
   </aside>
   <div class="workspace">
-    <header class="topbar"><span><span class="muted">Workspace</span><span class="breadcrumb" aria-hidden="true">/</span>Administration</span><span id="connection" class="connection connecting"><span class="status-dot"></span><span id="connection-label">Connecting</span></span></header>
+    <header class="topbar"><span><span class="muted">Workspace</span><span class="breadcrumb" aria-hidden="true">/</span>Administration</span><div class="topbar-actions"><span id="connection" class="connection connecting"><span class="status-dot"></span><span id="connection-label">Connecting</span></span><button class="button secondary" id="sign-out" type="button">Sign out</button></div></header>
     <main id="main">
       <section id="overview" aria-labelledby="page-title">
         <div class="page-heading"><div><div class="eyebrow">SERVER EMULATOR</div><h1 id="page-title">System overview</h1><p class="intro">Your application, its configuration, and the controls you need.</p></div><button class="button secondary" id="refresh" type="button"><span aria-hidden="true">↻</span> Refresh</button></div>
@@ -96,7 +97,7 @@
     <ul id="config-error-details" class="validation-issues"></ul>
     <form method="dialog" class="dialog-actions"><button class="button secondary" autofocus>Close</button></form>
   </dialog>
-  <dialog id="restart-dialog" aria-labelledby="dialog-title" aria-describedby="dialog-description"><form method="dialog"><div class="dialog-icon" aria-hidden="true">⏻</div><h2 id="dialog-title">Restart application?</h2><p id="dialog-description">The application will reload its configuration files. Active streams and event subscriptions will disconnect and must be reconnected.</p><p class="dialog-detail">If you changed the HTTP address or port, reopen administration at the new address. Invalid configuration can prevent startup.</p><div class="dialog-actions"><button class="button secondary" value="cancel" autofocus>Cancel</button><button id="confirm-restart" class="button danger" value="restart">Restart application</button></div></form></dialog>
+  <dialog id="restart-dialog" aria-labelledby="dialog-title" aria-describedby="dialog-description"><form method="dialog"><div class="dialog-icon" aria-hidden="true">⏻</div><h2 id="dialog-title">Restart application?</h2><p id="dialog-description">The application will reload its configuration files. Active streams and event subscriptions will disconnect and must be reconnected. You will need to sign in again.</p><p class="dialog-detail">If you changed the HTTP address or port, reopen administration at the new address. Invalid configuration can prevent startup.</p><div class="dialog-actions"><button class="button secondary" value="cancel" autofocus>Cancel</button><button id="confirm-restart" class="button danger" value="restart">Restart application</button></div></form></dialog>
   <noscript><p class="noscript">Enable JavaScript to view current settings and restart the application.</p></noscript>
 </body>
 </html>

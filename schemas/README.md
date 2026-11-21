@@ -6,6 +6,8 @@ files, based on its loaders and handlers. They use
 They are not ONVIF WSDL/XSD schemas and do not certify protocol conformance.
 
 `config-files.json` maps each case-sensitive configuration filename to its schema.
+`users.config` has its own schema for plaintext accounts and required boolean
+`enabled` flags; accounts no longer belong in `common.config`.
 `types.schema.json` provides shared definitions through relative `$ref` links.
 `analytics-rule.schema.json` describes persisted Motion Region, Line Detector,
 LineCounting, Field Detector, License Plate Recognition and Face Recognition rules referenced by the media profiles schema.

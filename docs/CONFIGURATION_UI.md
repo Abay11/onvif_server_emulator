@@ -57,7 +57,7 @@ if the HTTP endpoint changes, reconnect at its new address. Environment variable
 continue to override their corresponding file settings. The current browser draft
 is protected from automatic refresh; explicit reload asks before discarding edits.
 
-The common configuration represents existing passwords as
+The `users.config` document represents existing passwords as
 `__UNCHANGED_SECRET__`. Leave that marker to preserve the password for the same
 login, even if accounts are reordered; provide a real password for a new/renamed
 account. New values are write-only. Uniqueness of logins and RTP port ordering/parity
@@ -98,7 +98,7 @@ Schema errors return 422 with file/path/message entries; an unavailable validato
 returns 503. Invalid references, fixed-profile changes or native semantic failures
 return 400. Write failures return 507. No password values are included in responses
 or journal entries. The journal records the file name after a successful save.
-These routes share the WebUI's current unauthenticated access policy.
+These routes require the WebUI administrator session, including for reads.
 
 ## Contract and validation
 

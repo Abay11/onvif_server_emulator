@@ -8,6 +8,7 @@
 
 #include <memory>
 #include <cstdio>
+#include <filesystem>
 
 namespace pt = boost::property_tree;
 BOOST_AUTO_TEST_CASE(read_server_configs_func)
@@ -120,6 +121,7 @@ BOOST_AUTO_TEST_CASE(network_config_parsing_and_validation)
     tree.put("rtp.port_max", 51099);
     tree.put("rtsp_metadata.enabled", true);
     const std::string path = "network_validation.config";
+    std::filesystem::copy_file("../../server_configs/users.config", "users.config", std::filesystem::copy_options::overwrite_existing);
     pt::write_json(path, tree);
     const auto cfg = osrv::read_server_configs(path);
     BOOST_TEST(cfg->HttpAddress() == "http://192.168.1.10:18080/");
@@ -151,4 +153,5 @@ BOOST_AUTO_TEST_CASE(network_config_parsing_and_validation)
     pt::write_json(path, tree);
     BOOST_CHECK_THROW(osrv::read_server_configs(path), std::runtime_error);
     std::remove(path.c_str());
+    std::remove("users.config");
 }

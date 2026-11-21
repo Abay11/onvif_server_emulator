@@ -37,6 +37,7 @@ git clone https://github.com/Abay11/onvif_server_emulator.git
 
 To build OnvifServerEmulator:
 
+* OpenSSL libcrypto and development headers (`libssl-dev`)
 * cmake 3.16 or later to generate build files
 * C++ compiler with decent C++20 support
 * Python 3 with jsonschema 4.18+ and referencing for pre-write configuration validation
@@ -77,7 +78,7 @@ sudo apt update
 **Step 1.** Install toolchain and build tools:
 
 ```bash
-sudo apt install -y build-essential cmake pkg-config git python3 python3-jsonschema
+sudo apt install -y build-essential cmake pkg-config git python3 python3-jsonschema libssl-dev
 ```
 
 **Step 2.** Install GStreamer libraries:

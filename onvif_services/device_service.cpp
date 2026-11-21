@@ -31,6 +31,40 @@ namespace pt = boost::property_tree;
 
 namespace osrv
 {
+namespace
+{
+pt::ptree AuthenticationCapabilities(const ServerConfigs& config)
+{
+	pt::ptree result, network, security, system;
+	const bool digest = config.auth_scheme_ == AUTH_SCHEME::DIGEST || config.auth_scheme_ == AUTH_SCHEME::DIGEST_WSS;
+	const bool wss = config.auth_scheme_ == AUTH_SCHEME::WSS || config.auth_scheme_ == AUTH_SCHEME::DIGEST_WSS;
+	security.put("<xmlattr>.HttpDigest", digest ? "true" : "false");
+	security.put("<xmlattr>.UsernameToken", wss ? "true" : "false");
+	if (digest) security.put("<xmlattr>.HashingAlgorithms", "MD5 SHA-256 SHA-512-256");
+	result.add_child("tds:Network", network);
+	result.add_child("tds:Security", security);
+	result.add_child("tds:System", system);
+	return result;
+}
+}
+struct GetServiceCapabilitiesHandler : public OnvifRequestBase
+{
+	GetServiceCapabilitiesHandler(const std::map<std::string, std::string>& xs,
+		const std::shared_ptr<pt::ptree>& configs, const std::shared_ptr<ServerConfigs>& config)
+		: OnvifRequestBase("GetServiceCapabilities", auth::SECURITY_LEVELS::PRE_AUTH, xs, configs), config_(config) {}
+	void operator()(std::shared_ptr<HttpServer::Response> response, std::shared_ptr<HttpServer::Request>) override
+	{
+		auto envelope = utility::soap::getEnvelopeTree(ns_);
+		envelope.add_child("s:Body.tds:GetServiceCapabilitiesResponse.tds:Capabilities", AuthenticationCapabilities(*config_));
+		pt::ptree root;
+		root.add_child("s:Envelope", envelope);
+		std::ostringstream xml;
+		pt::write_xml(xml, root);
+		utility::http::fillResponseWithHeaders(*response, xml.str());
+	}
+	std::shared_ptr<ServerConfigs> config_;
+};
+
 struct GetCapabilitiesHandler : public OnvifRequestBase
 {
 	GetCapabilitiesHandler(const std::map<std::string, std::string>& xs, const std::shared_ptr<pt::ptree>& configs,
@@ -186,7 +220,7 @@ struct GetServicesHandler : public OnvifRequestBase
 	GetServicesHandler(const std::map<std::string, std::string>& xs, const std::shared_ptr<pt::ptree>& configs,
 		const std::shared_ptr<IOnvifServer>& srv)
 		: OnvifRequestBase(GetServices, auth::SECURITY_LEVELS::PRE_AUTH, xs, configs)
-		, ipv4_address_(srv->ServerAddress())
+		, ipv4_address_(srv->ServerAddress()), server_config_(srv->GetServerConfigs())
 	{
 	}
 
@@ -231,6 +265,9 @@ struct GetServicesHandler : public OnvifRequestBase
 															 caps_value.get_value<std::string>());
 			}
 
+			if (isNeedIncludeCaps && ns == "http://www.onvif.org/ver10/device/wsdl")
+				xml_service_node.add_child("tds:Capabilities.tds:Capabilities", AuthenticationCapabilities(*server_config_));
+
 			xml_service_node.put("tds:Version.tt:Major", node.get<std::string>("Version.Major"));
 			xml_service_node.put("tds:Version.tt:Minor", node.get<std::string>("Version.Minor"));
 
@@ -250,6 +287,7 @@ struct GetServicesHandler : public OnvifRequestBase
 
 private:
 	const std::string ipv4_address_;
+	std::shared_ptr<ServerConfigs> server_config_;
 };
 
 struct GetScopesHandler : public OnvifRequestBase
@@ -420,6 +458,8 @@ DeviceService::DeviceService(const std::string& service_uri, const std::string& 
 														 std::shared_ptr<IOnvifServer> srv)
 		: IOnvifService(service_uri, service_name, srv)
 {
+	requestHandlers_.push_back(
+			std::make_shared<GetServiceCapabilitiesHandler>(xml_namespaces_, configs_ptree_, srv->GetServerConfigs()));
 	requestHandlers_.push_back(std::make_shared<GetCapabilitiesHandler>(xml_namespaces_, configs_ptree_,
 		*srv->GetServerConfigs(), srv->ServerAddress()));
 	requestHandlers_.push_back(std::make_shared<GetDeviceInformationHandler>(xml_namespaces_, configs_ptree_));

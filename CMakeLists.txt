@@ -22,6 +22,7 @@ find_package(Boost REQUIRED
 )
 include_directories(${Boost_INCLUDE_DIRS})
 add_definitions(-DBOOST_ASIO_USE_TS_EXECUTOR_AS_DEFAULT) # helps to solve errors while building Simple-Web-Server with BOOST.Asio version greater or equal 1.74
+find_package(OpenSSL REQUIRED)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(GSTREAMER REQUIRED gstreamer-rtsp-server-1.0 gstreamer-rtsp-1.0 gstreamer-app-1.0 gstreamer-video-1.0)
 message(STATUS "gstreamer lib dir: ${GSTREAMER_LIBRARY_DIRS}")
@@ -126,6 +127,7 @@ FILE (GLOB UTILITY_SRC
 	"utility/DateTime.hpp"
 	"utility/EventService.cpp"
 	"utility/EventService.h"
+	"utility/RequestAuthentication.cpp"
 	"utility/HttpDigestHelper.cpp"
 	"utility/HttpDigestHelper.h"
 	"utility/HttpHelper.cpp"
@@ -156,6 +158,8 @@ add_library(onvif_server STATIC
 	Server.h
 	web/AdminUi.cpp
 	web/AdminUi.h
+	web/WebAuthentication.cpp
+	web/WebAuthentication.h
 	utility/ConfigValidation.cpp
 	utility/ConfigValidation.h
 	utility/DetectorControls.cpp
@@ -206,11 +210,17 @@ target_compile_definitions(onvif_server PRIVATE
 # Embed the UI so native and container builds need no extra runtime asset mount.
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/web/index.html"
+    "${CMAKE_CURRENT_SOURCE_DIR}/web/login.html"
+    "${CMAKE_CURRENT_SOURCE_DIR}/web/login.js"
+    "${CMAKE_CURRENT_SOURCE_DIR}/web/session.js"
     "${CMAKE_CURRENT_SOURCE_DIR}/web/app.css"
     "${CMAKE_CURRENT_SOURCE_DIR}/web/app.js"
     "${CMAKE_CURRENT_SOURCE_DIR}/web/detectors.js"
     "${CMAKE_CURRENT_SOURCE_DIR}/web/configuration.js")
 file(READ "${CMAKE_CURRENT_SOURCE_DIR}/web/index.html" ADMIN_HTML)
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/web/login.html" LOGIN_HTML)
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/web/login.js" LOGIN_JS)
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/web/session.js" SESSION_JS)
 file(READ "${CMAKE_CURRENT_SOURCE_DIR}/web/app.css" ADMIN_CSS)
 file(READ "${CMAKE_CURRENT_SOURCE_DIR}/web/app.js" ADMIN_JS)
 file(READ "${CMAKE_CURRENT_SOURCE_DIR}/web/detectors.js" DETECTORS_JS)
@@ -225,6 +235,7 @@ include_directories(main
 )
 	
 target_compile_options(main PUBLIC "${GSTREAMER_CFLAGS}")
+target_link_libraries(onvif_server PUBLIC OpenSSL::Crypto)
 target_link_libraries(main PUBLIC
 	onvif_server
 	${GSTREAMER_LIBRARIES}

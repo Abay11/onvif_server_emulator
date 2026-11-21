@@ -5,6 +5,7 @@
 #include "../onvif_services/IOnvifService.h"
 #include <atomic>
 #include <future>
+#include <boost/date_time/posix_time/posix_time.hpp>
 #include <thread>
 
 #include <boost/test/unit_test.hpp>
@@ -51,8 +52,12 @@ struct DeviceEndpoint
 	std::shared_ptr<DeviceTestServer> server;
 	std::thread worker;
 	std::unique_ptr<SimpleWeb::Client<SimpleWeb::HTTP>> client;
-	DeviceEndpoint(std::function<void()> reboot = {}) : server(std::make_shared<DeviceTestServer>(path, reboot))
+	DeviceEndpoint(std::function<void()> reboot = {}, osrv::AUTH_SCHEME scheme = osrv::AUTH_SCHEME::NONE)
+			: server(std::make_shared<DeviceTestServer>(path, reboot))
 	{
+		server->GetServerConfigs()->auth_scheme_ = scheme;
+		server->GetServerConfigs()->digest_session_ = std::make_shared<utility::digest::DigestSessionImpl>();
+		server->GetServerConfigs()->digest_session_->set_users_list(server->GetServerConfigs()->system_users_);
 		server->DeviceService()->Run();
 		auto http = server->GetHttpServer();
 		http->config.address = "127.0.0.1";
@@ -131,4 +136,43 @@ BOOST_AUTO_TEST_CASE(system_reboot_failure_keeps_endpoint_available_for_retry)
 	BOOST_TEST(endpoint.Call()->status_code == "200 OK");
 	BOOST_TEST(endpoint.Call("<d:SystemReboot/>", "urn:wrong")->status_code == "400 Bad Request");
 	BOOST_TEST(attempts.load() == 2u);
+}
+
+BOOST_AUTO_TEST_CASE(authorization_prevents_reboot_side_effects_before_handler_execution)
+{
+	std::atomic_uint reboots{0};
+	DeviceEndpoint endpoint([&] { ++reboots; }, osrv::AUTH_SCHEME::WSS);
+	auto call = [&](const std::string& login, const std::string& password, char nonce, const std::string& operation) {
+		const auto created =
+				boost::posix_time::to_iso_extended_string(boost::posix_time::microsec_clock::universal_time()) + "Z";
+		return endpoint.client->request(
+				"POST", "/onvif/device_service",
+				"<s:Envelope xmlns:s='http://www.w3.org/2003/05/soap-envelope' "
+				"xmlns:d='http://www.onvif.org/ver10/device/wsdl'>"
+				"<s:Header><Security xmlns='http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-secext-1.0.xsd'>"
+				"<UsernameToken><Username>" +
+						login + "</Username><Password>" + password + "</Password><Nonce>AAAAAAAAAAA" + nonce +
+						"</Nonce><Created "
+						"xmlns='http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-utility-1.0.xsd'>" +
+						created + "</Created></UsernameToken></Security></s:Header><s:Body><d:" + operation +
+						"/></s:Body></s:Envelope>",
+				{{"Connection", "close"}});
+	};
+	char nonce = 'A';
+	for (const auto& [login, password] : {std::pair{"u", "u1"}, {"o", "o1"}})
+	{
+		BOOST_TEST(call(login, password, nonce++, "GetDeviceInformation")->status_code == "200 OK");
+		auto response = call(login, password, nonce++, "SystemReboot");
+		BOOST_TEST(response->status_code == "400 Bad Request");
+		BOOST_TEST(response->header.count("WWW-Authenticate") == 0u);
+		pt::ptree fault;
+		pt::read_xml(response->content, fault);
+		BOOST_TEST(fault.get<std::string>("s:Envelope.s:Body.s:Fault.s:Code.s:Value") == "s:Sender");
+		BOOST_TEST(fault.get<std::string>("s:Envelope.s:Body.s:Fault.s:Code.s:Subcode.s:Value") == "ter:NotAuthorized");
+		BOOST_TEST(reboots.load() == 0u);
+	}
+	BOOST_TEST(call("a", "a1", nonce++, "SystemReboot")->status_code == "200 OK");
+	// The next request runs after response completion, when a permitted reboot invokes its callback.
+	BOOST_TEST(call("u", "u1", nonce++, "GetDeviceInformation")->status_code == "200 OK");
+	BOOST_TEST(reboots.load() == 1u);
 }

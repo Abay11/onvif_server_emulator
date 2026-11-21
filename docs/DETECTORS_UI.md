@@ -136,8 +136,8 @@ emulator extensions. Third-party specifications/schemas are not redistributed.
 
 ## JSON interface
 
-Both methods use `/admin/api/detectors`. Like the existing WebUI, these endpoints
-currently have no login, independently of SOAP Digest settings.
+Both methods use `/admin/api/detectors` and require the WebUI administrator
+session for both reads and writes, independently of SOAP Digest settings.
 
 GET returns `simple`, `families`, `rules_enabled`, `max_rules` and
 `configurations`. Configuration entries have token/name, compatible source bounds,

@@ -1,4 +1,5 @@
 #include "AdminUi.h"
+#include "WebAuthentication.h"
 #include "../Server.h"
 #include "../Simple-Web-Server/server_http.hpp"
 #include "../include/onvif_services/service_configs.h"
@@ -97,7 +98,7 @@ Tree Settings(IOnvifServer& server)
 	settings.put("application.logging_level", server.Logger()->GetLogLevel());
 	settings.put("application.logging_output", common->get<std::string>("loggingOutput"));
 	settings.put("application.onvif_authentication", Authentication(cfg->auth_scheme_));
-	settings.put("application.web_authentication", "none");
+	settings.put("application.web_authentication", "administrator-session");
 	settings.put("network.bind_ipv4", cfg->ipv4_address_);
 	settings.put("network.http_port", cfg->http_port_);
 	settings.put("network.rtsp_port", cfg->rtsp_port_);
@@ -226,6 +227,40 @@ bool SameOrigin(const Request& request, const std::string& action = "reboot")
 	return host != request->header.end() &&
 				 (origin->second == "http://" + host->second || origin->second == "https://" + host->second);
 }
+std::string SessionToken(const Request& request)
+{
+	if (request->header.count("Cookie") != 1)
+		return {};
+	std::string_view cookies = request->header.find("Cookie")->second;
+	std::string token;
+	while (!cookies.empty())
+	{
+		const auto end = cookies.find(';');
+		auto item = cookies.substr(0, end);
+		while (!item.empty() && item.front() == ' ')
+			item.remove_prefix(1);
+		if (item.starts_with("onvif_admin_session="))
+		{
+			if (!token.empty())
+				return {};
+			token = item.substr(20);
+			if (token.size() != 64 || token.find_first_not_of("0123456789abcdef") != std::string::npos)
+				return {};
+		}
+		if (end == std::string_view::npos)
+			break;
+		cookies.remove_prefix(end + 1);
+	}
+	return token;
+}
+void SessionResponse(const Response& response, const std::string& token)
+{
+	auto headers = Headers("application/json; charset=utf-8");
+	headers.emplace("Set-Cookie", "onvif_admin_session=" + token + "; Path=/admin; HttpOnly; SameSite=Strict; Max-Age=" +
+																		(token.empty() ? "0" : "28800"));
+	response->write(Status::success_ok, "{\"status\":\"ok\"}", headers);
+}
+
 } // namespace
 
 void RegisterAdminUi(IOnvifServer& server)
@@ -234,6 +269,7 @@ void RegisterAdminUi(IOnvifServer& server)
 	const auto cfg = server.GetServerConfigs();
 	const auto logger = server.Logger();
 	const auto settings = Settings(server);
+	const auto authentication = std::make_shared<WebAuthentication>(cfg->system_users_);
 	const auto profiles = server.MediaProfilesManager()->SharedConfigs();
 	const auto started = std::chrono::steady_clock::now();
 	const auto instance = boost::uuids::to_string(boost::uuids::random_generator()());
@@ -254,11 +290,8 @@ void RegisterAdminUi(IOnvifServer& server)
 		headers.emplace("Location", "/admin/");
 		response->write(Status::redirection_found, "", headers);
 	};
-	const auto asset = [http, cfg](const std::string& path, std::string_view contents, const std::string& type) {
-		http->resource[path]["GET"] = [contents, type, cfg, page = path == "^/admin/$"](Response response,
-																																										Request request) {
-			if (page)
-				cfg->journal->Client("WebUI", request->remote_endpoint().address().to_string(), "unauthenticated");
+	const auto asset = [http](const std::string& path, std::string_view contents, const std::string& type) {
+		http->resource[path]["GET"] = [contents, type](Response response, Request) {
 			response->write(Status::success_ok, std::string(contents), Headers(type));
 		};
 	};
@@ -267,11 +300,75 @@ void RegisterAdminUi(IOnvifServer& server)
 	asset(R"(^/admin/app\.js$)", admin_assets::Js, "text/javascript; charset=utf-8");
 	asset(R"(^/admin/detectors\.js$)", admin_assets::Detectors, "text/javascript; charset=utf-8");
 	asset(R"(^/admin/configuration\.js$)", admin_assets::Configuration, "text/javascript; charset=utf-8");
+	asset("^/admin/login/?$", admin_assets::Login, "text/html; charset=utf-8");
+	asset(R"(^/admin/login\.js$)", admin_assets::LoginJs, "text/javascript; charset=utf-8");
+	asset(R"(^/admin/session\.js$)", admin_assets::SessionJs, "text/javascript; charset=utf-8");
+	http->resource["^/admin/api/login$"]["POST"] = [authentication](Response response, Request request) {
+		if (!SameOrigin(request, "login"))
+		{
+			Json(response, Status::client_error_forbidden, R"({"error":"Same-origin admin request required"})");
+			return;
+		}
+		const auto type = request->header.find("Content-Type");
+		if (type == request->header.end() || type->second != "application/json")
+		{
+			Json(response, Status::client_error_unsupported_media_type, R"({"error":"Expected application/json"})");
+			return;
+		}
+		Tree credentials;
+		try
+		{
+			const auto body = request->content.string();
+			if (body.size() > 4096)
+				throw std::invalid_argument("Login request is too large");
+			std::istringstream input(body);
+			boost::property_tree::read_json(input, credentials);
+			if (credentials.size() != 2 || !credentials.get_child("login").empty() ||
+					!credentials.get_child("password").empty())
+				throw std::invalid_argument("Invalid credentials document");
+		}
+		catch (const std::exception&)
+		{
+			Json(response, Status::client_error_bad_request, R"({"error":"Invalid login request"})");
+			return;
+		}
+		try
+		{
+			const auto token =
+					authentication->Login(credentials.get<std::string>("login"), credentials.get<std::string>("password"));
+			if (token.empty())
+				Json(response, Status::client_error_unauthorized, R"({"error":"Invalid administrator credentials"})");
+			else
+			{
+				authentication->Logout(SessionToken(request));
+				SessionResponse(response, token);
+			}
+		}
+		catch (const std::exception&)
+		{
+			Json(response, Status::server_error_service_unavailable, R"({"error":"Sign-in unavailable"})");
+		}
+	};
+	http->resource["^/admin/api/logout$"]["POST"] = [authentication](Response response, Request request) {
+		if (!SameOrigin(request, "logout"))
+		{
+			Json(response, Status::client_error_forbidden, R"({"error":"Same-origin admin request required"})");
+			return;
+		}
+		authentication->Logout(SessionToken(request));
+		SessionResponse(response, "");
+	};
 	auto configuration_ui = std::make_shared<ConfigurationUi>(server);
 	http->resource["^/admin/api/configuration$"]["GET"] = [configuration_ui](Response response, Request) {
-		try { Json(response, Status::success_ok, configuration_ui->Read()); }
-		catch (const std::exception&) { Json(response, Status::server_error_internal_server_error,
-			R"({"error":"ConfigurationUnavailable","message":"Configuration files could not be read"})"); }
+		try
+		{
+			Json(response, Status::success_ok, configuration_ui->Read());
+		}
+		catch (const std::exception&)
+		{
+			Json(response, Status::server_error_internal_server_error,
+					 R"({"error":"ConfigurationUnavailable","message":"Configuration files could not be read"})");
+		}
 	};
 	http->resource["^/admin/api/configuration$"]["POST"] = [configuration_ui](Response response, Request request) {
 		if (!SameOrigin(request, "configuration"))
@@ -444,5 +541,34 @@ void RegisterAdminUi(IOnvifServer& server)
 			headers.emplace("Allow", std::string(method) == "GET" ? "POST" : "GET");
 			response->write(Status::client_error_method_not_allowed, "{\"error\":\"Method not allowed\"}", headers);
 		};
+	// Wrap every registered administration handler, including write APIs and method errors.
+	// Only the sign-in page/API and non-secret static assets are public.
+	for (auto& [resource, methods] : http->resource)
+	{
+		const auto& path = resource.str;
+		if (!path.starts_with("^/admin") || path == "^/admin/login/?$" || path == "^/admin/api/login$" ||
+				path == R"(^/admin/app\.css$)" || path == R"(^/admin/login\.js$)" || path == R"(^/admin/session\.js$)" ||
+				path == R"(^/admin/app\.js$)" || path == R"(^/admin/detectors\.js$)" || path == R"(^/admin/configuration\.js$)")
+			continue;
+		for (auto& [method, handler] : methods)
+			handler = [handler, authentication, cfg, api = path.starts_with("^/admin/api/")](Response response,
+																																											 Request request) {
+				if (authentication->Username(SessionToken(request)).empty())
+				{
+					if (api)
+						Json(response, Status::client_error_unauthorized, R"({"error":"AuthenticationRequired"})");
+					else
+					{
+						auto headers = Headers("text/plain; charset=utf-8");
+						headers.emplace("Location", "/admin/login");
+						response->write(Status::redirection_found, "", headers);
+					}
+					return;
+				}
+				if (request->path == "/admin/")
+					cfg->journal->Client("WebUI", request->remote_endpoint().address().to_string(), "administrator");
+				handler(response, request);
+			};
+	}
 }
 } // namespace osrv

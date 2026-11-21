@@ -290,8 +290,8 @@ then test UDP separately. In your ONVIF VMS, verify:
 
 The [administration WebUI](WEB_UI.md) is available at
 `http://192.168.1.10:8080/admin/` on the same HTTP listener, with no extra port
-mapping or firewall rule. This initial version has no login, including when SOAP
-Digest is enabled.
+mapping or firewall rule. Sign in with the ONVIF login and password of any enabled `administrator`
+account from `users.config`, independently of the SOAP authentication setting.
 
 An HTTP GET on the device service may return 400: SOAP POST is expected. This
 alone is not a failed connectivity test. An open RTSP TCP port alone does not

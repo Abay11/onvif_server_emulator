@@ -1,3 +1,4 @@
+#include "../utility/RequestAuthentication.h"
 #include "event_service.h"
 
 #include "../Logger.h"
@@ -100,8 +101,8 @@ struct CreatePullPointSubscriptionHandler : public utility::http::RequestHandler
 void HandlePullPointRequest(std::shared_ptr<HttpServer::Response> response,
 																 std::shared_ptr<HttpServer::Request> request)
 {
-	// osrv::auth::SECURITY_LEVELS::READ_MEDIA
 	auto request_tree = exns::to_ptree(request->content.string());
+	utility::auth::Authenticate(*server_configs, *request, request_tree, osrv::auth::SECURITY_LEVELS::READ_MEDIA);
 
 	auto header_action = exns::find_hierarchy("Envelope.Header.Action", request_tree);
 	auto header_message_id = exns::find_hierarchy("Envelope.Header.MessageID", request_tree);
@@ -189,6 +190,10 @@ void PullPointPortDefaultHandler(std::shared_ptr<HttpServer::Response> response,
 	try
 	{
 		HandlePullPointRequest(response, request);
+	}
+	catch (const utility::auth::Rejected& e)
+	{
+		utility::auth::Reject(*response, *server_configs, e);
 	}
 	catch (const SubscriptionFault& fault)
 	{
@@ -368,12 +373,11 @@ void do_handler_request(std::shared_ptr<HttpServer::Response> response, std::sha
 	std::string method;
 	auto content = request->content.string();
 	std::istringstream is(content);
-	pt::ptree* tree = new exns::Parser();
+	exns::Parser tree;
 	try
 	{
-		pt::xml_parser::read_xml(is, *tree);
-		auto* ptr = static_cast<exns::Parser*>(tree);
-		method = static_cast<exns::Parser*>(tree)->___getMethod();
+		pt::xml_parser::read_xml(is, static_cast<pt::ptree&>(tree));
+		method = tree.___getMethod();
 	}
 	catch (const pt::xml_parser_error& e)
 	{
@@ -393,32 +397,8 @@ void do_handler_request(std::shared_ptr<HttpServer::Response> response, std::sha
 			auto handler_ptr = *handler_it;
 			log_->Debug("Handling EventService request: " + handler_ptr->get_name());
 
-			// extract user credentials
-			osrv::auth::USER_TYPE current_user = osrv::auth::USER_TYPE::ANON;
-			if (server_configs->auth_scheme_ == osrv::AUTH_SCHEME::DIGEST)
-			{
-				auto auth_header_it = request->header.find(utility::http::HEADER_AUTHORIZATION);
-				if (auth_header_it != request->header.end())
-				{
-					// do extract user creds
-					auto da_from_request = utility::digest::extract_DA(auth_header_it->second);
-
-					bool isStaled;
-					auto isCredsOk = digest_session->verifyDigest(da_from_request, isStaled);
-
-					// if provided credentials are OK, upgrade UserType from Anon to appropriate Type
-					if (isCredsOk)
-					{
-						current_user =
-								osrv::auth::get_usertype_by_username(da_from_request.username, digest_session->get_users_list());
-					}
-				}
-
-				if (!osrv::auth::isUserHasAccess(current_user, handler_ptr->get_security_level()))
-				{
-					throw osrv::auth::digest_failed{};
-				}
-			}
+			auto current_user =
+					utility::auth::Authenticate(*server_configs, *request, tree, handler_ptr->get_security_level());
 
 			server_configs->journal->Client("ONVIF", request->remote_endpoint().address().to_string(),
 					current_user == osrv::auth::USER_TYPE::ADMIN ? "administrator" :
@@ -426,20 +406,14 @@ void do_handler_request(std::shared_ptr<HttpServer::Response> response, std::sha
 				current_user == osrv::auth::USER_TYPE::USER ? "user" : "unauthenticated");
 			(*handler_ptr)(response, request);
 		}
-		catch (const osrv::auth::digest_failed& e)
+		catch (const utility::auth::Rejected& e)
 		{
 			server_configs->journal->Add("warn", "client", "ONVIF",
 					"Authentication or access check rejected a request from " +
 					request->remote_endpoint().address().to_string());
 			log_->Error(e.what());
 
-			*response << utility::http::RESPONSE_UNAUTHORIZED << "\r\n"
-								<< "Content-Type: application/soap+xml; charset=utf-8"
-								<< "\r\n"
-								<< "Content-Length: " << 0 << "\r\n"
-								<< utility::http::HEADER_WWW_AUTHORIZATION << ": " << digest_session->generateDigest().to_string()
-								<< "\r\n"
-								<< "\r\n";
+			utility::auth::Reject(*response, *server_configs, e);
 		}
 		catch (const std::exception& e)
 		{
