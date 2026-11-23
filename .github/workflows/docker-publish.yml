@@ -63,9 +63,21 @@ jobs:
 
       - name: Start runtime image
         run: |
+          # The network smoke test sends anonymous SOAP requests.
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          config = json.loads(Path("server_configs/common.config").read_text())
+          config["authentication"] = "none"
+          destination = Path(os.environ["RUNNER_TEMP"]) / "onvif-network-common.config"
+          destination.write_text(json.dumps(config, indent=2) + "\n")
+          PY
           docker run --detach --init \
             --name onvif-ci \
             --network host \
+            --mount "type=bind,src=$RUNNER_TEMP/onvif-network-common.config,dst=/app/server_configs/common.config,readonly" \
             -e ONVIF_ADVERTISED_IPV4=127.0.0.1 \
             -e ONVIF_DISCOVERY_INTERFACE_IPV4=127.0.0.1 \
             onvif-ci:latest

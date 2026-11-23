@@ -334,7 +334,11 @@ in the server's own Linux network namespace use `--host 127.0.0.1` and select th
 interface joined by discovery. This automated test complements the Windows/VMS
 acceptance steps in [the mirrored guide](docs/WSL2.md); it does not configure
 firewalls. The test assumes authentication is disabled and creates a short-lived
-PullPoint subscription.
+PullPoint subscription. The bundled configuration enables `digest/ws-security`,
+so set `authentication` to `none` in a separate test configuration before starting
+the server. The Docker distribution CI mounts a temporary `common.config` with
+this override for its network check; the built and published image retains the
+bundled authentication setting.
 
 After changing event delivery, also run `python3 unit_tests/event_delivery_smoke.py`
 against the same source-built server. It checks two independent PullPoints,
