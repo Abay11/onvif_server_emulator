@@ -109,6 +109,20 @@ BOOST_AUTO_TEST_CASE(advertised_endpoints_are_independent_of_bind_addresses)
     BOOST_TEST(cfg.PullPointAddress(5550, false) == "http://192.168.1.10:15550/");
 }
 
+BOOST_AUTO_TEST_CASE(advertised_https_can_be_selected_with_both_listeners_enabled)
+{
+    osrv::ServerConfigs cfg{};
+    cfg.http_port_ = "8080";
+    cfg.advertised_web_scheme_ = "https";
+    cfg.advertised_https_port_ = 19443;
+    BOOST_TEST(cfg.http_enabled_);
+    BOOST_TEST(cfg.https_enabled_);
+    BOOST_TEST(cfg.HttpAddress() == "https://127.0.0.1:19443/");
+    BOOST_TEST(cfg.PlainHttpAddress() == "http://127.0.0.1:8080/");
+    BOOST_TEST(cfg.PullPointAddress(5550, true) == cfg.HttpAddress());
+    BOOST_TEST(cfg.PullPointAddress(5550, false) == "https://127.0.0.1:5550/");
+}
+
 BOOST_AUTO_TEST_CASE(network_config_parsing_and_validation)
 {
     pt::ptree tree;
@@ -129,6 +143,39 @@ BOOST_AUTO_TEST_CASE(network_config_parsing_and_validation)
     BOOST_TEST(cfg->rtp_port_min_ == 51000);
     BOOST_TEST(cfg->rtp_port_max_ == 51099);
     BOOST_TEST(cfg->rtsp_metadata_enabled_);
+    BOOST_TEST(cfg->http_enabled_);
+    BOOST_TEST(cfg->https_enabled_);
+    BOOST_TEST(cfg->https_port_ == "8443");
+    tree.put("http.enabled", false);
+    tree.put("addresses.https_port", 9443);
+    tree.put("advertised.https_port", 19443);
+    pt::write_json(path, tree);
+    auto secure = osrv::read_server_configs(path);
+    BOOST_TEST(secure->HttpAddress() == "https://192.168.1.10:19443/");
+    BOOST_TEST(secure->PullPointAddress(5550, true) == secure->HttpsAddress());
+    BOOST_TEST(secure->PullPointAddress(5550, false) == "https://192.168.1.10:15550/");
+    tree.put("https.enabled", false);
+    pt::write_json(path, tree);
+    BOOST_CHECK_THROW(osrv::read_server_configs(path), std::runtime_error);
+    tree.put("http.enabled", true);
+    tree.put("https.enabled", true);
+    tree.put("addresses.https_port", tree.get<std::string>("addresses.http_port"));
+    pt::write_json(path, tree);
+    BOOST_CHECK_THROW(osrv::read_server_configs(path), std::runtime_error);
+    tree.put("addresses.https_port", 8443);
+    tree.put("https.certificate", "missing.pem");
+    pt::write_json(path, tree);
+    BOOST_CHECK_THROW(osrv::read_server_configs(path), std::runtime_error);
+    tree.put("https.certificate", "");
+    tree.put("advertised.web_scheme", "ftp");
+    pt::write_json(path, tree);
+    BOOST_CHECK_THROW(osrv::read_server_configs(path), std::runtime_error);
+    tree.put("advertised.web_scheme", "https");
+    tree.put("https.enabled", false);
+    pt::write_json(path, tree);
+    BOOST_CHECK_THROW(osrv::read_server_configs(path), std::runtime_error);
+    tree.put("advertised.web_scheme", "auto");
+    tree.put("https.enabled", true);
     // Missing settings use the same enabled default as the shipped configuration.
     tree.erase("rtsp_metadata");
     pt::write_json(path, tree);

@@ -17,7 +17,7 @@ docker run -d --init --network host \
 This command targets Docker Engine on native Linux (`linux/amd64`). Replace both
 IPv4 values with the host's LAN interface address. The image includes the
 executable, `/app/server_configs`, fonts and GStreamer runtime plugins.
-Host networking uses TCP 8080/8554, UDP 3702 and UDP 50000–50199 by default;
+Host networking uses TCP 8080/8443/8554, UDP 3702 and UDP 50000–50199 by default;
 do not add port mappings. On Windows, first follow the
 [WSL2 mirrored networking and firewall guide](docs/WSL2.md).
 
@@ -37,7 +37,7 @@ git clone https://github.com/Abay11/onvif_server_emulator.git
 
 To build OnvifServerEmulator:
 
-* OpenSSL libcrypto and development headers (`libssl-dev`)
+* OpenSSL libcrypto, libssl and development headers (`libssl-dev`)
 * cmake 3.16 or later to generate build files
 * C++ compiler with decent C++20 support
 * Python 3 with jsonschema 4.18+ and referencing for pre-write configuration validation
@@ -228,12 +228,12 @@ For a local-only TCP test with manual device registration:
 
 ```bash
 docker run --rm --init \
-    -p 127.0.0.1:8080:8080 -p 127.0.0.1:8554:8554 \
+    -p 127.0.0.1:8080:8080 -p 127.0.0.1:8443:8443 -p 127.0.0.1:8554:8554 \
     osrv-image:latest
 ```
 
 In this last profile use `127.0.0.1` URLs and RTP interleaved over RTSP/TCP.
-These two port mappings do not provide multicast discovery or UDP media to LAN
+These three port mappings do not provide multicast discovery or UDP media to LAN
 clients. Default UDP server media ports in the full profile are 50000–50199.
 
 GStreamer diagnostics are opt-in; add `-e 'GST_DEBUG=*:3'` to `docker run` when
@@ -345,3 +345,7 @@ against the same source-built server. It checks two independent PullPoints,
 matching live notifications, message limits, synchronization and unsubscribe.
 See [shared event delivery](docs/EVENT_DELIVERY.md) for the pinned XML validation
 command and subscription simulation limits.
+
+HTTPS is enabled by default on TCP 8443 alongside HTTP 8080. See
+[HTTPS](docs/HTTPS.md) for certificate settings and
+`python3 unit_tests/https_smoke.py --binary build/main` for the transport matrix.

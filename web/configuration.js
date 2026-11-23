@@ -207,5 +207,86 @@
   });
   window.addEventListener("beforeunload", (event) => { if (dirty) { event.preventDefault(); event.returnValue = ""; } });
   window.addEventListener("admin-configuration-saved", () => { if (!dirty && !busy) load(); });
+  const networkForms = [...document.querySelectorAll("[data-network-file]")];
+  const networkDirty = new Set();
+  let networkFiles = [], networkBusy = false;
+  const networkDefaults = {
+    "http.enabled": true, "https.enabled": true, "addresses.https_port": 8443,
+    "https.certificate": "", "https.private_key": "", "advertised.ipv4": "127.0.0.1",
+    "advertised.web_scheme": "auto", "advertised.http_port": 0, "advertised.https_port": 0,
+    "advertised.rtsp_port": 0, "advertised.pullpoint_port": 0, "rtp.port_min": 50000,
+    "rtp.port_max": 50199, "enabled": true, "interface_ipv4": ""
+  };
+  function networkMessage(text, failure = false) {
+    $("network-message").textContent = text;
+    $("network-message").className = `notice ${failure ? "error" : "success"}`;
+    $("network-message").hidden = !text;
+  }
+  function networkLock(value) {
+    networkBusy = value; $("network-workspace").inert = value; $("network-refresh").disabled = value;
+  }
+  async function loadNetwork() {
+    const response = await window.adminFetch("/admin/api/configuration", {cache: "no-store", signal: AbortSignal.timeout(10000)});
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const result = await response.json();
+    for (const form of networkForms) {
+      const file = form.dataset.networkFile;
+      if (networkDirty.has(file)) continue;
+      const entry = result.files.find((item) => item.name === file);
+      networkFiles = networkFiles.filter((item) => item.name !== file).concat(entry);
+      const document = JSON.parse(entry.document);
+      for (const control of form.querySelectorAll("[data-network-path]")) {
+        const path = control.dataset.networkPath;
+        const value = path.split(".").reduce((value, key) => value?.[key], document) ?? networkDefaults[path] ?? "";
+        if (control.type === "checkbox") control.checked = truth(value); else control.value = value;
+      }
+    }
+    $("network-restart").hidden = !result.restart_required;
+    $("network-restart").textContent = "Saved settings require an application restart. Reconnect to the new address if the port or allowed connections change.";
+  }
+  for (const form of networkForms) {
+    form.addEventListener("input", () => { networkDirty.add(form.dataset.networkFile); networkMessage("Unsaved network settings."); });
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault(); if (networkBusy) return;
+      const file = form.dataset.networkFile;
+      const entry = networkFiles.find((item) => item.name === file);
+      if (!entry) { networkMessage("Reload network settings before saving.", true); return; }
+      const document = JSON.parse(entry.document);
+      for (const control of form.querySelectorAll("[data-network-path]")) {
+        const path = control.dataset.networkPath.split(".");
+        let parent = document;
+        for (const key of path.slice(0, -1)) parent = parent[key] ??= {};
+        parent[path.at(-1)] = control.type === "checkbox" ? control.checked : control.dataset.networkType === "number" ? Number(control.value) : control.value;
+      }
+      networkLock(true);
+      try {
+        const response = await window.adminFetch("/admin/api/configuration", {
+          method: "POST", headers: {"Content-Type": "application/json", "X-ONVIF-Admin": "configuration"},
+          body: JSON.stringify({file, revision: entry.revision, document: JSON.stringify(document)}), signal: AbortSignal.timeout(20000)
+        });
+        const result = await response.json();
+        if (!response.ok) { popup(result.message || result.error, result.validation_errors || []); networkMessage(result.message || result.error, true); return; }
+        networkDirty.delete(file); await loadNetwork();
+        networkMessage("Network settings saved. Restart the application to apply them; reconnect to the new address if needed.");
+        window.dispatchEvent(new Event("admin-configuration-saved"));
+        if (result.restart_required) $("configuration-saved-dialog").showModal();
+      } catch (error) { networkMessage(`Save could not be confirmed: ${error.message}. Reload to inspect saved settings.`, true); }
+      finally { networkLock(false); }
+    });
+  }
+  $("network-refresh").addEventListener("click", async () => {
+    if (networkBusy || (networkDirty.size && !window.confirm("Discard unsaved network settings?"))) return;
+    networkLock(true);
+    try {
+      networkDirty.clear(); await loadNetwork(); networkMessage("");
+    } catch (error) { networkMessage(`Network settings unavailable: ${error.message}`, true); }
+    finally { networkLock(false); }
+  });
+  window.addEventListener("beforeunload", (event) => { if (networkDirty.size) { event.preventDefault(); event.returnValue = ""; } });
+  window.addEventListener("admin-configuration-saved", () => {
+    if (!networkBusy) loadNetwork().catch((error) => networkMessage(`Network settings unavailable: ${error.message}`, true));
+  });
+  networkLock(true);
+  loadNetwork().then(() => networkLock(false)).catch((error) => { networkLock(false); $("network-workspace").inert = true; networkMessage(`Network settings unavailable: ${error.message}`, true); });
   load();
 })();

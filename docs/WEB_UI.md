@@ -1,8 +1,9 @@
 # Administration WebUI
 
-Open `http://<emulator-host>:<http-port>/admin/` (by default,
+Open `https://<emulator-host>:8443/admin/` or `http://<emulator-host>:<http-port>/admin/` (by default,
 `http://127.0.0.1:8080/admin/`). `/admin` redirects to `/admin/`. The administration
-page shares the existing ONVIF HTTP listener and bind/port configuration. No extra
+page shares the ONVIF HTTP and HTTPS listeners and bind/port configuration.
+Both are enabled by default; see [HTTPS and certificates](HTTPS.md). No extra
 port, web process, JavaScript package installation, or container asset mount is
 needed. HTML, CSS and JavaScript are embedded into the executable at CMake
 configuration time and served locally without external fonts, scripts or CDNs.
@@ -24,6 +25,9 @@ The Users & authentication section manages accounts and the saved ONVIF scheme,
 with the active scheme shown separately. Account and scheme changes require restart.
 The overview shows active settings; [configuration administration](CONFIGURATION_UI.md)
 supports media profile/configuration editing and validated JSON file saves.
+The separate **Network configuration** sidebar section edits HTTP/HTTPS, addresses,
+advertised web protocol, ports, Discovery and PullPoint connections. Network changes
+require restart; active values remain separate from saved settings.
 Restart requirements and write failures are reported explicitly. The [detector panel](DETECTORS_UI.md)
 provides persisted rule editing, live detector settings and manual simulation steps.
 The status API selects explicit fields and excludes account
@@ -48,8 +52,9 @@ POST `/admin/api/login` accepts JSON `{ "login": "...", "password": "..." }`
 with `X-ONVIF-Admin: login`. Successful sign-in creates a random 256-bit session
 and sets `onvif_admin_session` with Path `/admin`, HttpOnly, SameSite=Strict and
 Max-Age=28800. Sessions expire after eight hours, are kept only in server memory,
-and disappear on application restart. The cookie uses the existing HTTP listener;
-there is no new TLS termination or trust in proxy forwarding headers.
+and disappear on application restart. HTTPS responses add Secure to the session
+cookie. Transport security is determined by the listener, without trusting proxy
+forwarding headers.
 The server retains at most 1024 unexpired sessions. At capacity, sign-in returns
 503 until sessions expire or users sign out.
 

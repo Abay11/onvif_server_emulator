@@ -1,7 +1,7 @@
 #include "AdminUi.h"
 #include "WebAuthentication.h"
 #include "../Server.h"
-#include "../Simple-Web-Server/server_http.hpp"
+#include "../HttpServer.h"
 #include "../include/onvif_services/service_configs.h"
 #include "../onvif_services/IOnvifService.h"
 #include "../utility/AnalyticsRules.h"
@@ -101,9 +101,15 @@ Tree Settings(IOnvifServer& server)
 	settings.put("application.web_authentication", "administrator-session");
 	settings.put("network.bind_ipv4", cfg->ipv4_address_);
 	settings.put("network.http_port", cfg->http_port_);
+	settings.put("network.https_port", cfg->https_port_);
+	settings.put("network.http_enabled", cfg->http_enabled_);
+	settings.put("network.https_enabled", cfg->https_enabled_);
+	settings.put("network.https_endpoint", cfg->https_enabled_ ? cfg->HttpsAddress() : "Disabled");
 	settings.put("network.rtsp_port", cfg->rtsp_port_);
 	settings.put("network.advertised_ipv4", cfg->advertised_ipv4_);
-	settings.put("network.http_endpoint", cfg->HttpAddress());
+	settings.put("network.advertised_web_scheme", cfg->advertised_web_scheme_);
+	settings.put("network.service_endpoint", cfg->HttpAddress());
+	settings.put("network.http_endpoint", cfg->http_enabled_ ? cfg->PlainHttpAddress() : "Disabled");
 	settings.put("network.rtsp_endpoint", cfg->RtspAddress());
 	settings.put("network.rtp_port_min", cfg->rtp_port_min_);
 	settings.put("network.rtp_port_max", cfg->rtp_port_max_);
@@ -253,11 +259,11 @@ std::string SessionToken(const Request& request)
 	}
 	return token;
 }
-void SessionResponse(const Response& response, const std::string& token)
+void SessionResponse(const Response& response, const Request& request, const std::string& token)
 {
 	auto headers = Headers("application/json; charset=utf-8");
 	headers.emplace("Set-Cookie", "onvif_admin_session=" + token + "; Path=/admin; HttpOnly; SameSite=Strict; Max-Age=" +
-																		(token.empty() ? "0" : "28800"));
+																		(token.empty() ? "0" : "28800") + std::string(HttpServer::IsSecure(request) ? "; Secure" : ""));
 	response->write(Status::success_ok, "{\"status\":\"ok\"}", headers);
 }
 
@@ -342,7 +348,7 @@ void RegisterAdminUi(IOnvifServer& server)
 			else
 			{
 				authentication->Logout(SessionToken(request));
-				SessionResponse(response, token);
+				SessionResponse(response, request, token);
 			}
 		}
 		catch (const std::exception&)
@@ -357,7 +363,7 @@ void RegisterAdminUi(IOnvifServer& server)
 			return;
 		}
 		authentication->Logout(SessionToken(request));
-		SessionResponse(response, "");
+		SessionResponse(response, request, "");
 	};
 	auto configuration_ui = std::make_shared<ConfigurationUi>(server);
 	http->resource["^/admin/api/configuration$"]["GET"] = [configuration_ui](Response response, Request) {

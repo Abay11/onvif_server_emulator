@@ -13,6 +13,7 @@ param(
     [string]$LanSubnet,
     [string]$HostIPv4,
     [ValidateRange(1, 65535)][int]$HttpPort = 8080,
+    [ValidateRange(1, 65535)][int]$HttpsPort = 8443,
     [ValidateRange(1, 65535)][int]$RtspPort = 8554,
     [ValidateRange(0, 65535)][int]$PullPointPort = 0,
     [ValidateRange(2, 65534)][int]$RtpPortMin = 50000,
@@ -43,7 +44,7 @@ if (-not $Remove) {
         throw 'RTP range must start at an even port and end at a larger odd port.'
     }
     $remoteAddresses = @($LanSubnet, $HostIPv4, '127.0.0.1')
-    $tcpPorts = @("$HttpPort", "$RtspPort")
+    $tcpPorts = @("$HttpPort", "$HttpsPort", "$RtspPort")
     if ($PullPointPort -ne 0) { $tcpPorts += "$PullPointPort" }
     $udpPorts = @('3702', "$RtpPortMin-$RtpPortMax")
 }

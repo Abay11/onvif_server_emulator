@@ -12,7 +12,7 @@ separate. See [distribution instructions](DISTRIBUTION.md).
 | --- | --- | --- |
 | Simple-Web-Server | Header-only HTTP implementation; Git submodule v3.1.1, commit `898b6abd1be568ff9de4390d44288962e3fac337` | MIT; retain Ole Christian Eidheim's copyright and full permission/disclaimer notice from [the bundled license](../Simple-Web-Server/LICENSE), including when its headers are compiled into a binary. |
 | Boost | Asio, PropertyTree (JSON/XML, including its bundled RapidXML implementation), DateTime, Signals2 and UUID utilities; CMake also discovers System, Regex and Thread. Container packages use 1.83. | [BSL-1.0](https://www.boost.org/LICENSE_1_0.txt); preserve source notices. The license includes an exception for solely compiled object code. Boost.Test is optional. |
-| OpenSSL libcrypto | Direct `OpenSSL::Crypto` link for Digest and WS-Security; inspected runtime 3.5.7 | [Apache-2.0 for OpenSSL 3+](https://openssl-library.org/source/license/index.html). CMake does not enforce version 3; older OpenSSL has different terms and needs separate review. SSL is discovered by the submodule, but the emulator serves HTTP and explicitly links Crypto. |
+| OpenSSL libcrypto/libssl | Direct `OpenSSL::Crypto` and `OpenSSL::SSL` links for Digest, WS-Security and HTTPS; inspected runtime 3.5.7 | [Apache-2.0 for OpenSSL 3+](https://openssl-library.org/source/license/index.html). CMake does not enforce version 3; older OpenSSL has different terms and needs separate review. The emulator explicitly links Crypto and SSL; HTTPS uses TLS 1.2 or newer. |
 | GStreamer core, RTSP server, RTSP, app, video and their dependent base/RTP/SDP/audio libraries | `pkg-config` modules `gstreamer-rtsp-server-1.0`, `gstreamer-rtsp-1.0`, `gstreamer-app-1.0`, `gstreamer-video-1.0`; inspected runtime 1.26.2 | Primarily LGPL-2.1-or-later, with per-file exceptions/notices. Dynamic linking permits multiple application licenses subject to LGPL conditions; see [GStreamer licensing guidance](https://gstreamer.freedesktop.org/documentation/frequently-asked-questions/licensing.html). |
 | GLib, GObject, GIO, GModule | GStreamer event loops, objects and transitive runtime support; inspected GLib 2.84.4 | Primarily LGPL-2.1-or-later; retain package-specific notices and provide corresponding library source as required. |
 | gst-plugin-onvif, gst-plugins-rs | `rtponvifmetadatapay`; upstream 0.13.7, commit `cdec77cad2d9b7348d800507bc6eeec5039717eb`; needs GStreamer 1.20+ and Rust 1.71+ to build | MPL-2.0. Loaded as a separate `.so`; its license does not automatically make the emulator MPL. Docker includes its upstream source archive, license and collected dependency notices in `/usr/local/share/osrv-metadata/`. See [provenance](../experiments/rtsp_metadata/README.md#plugin-provenance-and-notices). |
@@ -24,7 +24,7 @@ separate. See [distribution instructions](DISTRIBUTION.md).
 `onvif_server` is an internal static library containing project sources; this does
 not mean that GStreamer, OpenSSL or all other external libraries are statically
 linked. `ldd /app/main` in the inspected runtime confirms shared GStreamer,
-GLib, libcrypto and GNU runtime libraries. Header-only dependencies are not shown
+GLib, libcrypto, libssl and GNU runtime libraries. Header-only dependencies are not shown
 by `ldd`.
 
 ## Media plugins, codecs, fonts and graphics

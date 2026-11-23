@@ -12,7 +12,8 @@
 
 #include "../utility/EventService.h"
 
-#include "../Simple-Web-Server/server_http.hpp"
+#include "../HttpServer.h"
+#include "../utility/TlsContext.h"
 
 #include <boost/property_tree/json_parser.hpp>
 #include <boost/property_tree/ptree.hpp>
@@ -550,6 +551,9 @@ void init_service(HttpServer& srv, const osrv::ServerConfigs& server_configs_ins
 		events_http_server.reset(new osrv::HttpServer());
 		events_http_server->config.address = server_configs_instance.ipv4_address_;
 		events_http_server->config.port = ownPort;
+		if (server_configs_instance.AdvertiseHttps())
+			events_http_server->tls_context = utility::MakeTlsContext(server_configs_instance.tls_certificate_,
+					server_configs_instance.tls_private_key_, server_configs_instance.advertised_ipv4_);
 		events_http_server->resource[SUBSCRIPTIONS_REFERENCES]["POST"] = PullPointPortDefaultHandler;
 
 		// TODO: join this

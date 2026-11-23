@@ -1,7 +1,7 @@
 #pragma once
 
 #include "../HttpServerFwd.h"
-#include "../Simple-Web-Server/server_http.hpp"
+#include "../HttpServer.h"
 #include <memory>
 
 class ILogger;

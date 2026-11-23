@@ -20,6 +20,7 @@
     <nav>
       <a class="nav-link" href="#overview"><span aria-hidden="true">▦</span> Overview</a>
       <a class="nav-link" href="#configuration"><span aria-hidden="true">≡</span> Configuration</a>
+      <a class="nav-link" href="#network"><span aria-hidden="true">⌘</span> Network configuration</a>
       <a class="nav-link" href="#users"><span aria-hidden="true">♙</span> Users &amp; authentication</a>
       <a class="nav-link" href="#detectors"><span aria-hidden="true">◇</span> Detectors</a>
       <a class="nav-link" href="#journal"><span aria-hidden="true">☷</span> Event journal</a>
@@ -35,7 +36,7 @@
         <div id="notice" class="notice" role="status" aria-live="polite" hidden></div>
         <div class="stats">
           <article class="stat"><div class="stat-label">APPLICATION UPTIME<span class="stat-icon" aria-hidden="true">◷</span></div><div class="stat-value" id="uptime">—</div><div class="stat-foot" id="process">Waiting for application</div></article>
-          <article class="stat"><div class="stat-label">HTTP LISTENER<span class="stat-icon" aria-hidden="true">⌘</span></div><div class="stat-value mono" id="http-port">—</div><div class="stat-foot" id="http-bind">ONVIF &amp; administration</div></article>
+          <article class="stat"><div class="stat-label">HTTP / HTTPS<span class="stat-icon" aria-hidden="true">⌘</span></div><div class="stat-value mono" id="http-port">—</div><div class="stat-foot" id="http-bind">ONVIF &amp; administration</div></article>
           <article class="stat"><div class="stat-label">MEDIA PROFILES<span class="stat-icon" aria-hidden="true">▤</span></div><div class="stat-value" id="profile-count">—</div><div class="stat-foot" id="metadata-status">Loading media configuration</div></article>
         </div>
         <div class="summary-grid"><article class="panel"><div class="panel-heading"><h2>Network endpoints</h2><span class="tag">Advertised</span></div><dl id="network-summary" class="key-values"><dt>Configuration</dt><dd>Loading…</dd></dl></article><article class="panel"><div class="panel-heading"><h2>Device identity</h2><span class="tag">Emulated device</span></div><dl id="device-summary" class="key-values"><dt>Configuration</dt><dd>Loading…</dd></dl></article></div>
@@ -52,6 +53,62 @@
         <div class="panel config-panel" id="settings"><p class="loading">Loading application settings…</p></div>
         <article class="panel table-panel"><div class="panel-heading"><h2>Media profiles</h2><span class="tag">Current associations</span></div><div class="table-scroll"><table><caption class="sr-only">Current media profile configuration associations</caption><thead><tr><th>Profile</th><th>Video encoder</th><th>Audio encoder</th><th>Metadata</th></tr></thead><tbody id="profiles-body"><tr><td colspan="4">Loading profiles…</td></tr></tbody></table></div><p class="table-note">Profile associations describe configuration; some streaming parameters are fixed by the emulator.</p></article>
         <article class="panel table-panel"><div class="panel-heading"><h2>ONVIF services</h2><span class="tag">Configured endpoints</span></div><div class="table-scroll"><table><caption class="sr-only">Configured ONVIF services and advertisement settings</caption><thead><tr><th>Service</th><th>Endpoint</th><th>Discovery listing</th></tr></thead><tbody id="services-body"><tr><td colspan="3">Loading services…</td></tr></tbody></table></div></article>
+      </section>
+      <section id="network" aria-labelledby="network-title">
+        <div class="section-heading"><div><h2 id="network-title">Network configuration</h2><p>Configure listeners, advertised endpoints and discovery. Saved changes apply after an application restart.</p></div><button id="network-refresh" class="button secondary" type="button">Reload network settings</button></div>
+        <p id="network-message" class="notice" role="status" aria-live="polite" hidden></p>
+        <p id="network-restart" class="notice" role="status" hidden></p>
+        <div id="network-workspace">
+          <article class="panel"><div class="panel-heading"><h3>Connections &amp; advertised endpoints</h3></div>
+            <form id="network-connections" class="detector-form detector-settings" data-network-file="common.config">
+              <label>Bind IPv4<input data-network-path="addresses.ipv4" required></label>
+              <fieldset><legend>HTTP</legend>
+                <label><input type="checkbox" data-network-path="http.enabled" data-network-type="boolean"> Allow HTTP connections</label>
+                <label>Listening port<input type="number" min="1" max="65535" required data-network-path="addresses.http_port" data-network-type="number"></label>
+              </fieldset>
+              <fieldset><legend>HTTPS</legend>
+                <label><input type="checkbox" data-network-path="https.enabled" data-network-type="boolean"> Allow HTTPS connections</label>
+                <label>Listening port<input type="number" min="1" max="65535" required data-network-path="addresses.https_port" data-network-type="number"></label>
+                <label>Certificate chain (PEM path)<input data-network-path="https.certificate"></label>
+                <label>Private key (PEM path)<input data-network-path="https.private_key"></label>
+                <p class="table-note">Leave both paths empty for a self-signed certificate generated on startup. Relative paths use the configuration directory.</p>
+              </fieldset>
+              <label>RTSP listening port<input type="number" min="1" max="65535" required data-network-path="addresses.rtsp_port" data-network-type="number"></label>
+              <fieldset><legend>Advertised endpoints</legend>
+                <p class="table-note">Discovery, ONVIF services, snapshots and event references share this web protocol. Select HTTPS to advertise secure URLs while keeping HTTP available. Port 0 uses the corresponding listening port or configured forwarding simulation. Environment overrides remain active until changed outside WebUI.</p>
+                <label>Advertised IPv4<input data-network-path="advertised.ipv4" required></label>
+                <label>Advertised web protocol<select data-network-path="advertised.web_scheme"><option value="auto">Automatic (HTTP when enabled, otherwise HTTPS)</option><option value="http">HTTP</option><option value="https">HTTPS</option></select></label>
+                <label>Advertised HTTP port<input type="number" min="0" max="65535" required data-network-path="advertised.http_port" data-network-type="number"></label>
+                <label>Advertised HTTPS port<input type="number" min="0" max="65535" required data-network-path="advertised.https_port" data-network-type="number"></label>
+                <label>Advertised RTSP port<input type="number" min="0" max="65535" required data-network-path="advertised.rtsp_port" data-network-type="number"></label>
+                <label>Advertised separate PullPoint port<input type="number" min="0" max="65535" required data-network-path="advertised.pullpoint_port" data-network-type="number"></label>
+              </fieldset>
+              <fieldset><legend>UDP RTP / RTCP</legend>
+                <label>First port (even)<input type="number" min="2" max="65534" step="2" required data-network-path="rtp.port_min" data-network-type="number"></label>
+                <label>Last port (odd)<input type="number" min="3" max="65535" step="2" required data-network-path="rtp.port_max" data-network-type="number"></label>
+              </fieldset>
+              <button class="button secondary" type="submit">Save connections &amp; endpoints</button>
+            </form>
+          </article>
+          <article class="panel"><div class="panel-heading"><h3>Discovery</h3></div>
+            <form id="network-discovery" class="detector-form detector-settings" data-network-file="discovery.config">
+              <label><input type="checkbox" data-network-path="enabled" data-network-type="boolean"> Enable WS-Discovery</label>
+              <label>Multicast interface IPv4<input data-network-path="interface_ipv4"></label>
+              <p class="table-note">Leave the interface empty for the system default. Discovery advertises the selected web protocol and advertised address above.</p>
+              <button class="button secondary" type="submit">Save discovery</button>
+            </form>
+          </article>
+          <article class="panel"><div class="panel-heading"><h3>Event connections</h3></div>
+            <form id="network-events" class="detector-form detector-settings" data-network-file="event.config">
+              <label><input type="checkbox" data-network-path="PullPoint.UseHttpServerPort" data-network-type="boolean"> Use the shared HTTP / HTTPS listeners for PullPoint</label>
+              <label>Separate PullPoint listening port<input type="number" min="1" max="65535" required data-network-path="PullPoint.Port" data-network-type="number"></label>
+              <p class="table-note">A separate listener uses the selected advertised web protocol, including TLS when HTTPS is selected.</p>
+              <button class="button secondary" type="submit">Save event connections</button>
+            </form>
+          </article>
+        </div>
+        <h3>Active network settings from this application run</h3>
+        <div class="panel config-panel" id="network-active-settings"><p class="loading">Loading active network settings…</p></div>
       </section>
       <section id="users" aria-labelledby="users-title">
         <div class="section-heading"><div><h2 id="users-title">Users &amp; authentication</h2><p>Manage accounts shared by ONVIF and WebUI. Saved changes apply after an application restart.</p></div><button id="users-refresh" class="button secondary" type="button">Reload users</button></div>

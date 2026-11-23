@@ -3,7 +3,7 @@
 ## Purpose and Scope
 
 The project emulates an IP camera or NVR for testing ONVIF clients. It is a C++20
-application for Linux: SOAP over HTTP describes and controls the device,
+application for Linux: SOAP over HTTP/HTTPS describes and controls the device,
 GStreamer delivers media over RTSP/RTP, and WS-Discovery enables device discovery.
 Some responses and capabilities are configured in files or hardcoded. The presence
 of a service or capability field does not imply full implementation of the standard.
@@ -101,8 +101,9 @@ flowchart TD
 5. `Run()` is called on nine SOAP services. The Event service is then initialized
    separately, the RTSP server is created, and the Asio context for response delays
    is started.
-6. `Server::run()` starts HTTP in a separate thread, starts RTSP, and waits for
-   the HTTP thread to finish.
+6. `Server::run()` binds each enabled HTTP/HTTPS listener synchronously,
+   starts RTSP, then dispatches web requests on a shared Asio context. HTTPS uses
+   the same route handlers through an optional TLS stream adapter; see [HTTPS](HTTPS.md).
 
 HTTP, discovery, events, and RTSP use separate event loops. Discovery has its own
 Asio context and worker thread; `EventSource` owns the event context and worker,
@@ -215,12 +216,20 @@ current RTSP stream.
 
 | Setting | Meaning |
 | --- | --- |
-| `addresses.ipv4`, `http_port`, `rtsp_port` | Listening address and ports; defaults: `0.0.0.0`, `8080`, `8554` |
+| `addresses.ipv4`, `http_port`, `https_port`, `rtsp_port` | Listening address and ports; defaults: `0.0.0.0`, `8080`, `8443`, `8554` |
 | `advertised.ipv4` | Concrete IPv4 used in client URLs; default: `127.0.0.1` |
 | `ONVIF_ADVERTISED_IPV4` | Environment override for `advertised.ipv4` |
 | `advertised.http_port`, `rtsp_port`, `pullpoint_port` | Client ports; `0` selects the listening port subject to the rules below |
 | `portForwardingSimulation` | Legacy HTTP/RTSP client port overrides; explicit advertised ports take precedence |
 | `rtp.port_min`, `port_max` | UDP RTP/RTCP pool; default: `50000–50199`, with an even first port and odd last port |
+
+HTTP/HTTPS are independently enabled by `http.enabled` / `https.enabled` (both true
+by default). HTTPS uses `advertised.https_port` or its listening port. When HTTP
+is disabled, `HttpAddress()` selects HTTPS for all advertised web URLs.
+`advertised.web_scheme=https` also selects HTTPS while both listeners remain
+enabled; `auto` preserves HTTP preference when available. A separate PullPoint
+listener follows the same protocol selection. The WebUI Network configuration
+section edits these settings separately from media configuration.
 
 URLs are built through `HttpAddress()`, `RtspAddress()`, and `PullPointAddress()`.
 PullPoint on the shared HTTP listener uses the advertised HTTP endpoint; a separate

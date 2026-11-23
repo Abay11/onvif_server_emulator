@@ -1,6 +1,6 @@
 #include "ApplicationReboot.h"
 #include "../Server.h"
-#include "../Simple-Web-Server/server_http.hpp"
+#include "../HttpServer.h"
 
 namespace osrv
 {

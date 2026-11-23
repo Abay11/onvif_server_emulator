@@ -14,7 +14,7 @@
 #include "../utility/XmlParser.h"
 #include "media2_service.h"
 
-#include "../Simple-Web-Server/server_http.hpp"
+#include "../HttpServer.h"
 
 #include <boost/property_tree/json_parser.hpp>
 #include <boost/property_tree/ptree.hpp>

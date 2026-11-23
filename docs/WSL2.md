@@ -155,7 +155,7 @@ If using a source checkout instead, the script is at
 
 | Traffic | Default local server ports | Purpose |
 | --- | --- | --- |
-| TCP inbound | 8080, 8554 | ONVIF HTTP, snapshots, events; RTSP and interleaved RTP/RTCP |
+| TCP inbound | 8080, 8443, 8554 | ONVIF HTTP/HTTPS, snapshots, events; RTSP and interleaved RTP/RTCP |
 | UDP inbound/outbound | 3702 | Discovery multicast reception and unicast ProbeMatch replies |
 | UDP inbound/outbound | 50000–50199 | Server RTP/RTCP endpoints for UDP streaming |
 
@@ -169,7 +169,7 @@ For custom listening ports, rerun with matching parameters:
 ```powershell
 .\Configure-OnvifFirewall.ps1 `
   -LanSubnet 192.168.1.0/24 -HostIPv4 192.168.1.10 `
-  -HttpPort 8080 -RtspPort 8554 -RtpPortMin 50000 -RtpPortMax 50199
+  -HttpPort 8080 -HttpsPort 8443 -RtspPort 8554 -RtpPortMin 50000 -RtpPortMax 50199
 ```
 
 If `PullPoint.UseHttpServerPort` is false, also pass `-PullPointPort 5550` (or your
@@ -217,6 +217,9 @@ Advertised port `0` means use the corresponding listening port (or the legacy
 precedence. A separate PullPoint listener uses `advertised.pullpoint_port` or its
 configured listening port; shared HTTP PullPoint uses the advertised HTTP port.
 In mirrored host networking, leave all advertised port overrides at zero.
+Set `advertised.web_scheme` to `https` (or choose HTTPS in WebUI Network
+configuration) to advertise secure addresses through Discovery and service URLs.
+The selected protocol must be enabled; `auto` uses HTTP when enabled, otherwise HTTPS.
 
 `server_configs/discovery.config`:
 
@@ -267,12 +270,14 @@ With `192.168.1.10` replaced by your actual address:
 
 ```powershell
 Test-NetConnection 192.168.1.10 -Port 8080
+Test-NetConnection 192.168.1.10 -Port 8443
 Test-NetConnection 192.168.1.10 -Port 8554
 ```
 
 Use these URLs, including the `&` in stream names:
 
 - ONVIF device service: `http://192.168.1.10:8080/onvif/device_service`
+- HTTPS device service: `https://192.168.1.10:8443/onvif/device_service` (see [certificate trust](HTTPS.md))
 - Snapshot: `http://192.168.1.10:8080/snapshot.jpeg`
 - RTSP main/substream: `rtsp://192.168.1.10:8554/Live&HighStream` and `/Live&LowStream`
 - Replay: `rtsp://192.168.1.10:8554/Recording0`
@@ -289,7 +294,7 @@ then test UDP separately. In your ONVIF VMS, verify:
 5. Repeat after WSL restart, with the actual VPN and Ethernet/Wi-Fi configuration.
 
 The [administration WebUI](WEB_UI.md) is available at
-`http://192.168.1.10:8080/admin/` on the same HTTP listener, with no extra port
+`https://192.168.1.10:8443/admin/` and `http://192.168.1.10:8080/admin/` on the ONVIF listeners, with no extra port
 mapping or firewall rule. Sign in with the ONVIF login and password of any enabled `administrator`
 account from `users.config`, independently of the SOAP authentication setting.
 

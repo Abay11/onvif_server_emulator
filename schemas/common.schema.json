@@ -29,6 +29,10 @@
         },
         "rtsp_port": {
           "$ref": "types.schema.json#/$defs/listeningPort"
+        },
+        "https_port": {
+          "$ref": "types.schema.json#/$defs/listeningPort",
+          "default": 8443
         }
       },
       "required": [
@@ -79,6 +83,19 @@
           "$ref": "types.schema.json#/$defs/port",
           "default": 0,
           "description": "Zero selects the runtime fallback endpoint port."
+        },
+        "https_port": {
+          "$ref": "types.schema.json#/$defs/port",
+          "default": 0
+        },
+        "web_scheme": {
+          "enum": [
+            "auto",
+            "http",
+            "https"
+          ],
+          "default": "auto",
+          "description": "Select an enabled listener for discovery and dependent web URLs. Auto uses HTTP when enabled, otherwise HTTPS."
         }
       },
       "required": [],
@@ -287,6 +304,32 @@
         }
       ],
       "description": "File input for the high live stream. Enabling requires an accessible media file."
+    },
+    "http": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "$ref": "types.schema.json#/$defs/boolean",
+          "default": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "https": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "$ref": "types.schema.json#/$defs/boolean",
+          "default": true
+        },
+        "certificate": {
+          "type": "string"
+        },
+        "private_key": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
     }
   },
   "required": [
@@ -298,5 +341,43 @@
     "multichannelSimulation",
     "fileStreaming"
   ],
-  "additionalProperties": false
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "not": {
+        "properties": {
+          "http": {
+            "properties": {
+              "enabled": {
+                "enum": [
+                  false,
+                  "false"
+                ]
+              }
+            },
+            "required": [
+              "enabled"
+            ]
+          },
+          "https": {
+            "properties": {
+              "enabled": {
+                "enum": [
+                  false,
+                  "false"
+                ]
+              }
+            },
+            "required": [
+              "enabled"
+            ]
+          }
+        },
+        "required": [
+          "http",
+          "https"
+        ]
+      }
+    }
+  ]
 }

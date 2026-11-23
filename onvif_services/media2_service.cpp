@@ -16,7 +16,7 @@
 #include "../utility/XmlParser.h"
 #include "../utility/AnalyticsReader.h"
 
-#include "../Simple-Web-Server/server_http.hpp"
+#include "../HttpServer.h"
 
 #include <boost/algorithm/string.hpp>
 #include <boost/property_tree/json_parser.hpp>

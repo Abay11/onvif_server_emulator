@@ -26,6 +26,33 @@ class ConfigSchemaTests(unittest.TestCase):
         errors = list(self.validators[name].iter_errors(config))
         self.assertEqual(not errors, valid, str(errors))
 
+    def test_http_https_defaults_and_invalid_combinations(self):
+        original = self.configs["common.config"]
+        candidate = deepcopy(original)
+        candidate.pop("http"); candidate.pop("https")
+        candidate["addresses"].pop("https_port")
+        self.check("common.config", candidate, True)
+        candidate = deepcopy(original)
+        candidate["http"]["enabled"] = candidate["https"]["enabled"] = False
+        self.check("common.config", candidate, False)
+        for mutation in ("port", "certificate"):
+            candidate = deepcopy(original)
+            if mutation == "port":
+                candidate["addresses"]["https_port"] = candidate["addresses"]["http_port"]
+            else:
+                candidate["https"]["certificate"] = "only-cert.pem"
+            report = validation.validate_candidate("common.config", json.dumps(candidate), self.validators)
+            self.assertFalse(report["valid"])
+            self.assertTrue(report["errors"])
+
+    def test_advertised_protocol_must_be_enabled(self):
+        for scheme in ("http", "https"):
+            candidate = deepcopy(self.configs["common.config"])
+            candidate["advertised"]["web_scheme"] = scheme
+            self.assertTrue(validation.validate_candidate("common.config", json.dumps(candidate), self.validators)["valid"])
+            candidate[scheme]["enabled"] = False
+            self.assertFalse(validation.validate_candidate("common.config", json.dumps(candidate), self.validators)["valid"])
+
     def test_all_shipped_configs_have_schemas_and_validate(self):
         self.assertEqual(set(self.validators), {p.name for p in (ROOT / "server_configs").glob("*.config")})
         for name, config in self.configs.items():

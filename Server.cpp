@@ -2,6 +2,7 @@
 #include <set>
 #include "Server.h"
 #include "web/AdminUi.h"
+#include "utility/TlsContext.h"
 #include "../onvif_services/device_service.h"
 #include "../onvif_services/discovery_service.h"
 #include "../onvif_services/event_service.h"
@@ -26,7 +27,7 @@
 #include "utility/MetadataConfiguration.h"
 #include "utility/MediaProfilesManager.h"
 
-#include "Simple-Web-Server/server_http.hpp"
+#include "HttpServer.h"
 
 #include <boost/asio/io_context.hpp>
 #include <boost/property_tree/json_parser.hpp>
@@ -48,6 +49,8 @@ Server::Server(const std::string& configs_dir, std::shared_ptr<ILogger> log) : I
 
 Server::~Server()
 {
+	if (https_server_) https_server_->stop();
+	if (http_server_) http_server_->stop();
 	discovery::stop();
 	event::stop_service();
 
@@ -90,6 +93,14 @@ void Server::init(std::function<void()> reboot)
 
 	auto configs_dir = configs_path_ + "/";
 	server_configs_ = read_server_configs(configs_dir + COMMON_CONFIGS_NAME);
+	if (server_configs_->https_enabled_)
+	{
+		https_server_ = std::make_shared<HttpServer>();
+		https_server_->tls_context = utility::MakeTlsContext(server_configs_->tls_certificate_,
+				server_configs_->tls_private_key_, server_configs_->advertised_ipv4_);
+		https_server_->config.address = server_configs_->ipv4_address_;
+		https_server_->config.port = std::stoi(server_configs_->https_port_);
+	}
 	server_configs_->reboot = std::move(reboot);
 	server_configs_->journal->Add("info", "system", "application", "Application initialization started");
 
@@ -225,44 +236,40 @@ void Server::init(std::function<void()> reboot)
 
 	server_configs_->io_context_ = io_context_;
 	RegisterAdminUi(*this);
+	if (https_server_)
+	{
+		https_server_->resource = http_server_->resource;
+		https_server_->default_resource = http_server_->default_resource;
+		https_server_->on_error = http_server_->on_error;
+	}
 }
 
 void Server::run()
 {
-	using namespace std;
-
-	// Start server and receive assigned port when server is listening for requests
-	promise<unsigned short> server_port;
-	auto listening = server_port.get_future();
-	thread server_thread([this, &server_port]() {
-		bool announced = false;
-		// Start HTTP server
-		try
-		{
-			http_server_->start([&server_port, &announced](unsigned short port) {
-				announced = true;
-				server_port.set_value(port);
-			});
-		}
-		catch (const std::exception& e)
-		{
-			logger_->Error(std::string("HTTP server finished with a critical erroe: ") + e.what());
-			if (!announced) server_port.set_exception(std::current_exception());
-		}
-	});
-
+	// Bind synchronously before dispatching requests so partial startup cannot leave a listener running.
+	auto io = std::make_shared<boost::asio::io_context>();
 	try
 	{
-		auto port = listening.get();
+		if (server_configs_->http_enabled_)
+		{
+			http_server_->io_service = io;
+			http_server_->start();
+		}
+		if (https_server_)
+		{
+			https_server_->io_service = io;
+			https_server_->start();
+		}
 		rtspServer_->run();
-		logger_->Info("Server is successfully started on port: " + std::to_string(port));
-		server_configs_->journal->Add("info", "system", "application", "Application started; HTTP and RTSP listeners ready");
-		server_thread.join();
+		logger_->Info("HTTP/HTTPS and RTSP listeners ready");
+		server_configs_->journal->Add("info", "system", "application", "Application started; web and RTSP listeners ready");
+		io->run();
 	}
 	catch (...)
 	{
 		http_server_->stop();
-		if (server_thread.joinable()) server_thread.join();
+		if (https_server_) https_server_->stop();
+		io->stop();
 		throw;
 	}
 }
@@ -282,6 +289,29 @@ std::shared_ptr<ServerConfigs> read_server_configs(const std::string& config_pat
 
 	read_configs->ipv4_address_ = configs_tree.get<std::string>("addresses.ipv4");
 	read_configs->http_port_ = configs_tree.get<std::string>("addresses.http_port");
+	read_configs->https_port_ = configs_tree.get<std::string>("addresses.https_port", "8443");
+	read_configs->http_enabled_ = configs_tree.get<bool>("http.enabled", true);
+	read_configs->https_enabled_ = configs_tree.get<bool>("https.enabled", true);
+	if (!read_configs->http_enabled_ && !read_configs->https_enabled_)
+		throw std::runtime_error("At least one of HTTP and HTTPS must be enabled");
+	auto port = [](const std::string& value) {
+		if (value.empty() || value.find_first_not_of("0123456789") != std::string::npos ||
+				std::stoul(value) == 0 || std::stoul(value) > 65535)
+			throw std::runtime_error("HTTP/HTTPS ports must be integers in 1..65535");
+		return std::stoul(value);
+	};
+	const auto http_port = port(read_configs->http_port_);
+	const auto https_port = port(read_configs->https_port_);
+	if (read_configs->http_enabled_ && read_configs->https_enabled_ && http_port == https_port)
+		throw std::runtime_error("HTTP and HTTPS must use different ports");
+	auto path = [&](const char* key) {
+		auto value = configs_tree.get<std::string>(key, "");
+		return value.empty() ? value : (std::filesystem::path(config_path).parent_path() / value).string();
+	};
+	read_configs->tls_certificate_ = path("https.certificate");
+	read_configs->tls_private_key_ = path("https.private_key");
+	if (read_configs->https_enabled_ && read_configs->tls_certificate_.empty() != read_configs->tls_private_key_.empty())
+		throw std::runtime_error("HTTPS certificate and private key must both be configured");
 	read_configs->rtsp_port_ = configs_tree.get<std::string>("addresses.rtsp_port");
 	read_configs->advertised_ipv4_ = configs_tree.get<std::string>("advertised.ipv4", "127.0.0.1");
 	if (const char* value = std::getenv("ONVIF_ADVERTISED_IPV4"))
@@ -289,7 +319,14 @@ std::shared_ptr<ServerConfigs> read_server_configs(const std::string& config_pat
 	const auto advertised = boost::asio::ip::make_address_v4(read_configs->advertised_ipv4_);
 	if (advertised.is_unspecified() || advertised.is_multicast() || advertised.to_uint() == 0xffffffff)
 		throw std::runtime_error("advertised.ipv4 must be a unicast IPv4 address reachable by clients");
+	read_configs->advertised_web_scheme_ = configs_tree.get<std::string>("advertised.web_scheme", "auto");
+	const auto& scheme = read_configs->advertised_web_scheme_;
+	if ((scheme != "auto" && scheme != "http" && scheme != "https") ||
+			(scheme == "http" && !read_configs->http_enabled_) ||
+			(scheme == "https" && !read_configs->https_enabled_))
+		throw std::runtime_error("advertised.web_scheme must select an enabled HTTP/HTTPS listener, or auto");
 	read_configs->advertised_http_port_ = configs_tree.get<unsigned short>("advertised.http_port", 0);
+	read_configs->advertised_https_port_ = configs_tree.get<unsigned short>("advertised.https_port", 0);
 	read_configs->advertised_rtsp_port_ = configs_tree.get<unsigned short>("advertised.rtsp_port", 0);
 	read_configs->advertised_pullpoint_port_ = configs_tree.get<unsigned short>("advertised.pullpoint_port", 0);
 	read_configs->rtp_port_min_ = configs_tree.get<unsigned short>("rtp.port_min", 50000);
@@ -368,11 +405,27 @@ DigitalInputsList read_digital_inputs(const boost::property_tree::ptree& configs
 	return result;
 }
 
+bool ServerConfigs::AdvertiseHttps() const
+{
+	return advertised_web_scheme_ == "https" || (advertised_web_scheme_ == "auto" && !http_enabled_);
+}
+
 std::string ServerConfigs::HttpAddress() const
+{
+	return AdvertiseHttps() ? HttpsAddress() : PlainHttpAddress();
+}
+
+std::string ServerConfigs::PlainHttpAddress() const
 {
 	const auto port = advertised_http_port_ ? std::to_string(advertised_http_port_) :
 		(enabled_http_port_forwarding ? std::to_string(forwarded_http_port) : http_port_);
 	return std::format("http://{}:{}/", advertised_ipv4_, port);
+}
+
+std::string ServerConfigs::HttpsAddress() const
+{
+	return std::format("https://{}:{}/", advertised_ipv4_,
+			advertised_https_port_ ? std::to_string(advertised_https_port_) : https_port_);
 }
 
 std::string ServerConfigs::RtspAddress() const
@@ -386,7 +439,7 @@ std::string ServerConfigs::PullPointAddress(unsigned short listen_port, bool use
 {
 	if (use_http_port)
 		return HttpAddress();
-	return std::format("http://{}:{}/", advertised_ipv4_,
+	return std::format("{}://{}:{}/", AdvertiseHttps() ? "https" : "http", advertised_ipv4_,
 		advertised_pullpoint_port_ ? advertised_pullpoint_port_ : listen_port);
 }
 

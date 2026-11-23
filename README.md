@@ -54,7 +54,7 @@ docker run -d --init --network host \
 ```
 
 The discovery interface must exist on the Docker Engine host. Host networking
-uses the host's ports directly; do not add `-p`. Default ports are TCP `8080`
+uses the host's ports directly; do not add `-p`. Default ports are TCP `8080`/`8443`
 (HTTP/SOAP) and `8554` (RTSP), UDP `3702` (discovery), and UDP `50000–50199`
 (RTP/RTCP). Allow the required traffic through the host firewall. A separate
 PullPoint listener, if enabled in configuration, also needs its configured port.
@@ -83,7 +83,7 @@ For a limited local test on Linux or Docker Desktop, use:
 
 ```bash
 docker run -d --init \
-  -p 127.0.0.1:8080:8080 -p 127.0.0.1:8554:8554 \
+  -p 127.0.0.1:8080:8080 -p 127.0.0.1:8443:8443 -p 127.0.0.1:8554:8554 \
   --name onvif-emulator \
   ghcr.io/abay11/onvif_server_emulator:latest
 ```
@@ -118,7 +118,7 @@ the equivalent `docker run` deployment: both use the same host ports.
 
 ### Administration WebUI
 
-Open `http://<emulator-host>:8080/admin/` (use the configured HTTP port if different)
+Open `https://<emulator-host>:8443/admin/` or `http://<emulator-host>:8080/admin/` (use the configured ports if different)
 for application status, active settings, media profile associations, a live
 system/detector journal with filters, detector/rule management with geometry
 previews, editable media profiles and ONVIF configurations, a JSON configuration
@@ -270,9 +270,17 @@ SOAP operations do not necessarily change the RTSP pipelines.
 
 ### Network Endpoints (`common.config`)
 
-`addresses.ipv4` specifies the socket bind address; `addresses.http_port` and
-`addresses.rtsp_port` specify the listening ports. The defaults are `0.0.0.0`,
-`8080`, and `8554`, respectively.
+HTTP and HTTPS are both enabled by default (8080 and 8443). Use the WebUI
+**Network configuration** section or `http.enabled` and
+`https.enabled` in `common.config` to select allowed connections. Changes require
+restart; at least one listener must stay enabled. See [HTTPS configuration](docs/HTTPS.md)
+for certificates, the `advertised.web_scheme` selector and validation. Select
+HTTPS as the advertised protocol to announce secure endpoints in Discovery and
+related service URLs while keeping both listeners enabled.
+
+`addresses.ipv4` specifies the socket bind address; `addresses.http_port`,
+`addresses.https_port` and `addresses.rtsp_port` specify the listening ports. The defaults are `0.0.0.0`,
+`8080`, `8443`, and `8554`, respectively.
 
 `advertised.ipv4` specifies the concrete IPv4 address used in URLs returned to
 clients for discovery, SOAP services, media, snapshots, replay, and events. It

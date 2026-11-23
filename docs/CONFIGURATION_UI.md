@@ -1,9 +1,25 @@
 # Configuration administration
 
-Open `/admin/#configuration` on the ONVIF HTTP port. The catalog contains media
+Open `/admin/#configuration` on either enabled ONVIF HTTP/HTTPS port. The catalog contains media
 profiles, ONVIF configuration entities and an advanced editor for supported
 JSON `.config` files. The active settings and association tables below the editor
 remain a view of the running application. Account passwords are never returned.
+
+## Network configuration
+
+Network settings have their own sidebar section at `/admin/#network`, separate
+from the media/configuration catalog. It contains HTTP/HTTPS enable checkboxes,
+listening ports, certificate/key paths, bind and advertised IPv4, advertised
+protocol and port overrides, RTSP and RTP/RTCP ports, Discovery and PullPoint
+connections. Each form saves its corresponding file and retains drafts on
+validation or stale-revision failures. Active network values appear below the forms.
+
+Use **Advertised web protocol → HTTPS** to return HTTPS addresses in Discovery,
+service XAddrs, snapshot/image URLs and subscription references even with HTTP
+enabled. Automatic uses HTTP when available and HTTPS otherwise; explicitly
+selecting a disabled protocol is rejected. Save and restart to apply. Reconnect
+to the new browser URL if you change its port or disable its listener. See
+[HTTPS](HTTPS.md) for certificates and endpoint selection.
 
 ## Media profiles and configurations
 

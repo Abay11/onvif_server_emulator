@@ -1,6 +1,6 @@
 #include "../Server.h"
 #include "../Simple-Web-Server/client_http.hpp"
-#include "../Simple-Web-Server/server_http.hpp"
+#include "../HttpServer.h"
 #include "../include/LoggerFactories.h"
 #include "../utility/AnalyticsRules.h"
 #include "../utility/ConfigValidation.h"

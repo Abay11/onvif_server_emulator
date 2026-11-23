@@ -2,7 +2,7 @@
 
 #include "AuthHelper.h"
 
-#include "../Simple-Web-Server/server_http.hpp"
+#include "../HttpServer.h"
 
 #include <iostream>
 #include <string>

@@ -10,7 +10,7 @@
 #include "../utility/SoapHelper.h"
 #include "../utility/XmlParser.h"
 
-#include "../Simple-Web-Server/server_http.hpp"
+#include "../HttpServer.h"
 
 #include <algorithm>
 
@@ -38,6 +38,9 @@ pt::ptree AuthenticationCapabilities(const ServerConfigs& config)
 	pt::ptree result, network, security, system;
 	const bool digest = config.auth_scheme_ == AUTH_SCHEME::DIGEST || config.auth_scheme_ == AUTH_SCHEME::DIGEST_WSS;
 	const bool wss = config.auth_scheme_ == AUTH_SCHEME::WSS || config.auth_scheme_ == AUTH_SCHEME::DIGEST_WSS;
+	security.put(pt::ptree::path_type("<xmlattr>/TLS1.0", '/'), "false");
+	security.put(pt::ptree::path_type("<xmlattr>/TLS1.1", '/'), "false");
+	security.put(pt::ptree::path_type("<xmlattr>/TLS1.2", '/'), config.https_enabled_ ? "true" : "false");
 	security.put("<xmlattr>.HttpDigest", digest ? "true" : "false");
 	security.put("<xmlattr>.UsernameToken", wss ? "true" : "false");
 	if (digest) security.put("<xmlattr>.HashingAlgorithms", "MD5 SHA-256 SHA-512-256");

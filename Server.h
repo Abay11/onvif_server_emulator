@@ -30,8 +30,6 @@ enum class AUTH_SCHEME
 	DIGEST_WSS,
 };
 
-using socket_t = boost::asio::basic_stream_socket<boost::asio::ip::tcp>;
-using HttpServer = SimpleWeb::Server<socket_t>;
 
 struct ServerConfigs
 {
@@ -45,6 +43,11 @@ struct ServerConfigs
 
 	std::string ipv4_address_;
 	std::string http_port_;
+	std::string https_port_ = "8443";
+	bool http_enabled_ = true;
+	bool https_enabled_ = true;
+	std::string tls_certificate_;
+	std::string tls_private_key_;
 	std::string rtsp_port_;
 
 	bool enabled_http_port_forwarding = false;
@@ -54,13 +57,18 @@ struct ServerConfigs
 
 	// Client-visible endpoints are independent of socket bind addresses.
 	std::string advertised_ipv4_ = "127.0.0.1";
+	std::string advertised_web_scheme_ = "auto";
 	unsigned short advertised_http_port_ = 0;
+	unsigned short advertised_https_port_ = 0;
 	unsigned short advertised_rtsp_port_ = 0;
 	unsigned short advertised_pullpoint_port_ = 0;
 	unsigned short rtp_port_min_ = 50000;
 	unsigned short rtp_port_max_ = 50199;
 
+	bool AdvertiseHttps() const;
+	std::string PlainHttpAddress() const;
 	std::string HttpAddress() const;
+	std::string HttpsAddress() const;
 	std::string RtspAddress() const;
 	std::string PullPointAddress(unsigned short listen_port, bool use_http_port) const;
 
@@ -102,6 +110,7 @@ private:
 
 	// osrv::ServerConfigs server_configs_;
 
+	std::shared_ptr<HttpServer> https_server_;
 	rtsp::Server* rtspServer_ = nullptr;
 	std::shared_ptr<event::EventSource> event_source_;
 

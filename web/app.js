@@ -10,6 +10,9 @@
     media: "Media", simulation: "Simulation", configuration_directory: "Configuration directory",
     logging_level: "Logging level", logging_output: "Logging output", onvif_authentication: "ONVIF authentication",
     web_authentication: "WebUI authentication", bind_ipv4: "Bind IPv4", http_port: "HTTP port",
+    https_port: "HTTPS port", http_enabled: "HTTP enabled", https_enabled: "HTTPS enabled",
+    https_endpoint: "HTTPS endpoint", service_endpoint: "Advertised web endpoint",
+    advertised_web_scheme: "Advertised web protocol",
     rtsp_port: "RTSP port", advertised_ipv4: "Advertised IPv4", http_endpoint: "HTTP endpoint",
     rtsp_endpoint: "RTSP endpoint", rtp_port_min: "First RTP port", rtp_port_max: "Last RTCP port",
     http_port_forwarding: "HTTP forwarding simulation", rtsp_port_forwarding: "RTSP forwarding simulation",
@@ -73,8 +76,11 @@
     const profiles = data.profiles;
     byId("uptime").textContent = uptime(data.uptime_seconds);
     byId("process").textContent = `Process ${data.pid} · Current run`;
-    byId("http-port").textContent = `:${settings.network.http_port}`;
-    byId("http-bind").textContent = `${settings.network.bind_ipv4} · ONVIF & administration`;
+    const listeners = [];
+    if (settings.network.http_enabled === "true") listeners.push(["HTTP", settings.network.http_port]);
+    if (settings.network.https_enabled === "true") listeners.push(["HTTPS", settings.network.https_port]);
+    byId("http-port").textContent = listeners.map(([, port]) => `:${port}`).join(" / ");
+    byId("http-bind").textContent = `${settings.network.bind_ipv4} · ${listeners.map(([name]) => name).join(" + ")}`;
     byId("profile-count").textContent = profiles.length;
     byId("metadata-status").textContent = `Metadata transport ${settings.media.metadata_enabled === "true" ? "enabled" : "disabled"}`;
     byId("last-update").textContent = `Updated ${new Date().toLocaleTimeString()}`;
@@ -85,15 +91,17 @@
     if (signature === configSignature) return;
     configSignature = signature;
     list(byId("network-summary"), [
-      ["http_endpoint", settings.network.http_endpoint], ["rtsp_endpoint", settings.network.rtsp_endpoint],
+      ["service_endpoint", settings.network.service_endpoint], ["http_endpoint", settings.network.http_endpoint], ["https_endpoint", settings.network.https_endpoint],
+      ["rtsp_endpoint", settings.network.rtsp_endpoint],
       ["pullpoint_endpoint", settings.events.pullpoint_endpoint],
       ["RTP / RTCP ports", `${settings.network.rtp_port_min}–${settings.network.rtp_port_max}`]
     ]);
     list(byId("device-summary"), Object.entries(settings.device));
     const container = byId("settings");
-    const opened = new Set([...container.querySelectorAll("details[open]")].map((entry) => entry.dataset.section));
+    const opened = new Set([...document.querySelectorAll("#settings details[open], #network-active-settings details[open]")].map((entry) => entry.dataset.section));
     const firstRender = !container.querySelector("details");
     container.replaceChildren();
+    byId("network-active-settings").replaceChildren();
     for (const key of ["application", "network", "discovery", "events", "media", "simulation"]) {
       const details = node("details");
       details.dataset.section = key;
@@ -101,7 +109,7 @@
       const values = node("dl", undefined, "key-values");
       list(values, Object.entries(settings[key]).filter(([name]) => name !== "onvif_authentication"));
       details.append(node("summary", labels[key]), values);
-      container.append(details);
+      (["network", "discovery", "events"].includes(key) ? byId("network-active-settings") : container).append(details);
     }
     const profileBody = byId("profiles-body");
     profileBody.replaceChildren();

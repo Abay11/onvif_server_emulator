@@ -70,6 +70,17 @@ def validate_candidate(filename, text, validators=None):
         else:
             message = "Value violates schema constraint: " + str(kind)
         issues.append({"file": filename, "path": pointer, "message": message[:512]})
+    if filename == "common.config" and not issues:
+        http = config.get("http", {}).get("enabled", True) in (True, "true")
+        https = config.get("https", {}).get("enabled", True) in (True, "true")
+        if http and https and int(config["addresses"]["http_port"]) == int(config["addresses"].get("https_port", 8443)):
+            issues.append({"file": filename, "path": "/addresses/https_port", "message": "HTTP and HTTPS must use different ports"})
+        scheme = config.get("advertised", {}).get("web_scheme", "auto")
+        if (scheme == "http" and not http) or (scheme == "https" and not https):
+            issues.append({"file": filename, "path": "/advertised/web_scheme", "message": "The advertised protocol must be enabled"})
+        tls = config.get("https", {})
+        if https and bool(tls.get("certificate")) != bool(tls.get("private_key")):
+            issues.append({"file": filename, "path": "/https", "message": "Certificate and private key must both be configured, or both empty"})
     return {"valid": not issues, "errors": issues, "truncated": truncated}
 
 
@@ -94,17 +105,16 @@ def load_validators():
 
 def validate_file(path, validator):
     try:
-        config = load_json(path)
-    except (OSError, ValueError) as error:
+        text = path.read_text(encoding="utf-8")
+    except OSError as error:
         print(f"{path}: {error}", file=sys.stderr)
         return False
-    errors = sorted(validator.iter_errors(config), key=lambda error: tuple(str(p) for p in error.absolute_path))
-    for error in errors:
-        pointer = "/" + "/".join(str(p).replace("~", "~0").replace("/", "~1") for p in error.absolute_path)
-        print(f"{path}:{pointer}: {error.message}", file=sys.stderr)
-    if not errors:
+    report = validate_candidate(path.name, text, {path.name: validator})
+    for error in report["errors"]:
+        print(f"{path}:{error['path']}: {error['message']}", file=sys.stderr)
+    if report["valid"]:
         print(f"OK: {path}")
-    return not errors
+    return report["valid"]
 
 
 def main(argv=None):

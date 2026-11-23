@@ -154,6 +154,9 @@ add_library(onvif_server STATIC
 	HttpServerFwd.h
 	include/IOnvifServer.h
 	src/IOnvifServer.cpp
+	utility/TlsContext.h
+	utility/TlsContext.cpp
+	HttpServer.h
 	Server.cpp
 	Server.h
 	web/AdminUi.cpp
@@ -237,7 +240,7 @@ include_directories(main
 )
 	
 target_compile_options(main PUBLIC "${GSTREAMER_CFLAGS}")
-target_link_libraries(onvif_server PUBLIC OpenSSL::Crypto)
+target_link_libraries(onvif_server PUBLIC OpenSSL::Crypto OpenSSL::SSL)
 target_link_libraries(main PUBLIC
 	onvif_server
 	${GSTREAMER_LIBRARIES}

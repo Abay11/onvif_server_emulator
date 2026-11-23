@@ -3,7 +3,7 @@ services:
   emulator:
     image: ${ONVIF_IMAGE:-ghcr.io/abay11/onvif_server_emulator:latest}
     init: true
-    # Host networking uses TCP 8080/8554, UDP 3702 and UDP 50000-50199 by default.
+    # Host networking uses TCP 8080/8443/8554, UDP 3702 and UDP 50000-50199 by default.
     # Do not add ports mappings; configure the host firewall as needed.
     network_mode: host
     environment:

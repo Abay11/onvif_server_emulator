@@ -148,7 +148,7 @@ RUN dpkg-query -W -f='${source:Package}\t${source:Version}\n' \
     && sha256sum /app/main /usr/local/lib/gstreamer-1.0/libgstrsonvif.so \
         > /usr/local/share/onvif-server-emulator/BINARY_SHA256SUMS
 
-EXPOSE 8080 8554
+EXPOSE 8080 8443 8554
 CMD ["./main"]
 
 # Companion sources are exported separately so runtime downloads stay small.
