@@ -9,6 +9,23 @@ namespace osrv::scene
 namespace
 {
 constexpr std::size_t MaxFrames = 128, MaxObjects = 64;
+boost::property_tree::ptree ColorXml(const std::array<int, 3>& rgb)
+{
+	boost::property_tree::ptree color;
+	color.put("tt:ColorCluster.tt:Color.<xmlattr>.X", rgb[0]);
+	color.put("tt:ColorCluster.tt:Color.<xmlattr>.Y", rgb[1]);
+	color.put("tt:ColorCluster.tt:Color.<xmlattr>.Z", rgb[2]);
+	color.put("tt:ColorCluster.tt:Color.<xmlattr>.Colorspace", "http://www.onvif.org/ver10/colorspace/RGB");
+	return color;
+}
+} // namespace
+HumanFace SampleHumanFace()
+{
+	return {0, 0, 0, false, false};
+}
+HumanBody SampleHumanBody()
+{
+	return {175, "LongSleeve", "Shirt", "Trousers", "Jeans", {40, 100, 180}, {30, 40, 70}, "Walking"};
 }
 const std::vector<Module>& Modules()
 {
@@ -19,7 +36,8 @@ const std::vector<Module>& Modules()
 std::string Buffer::Sample(const std::string& source, const std::vector<std::string>& configurations,
 													 const std::string& input_id, double x, double y, const std::string& utc_time,
 													 const std::string& classification, std::optional<LicensePlate> plate, ImagePtr image,
-													 const std::string& module, std::optional<Vehicle> vehicle, const std::string& parent)
+													 const std::string& module, std::optional<Vehicle> vehicle, const std::string& parent,
+													 std::optional<HumanFace> face, std::optional<HumanBody> body)
 {
 	std::lock_guard lock(mutex_);
 	auto& state = sources_[{source, module}];
@@ -51,6 +69,8 @@ std::string Buffer::Sample(const std::string& source, const std::vector<std::str
 	found->second.image = std::move(image);
 	found->second.vehicle = std::move(vehicle);
 	found->second.parent = parent;
+	found->second.face = std::move(face);
+	found->second.body = std::move(body);
 	Publish(source, configurations, utc_time, deleted, found->second.image ? found->second.id : std::string{}, module);
 	return found->second.id;
 }
@@ -177,6 +197,32 @@ boost::property_tree::ptree FrameXml(const Frame& frame)
 			if (!plate.country.empty())
 				node.put("tt:Appearance.tt:LicensePlateInfo.tt:CountryCode", plate.country);
 		}
+		if (object.face)
+		{
+			boost::property_tree::ptree face;
+			face.put("<xmlattr>.xmlns:fc", "http://www.onvif.org/ver20/analytics/humanface");
+			face.put("fc:PoseAngle.fc:PoseAngles.<xmlattr>.yaw", object.face->yaw);
+			face.put("fc:PoseAngle.fc:PoseAngles.<xmlattr>.pitch", object.face->pitch);
+			face.put("fc:PoseAngle.fc:PoseAngles.<xmlattr>.roll", object.face->roll);
+			face.put("fc:Accessory.fc:Opticals.fc:Wear", object.face->opticals);
+			face.put("fc:Accessory.fc:Mask.fc:Wear", object.face->mask);
+			node.add_child("tt:Appearance.tt:HumanFace", face);
+		}
+		if (object.body)
+		{
+			const auto& body = *object.body;
+			boost::property_tree::ptree xml;
+			xml.put("<xmlattr>.xmlns:bd", "http://www.onvif.org/ver20/analytics/humanbody");
+			xml.put("bd:BodyMetric.bd:Height", body.height);
+			xml.put("bd:Clothing.bd:Tops.bd:Category", body.tops_category);
+			xml.add_child("bd:Clothing.bd:Tops.bd:Color", ColorXml(body.tops_color));
+			xml.put("bd:Clothing.bd:Tops.bd:Style", body.tops_style);
+			xml.put("bd:Clothing.bd:Bottoms.bd:Category", body.bottoms_category);
+			xml.add_child("bd:Clothing.bd:Bottoms.bd:Color", ColorXml(body.bottoms_color));
+			xml.put("bd:Clothing.bd:Bottoms.bd:Style", body.bottoms_style);
+			xml.put("bd:Behaviour.bd:Activity", body.activity);
+			node.add_child("tt:Appearance.tt:HumanBody", xml);
+		}
 		if (object.image)
 		{
 			if (!object.image->uri.empty())
@@ -213,6 +259,7 @@ Frame SampleFrame(ImagePtr image)
 	frame.utc_time = "2000-01-01T00:00:00Z";
 	frame.image_object_id = "3";
 	frame.objects.push_back({"1", -0.6, 0.6, "Human"});
+	frame.objects.back().body = SampleHumanBody();
 	frame.objects.push_back({"3", -0.3, 0.6, "LicensePlate", LicensePlate{"TEST123", "US", 0.95}, std::move(image)});
 	frame.deleted.push_back("2");
 	return frame;

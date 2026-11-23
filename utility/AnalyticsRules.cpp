@@ -593,9 +593,12 @@ std::deque<AnalyticsRules::Message> AnalyticsRules::SampleObject(const std::stri
 	for (const auto& [_, cfg] : profiles_.get_child("Analytics"))
 		if (source(profiles_, cfg.get<std::string>("token")).get<std::string>("SourceToken") == videoSource)
 			configurations.push_back(cfg.get<std::string>("token"));
-	auto sceneId = configurations.empty()
-										 ? objectId
-										 : scenes_->Sample(videoSource, configurations, objectId, x, y, utc, classification);
+	auto sceneId =
+			configurations.empty()
+					? objectId
+					: scenes_->Sample(videoSource, configurations, objectId, x, y, utc, classification, {}, {},
+														osrv::scene::ModuleName, {}, {}, {},
+														classification == "Human" ? std::optional{osrv::scene::SampleHumanBody()} : std::nullopt);
 	result.swap(pending_counts_);
 	result.insert(result.end(), pending_fields_.begin(), pending_fields_.end());
 	pending_fields_.clear();
@@ -789,6 +792,7 @@ osrv::scene::Frame AnalyticsRules::SupportedScene(const std::string& module) con
 		frame.objects = {
 				{"5", -0.55, 0.55, "HumanFace", {}, face_scene_images_.empty() ? nullptr : face_scene_images_.front()}};
 		frame.image_object_id = "5";
+		frame.objects.front().face = osrv::scene::SampleHumanFace();
 	}
 	else
 	{
@@ -958,7 +962,8 @@ std::deque<AnalyticsRules::Message> AnalyticsRules::SampleFace(const std::string
 	std::string objectId;
 	if (!configurations.empty())
 		objectId = scenes_->Sample(videoSource, configurations, "face:" + std::to_string(sample.imageIndex), 0, 0.125, utc,
-															 "HumanFace", {}, face_scene_images_.at(sample.imageIndex), osrv::scene::FaceModule);
+															 "HumanFace", {}, face_scene_images_.at(sample.imageIndex), osrv::scene::FaceModule, {},
+															 {}, osrv::scene::SampleHumanFace());
 	const auto& image = faces_[sample.imageIndex];
 	static constexpr const char* labels[] = {"Whitelisted", "Blacklisted", "Temporary"};
 	for (const auto& [_, cfg] : profiles_.get_child("Analytics"))

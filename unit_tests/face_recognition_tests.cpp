@@ -73,6 +73,9 @@ BOOST_AUTO_TEST_CASE(scene_identity_timestamp_and_module_match_recognition)
 	BOOST_TEST(frame.objects.front().id ==
 						 events.front().data_element_items[1].get<std::string>("tt:ObjectId.<xmlattr>.ObjectId"));
 	auto xml = osrv::scene::FrameXml(frame);
+	BOOST_REQUIRE(frame.objects.front().face);
+	BOOST_TEST(xml.get<double>("tt:Object.tt:Appearance.tt:HumanFace.fc:PoseAngle.fc:PoseAngles.<xmlattr>.yaw") == 0);
+	BOOST_TEST(!xml.get<bool>("tt:Object.tt:Appearance.tt:HumanFace.fc:Accessory.fc:Mask.fc:Wear"));
 	BOOST_TEST(xml.get<std::string>("tt:Object.tt:Appearance.tt:ImageRef") == images.front().previewUri);
 	BOOST_TEST(xml.get<double>("tt:Object.tt:Appearance.tt:Shape.tt:BoundingBox.<xmlattr>.left") == -0.45);
 }

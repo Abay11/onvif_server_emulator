@@ -3,6 +3,8 @@
 
 Exercises the fixed module, metadata selection, profile isolation and shared
 scene/event sample identity over real RTSP. Requires metadata transport enabled.
+Use one-second event generator intervals in the disposable event.config so that
+the default 30-second simulator period does not exceed the receive windows.
 """
 import argparse
 import base64
@@ -27,6 +29,37 @@ URN = "urn:onvif-server-emulator:analytics"
 TOPIC = "tns1:RuleEngine/LineDetector/Crossed"
 LPR_TOPIC = "tns1:RuleEngine/Recognition/LicensePlate"
 FACE_TOPIC = "tns1:RuleEngine/Recognition/Face"
+FC = "http://www.onvif.org/ver20/analytics/humanface"
+BD = "http://www.onvif.org/ver20/analytics/humanbody"
+
+
+def check_human_descriptors(root):
+    for appearance in root.findall(f".//{{{T}}}Object/{{{T}}}Appearance"):
+        kind = appearance.find(f"{{{T}}}Class/{{{T}}}Type").text
+        face = appearance.find(f"{{{T}}}HumanFace")
+        body = appearance.find(f"{{{T}}}HumanBody")
+        if kind == "HumanFace":
+            assert face is not None and len(face), "Missing HumanFace descriptor"
+            pose = face.find(f"{{{FC}}}PoseAngle/{{{FC}}}PoseAngles")
+            assert pose is not None and all(float(pose.get(a)) == 0 for a in ("yaw", "pitch", "roll"))
+            for accessory in ("Opticals", "Mask"):
+                assert face.find(f"{{{FC}}}Accessory/{{{FC}}}{accessory}/{{{FC}}}Wear").text in ("false", "0")
+        else:
+            assert face is None, "Face descriptor on a non-face object"
+        if kind == "Human":
+            assert body is not None and len(body), "Missing HumanBody descriptor"
+            assert int(body.find(f"{{{BD}}}BodyMetric/{{{BD}}}Height").text) == 175
+            assert body.find(f"{{{BD}}}Behaviour/{{{BD}}}Activity").text == "Walking"
+            for garment, category, style, rgb in (("Tops", "LongSleeve", "Shirt", (40, 100, 180)),
+                                                 ("Bottoms", "Trousers", "Jeans", (30, 40, 70))):
+                node = body.find(f"{{{BD}}}Clothing/{{{BD}}}{garment}")
+                assert node.find(f"{{{BD}}}Category").text == category
+                assert node.find(f"{{{BD}}}Style").text == style
+                color = node.find(f"{{{BD}}}Color/{{{T}}}ColorCluster/{{{T}}}Color")
+                assert color.get("Colorspace") == "http://www.onvif.org/ver10/colorspace/RGB"
+                assert tuple(int(color.get(a)) for a in ("X", "Y", "Z")) == rgb
+        else:
+            assert body is None, "Body descriptor on a non-human object"
 
 
 def main():
@@ -100,6 +133,7 @@ def main():
     image_cache = {}
 
     def check_images(root, required=False):
+        check_human_descriptors(root)
         found = False
         for appearance in root.findall(f".//{{{T}}}Object/{{{T}}}Appearance"):
             reference = appearance.find(f"{{{T}}}ImageRef")
@@ -133,6 +167,7 @@ def main():
         deadline = time.monotonic() + 12
         while time.monotonic() < deadline:
             root = client.document()
+            check_human_descriptors(root)
             assert not root.findall(f".//{{{W}}}NotificationMessage"), "Events leaked into a scene-only stream"
             if only:
                 assert all(node.get("Source") == only for node in root.findall(f"{{{T}}}VideoAnalytics/{{{T}}}Frame"))
@@ -180,6 +215,8 @@ def main():
         supported = analytics("GetSupportedMetadata")
         assert supported.find(f".//{{{T}}}Appearance/{{{T}}}LicensePlateInfo/{{{T}}}PlateNumber").text
         check_images(supported, required=True)
+        assert supported.find(f".//{{{T}}}Appearance/{{{T}}}HumanFace") is not None
+        assert supported.find(f".//{{{T}}}Appearance/{{{T}}}HumanBody") is not None
         samples = supported.findall(f".//{{{ANALYTICS}}}AnalyticsModule")
         assert {node.get("Type") for node in samples} == {"osrv:ObjectTracker", "osrv:LicensePlateRecognition", "osrv:FaceRecognition"}
         for name in (MODULE, LPR_MODULE, FACE_MODULE):
@@ -187,6 +224,7 @@ def main():
             nodes = response.findall(f".//{{{ANALYTICS}}}AnalyticsModule")
             assert len(nodes) == 1 and nodes[0].get("Type") == f"osrv:{name}"
             assert nodes[0].find(f"{{{ANALYTICS}}}SampleFrame").get("Source") == name
+            check_human_descriptors(response)
         analytics("GetSupportedMetadata", f'<m:Type xmlns:alias="{URN}"> alias:ObjectTracker </m:Type>')
         sample = analytics("GetSupportedMetadata", "<m:Type>osrv:ObjectTracker</m:Type>")
         for box in sample.findall(f".//{{{T}}}BoundingBox"):
@@ -358,7 +396,8 @@ def main():
             quiet(receiver(stack, "ProfileToken0"))
         print("PASS scene TCP/UDP, fixed module discovery, schema/geometry, analytics selection, profile isolation, "
               "active-session snapshots, line ObjectId/UtcTime and LPR plate/country/confidence/box/UtcTime "
-              "across scene/RTSP/PullPoint, downloadable PNG ImageRef and matching base64 Image, independent modules and Face ObjectId/UtcTime")
+              "across scene/RTSP/PullPoint, downloadable PNG ImageRef and matching base64 Image, independent modules, "
+              "Face ObjectId/UtcTime and nonempty HumanFace/HumanBody descriptors in SOAP and RTP")
     finally:
         if subscription:
             call(subscription, "Unsubscribe")

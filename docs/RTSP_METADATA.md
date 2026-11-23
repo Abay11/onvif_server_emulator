@@ -211,7 +211,23 @@ UTC is the simulator sample time; exact correspondence to an encoded video frame
 is not implemented. Visual correlation requires a separate renderer/analyzer.
 FaceRecognition publishes separate HumanFace objects and compact PNG previews
 from the same recognition samples, with scene/event ObjectId and UTC correlation.
-No biometric attributes or recognized-person identity descriptor are invented.
+Face objects also carry `Appearance/HumanFace`: `fc:PoseAngle/fc:PoseAngles`
+with yaw, pitch and roll in degrees (all zero for the synthetic frontal scenario),
+and `fc:Accessory` with `fc:Opticals/fc:Wear=false` and `fc:Mask/fc:Wear=false`.
+Human tracker objects carry `Appearance/HumanBody`: `bd:BodyMetric/bd:Height=175`
+centimetres, `bd:Clothing` with LongSleeve/Shirt tops and Trousers/Jeans bottoms,
+RGB colors (40,100,180) and (30,40,70), and `bd:Behaviour/bd:Activity=Walking`.
+The outer descriptor elements use the `tt` namespace; face children use
+`http://www.onvif.org/ver20/analytics/humanface` and body children use
+`http://www.onvif.org/ver20/analytics/humanbody`. Nested ColorCluster/Color use `tt`.
+These same nonempty descriptors appear in `GetSupportedMetadata` for FaceRecognition
+and ObjectTracker respectively, before ImageRef/Image in schema order.
+Descriptors are optional observations in the scene model; a class label alone
+does not generate them. The simulator attaches the fixed scenario values before
+publication, independently of recognition rules and event filters. Other optional
+face/body features are omitted, including age, gender, temperature, belongings
+and recognized-person identity. These values are simulation data, not biometric
+measurements or attributes inferred from the PNG previews or live video.
 The optional event ParentObjectId is omitted when there is no tracked parent.
 Motion-region event generators do not produce object scene frames. PTZ metadata remains unsupported.
 
@@ -322,6 +338,19 @@ schema validation continues to use the pinned 24.12 contract.
 Object images follow Analytics §5.4.13 Image Data and the same release's
 `Appearance/ImageRef` (`xs:anyURI`) and `Appearance/Image` (`xs:base64Binary`),
 in schema order after LicensePlateInfo. The embedded format is PNG.
+Face and body descriptors implement the subset described above from
+[Analytics 26.06 §§5.4.14–5.4.15](https://www.onvif.org/specs/srv/analytics/ONVIF-Analytics-Service-Spec.pdf).
+Their XML uses the compatible definitions in the pinned 24.12 release:
+`metadatastream.xsd` Appearance/HumanFace and Appearance/HumanBody,
+`wsdl/ver20/analytics/humanface.xsd` (HumanFace, PoseAngle, Accessory),
+`wsdl/ver20/analytics/humanbody.xsd` (HumanBody, BodyMetric, Clothing, Behaviour)
+and their imported `onvif.xsd` GeoOrientation and ColorDescriptor types.
+The Analytics WSDL and schema validation baseline remain the pinned 24.12 set;
+no newer-only face/body features are emitted. The scene smoke check validates
+both supported metadata responses and live RTP XML against that set and checks
+the scenario values separately. This covers the missing descriptor assertions in
+ANALYTICS-5-1-4-v20.06 and ANALYTICS-5-1-6-v20.06 without claiming a complete
+ONVIF test-tool or conformance run.
 See
 [the contract references/cache instructions](../experiments/rtsp_metadata/README.md)
 and [the immutable release](https://github.com/onvif/specs/tree/d7f3684501c4a6d58f879e72e1e3322c120f95e6).
@@ -354,6 +383,10 @@ python3 unit_tests/rtsp_metadata_smoke.py --contract /contract
 python3 unit_tests/metadata_configuration_smoke.py --contract /contract
 python3 unit_tests/scene_metadata_smoke.py --contract /contract
 ```
+
+For the scene check, set `EventGenerationTimeout=1` on the enabled generators
+in a disposable `event.config` before starting the test server. Its bounded
+receive windows can expire before the default 30-second simulator tick.
 
 `/contract` is the pinned schema cache mounted into the test container.
 Omit that argument for a standard-library-only receiver without XSD validation.

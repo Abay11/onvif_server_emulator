@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <boost/property_tree/ptree.hpp>
 #include <cstdint>
 #include <deque>
@@ -43,6 +44,20 @@ struct Vehicle
 	double speed = 0;
 	int red = 0, green = 0, blue = 0;
 };
+struct HumanFace
+{
+	double yaw = 0, pitch = 0, roll = 0; // Degrees relative to a frontal face.
+	bool opticals = false, mask = false;
+};
+struct HumanBody
+{
+	int height = 0; // Centimetres.
+	std::string tops_category, tops_style, bottoms_category, bottoms_style;
+	std::array<int, 3> tops_color{}, bottoms_color{}; // ONVIF RGB, components in [0,255].
+	std::string activity;
+};
+HumanFace SampleHumanFace();
+HumanBody SampleHumanBody();
 struct Object
 {
 	std::string id;
@@ -52,6 +67,8 @@ struct Object
 	ImagePtr image;
 	std::optional<Vehicle> vehicle;
 	std::string parent;
+	std::optional<HumanFace> face;
+	std::optional<HumanBody> body;
 };
 struct Frame
 {
@@ -83,7 +100,8 @@ public:
 										 const std::string& input_id, double x, double y, const std::string& utc_time,
 										 const std::string& classification = {}, std::optional<LicensePlate> plate = {},
 										 ImagePtr image = {}, const std::string& module = ModuleName, std::optional<Vehicle> vehicle = {},
-										 const std::string& parent = {});
+										 const std::string& parent = {}, std::optional<HumanFace> face = {},
+										 std::optional<HumanBody> body = {});
 	void Forget(const std::string& source, const std::vector<std::string>& configurations, const std::string& input_id,
 							const std::string& utc_time);
 	Batch Read(const std::string& source, const std::string& configuration, std::uint64_t after,
