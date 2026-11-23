@@ -11,10 +11,13 @@ struct Image
 {
 	lpr::Image image;
 	std::string uri;
+ lpr::Image preview;
+ std::string previewUri;
 };
 using Images = std::vector<Image>;
 Images LoadImages(const std::string& configsPath, const std::string& httpAddress);
 std::string ImagePath(size_t index);
+std::string SceneImagePath(size_t index);
 bool ImagesReady(const Images& images);
 struct Sample
 {

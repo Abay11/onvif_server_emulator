@@ -271,9 +271,14 @@ validates and stores rule snapshots, alarm state and object history under a mute
 `utility::line` handles Line Detector parameters and geometry. SOAP mutations persist rules
 through the media manager; synthetic event generators read the shared snapshot
 without accessing the manager from the event thread. Media and Media2 serialize
-rules from the manager's current tree. A fixed `SyntheticObjectTracker` module
-publishes immutable scene snapshots from the same samples used by Line Detector,
-Line Counting and Field Detector. `onvif/SceneDescription` bounds retained frames
+rules from the manager's current tree. The fixed `ObjectTracker`, `LicensePlateRecognition` and `FaceRecognition` modules
+publish immutable scene snapshots from the same samples used by Line Detector,
+Line Counting, Field Detector, License Plate Recognition and Face Recognition. Each module has its own Frame.Source and state. LPR observations
+include LicensePlateInfo and share plate geometry, confidence and sample UTC with
+recognition events, independently of rule filtering and event throttling. Plate
+objects reference a Vehicle parent with type, RGB color and speed; plate objects also expose a 240x120 synthetic PNG preview through ImageRef and a matching
+embedded Image on the sampled object; retained frames share immutable image assets.
+`onvif/SceneDescription` bounds retained frames
 and objects; each RTSP bridge reads independently by video source and analytics
 configuration, without accessing the media manager. Metadata settings separately
 select events and analytics. Line crossing notifications are non-property events and have no

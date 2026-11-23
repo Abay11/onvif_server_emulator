@@ -47,6 +47,13 @@ Plate image edit prompt:
 
 The delivered plate PNG is 2172x724 and is stored unchanged from the generated output.
 
+Synthetic scene metadata uses previews generated from the plate-only PNGs at
+startup with GStreamer (decode PNG, preserve aspect ratio inside a 240x120 canvas,
+encode PNG). `Appearance/ImageRef` links to `/analytics/lpr/scene/plate*.png`, and
+`Appearance/Image` embeds the same preview bytes as base64 on a plate observation.
+`GetSupportedMetadata` uses the TEST123 preview. The previews are retained in
+memory; source PNG files and recognition event images remain full resolution.
+
 ## Additional vehicle pairs
 
 The following six standalone PNGs were generated on 2026-11-19 with the built-in image_gen tool, without reference images. They are synthetic test fixtures, not camera captures. Each full vehicle and its separate plate use matching TEST numbers. Outputs were copied unchanged into this directory.

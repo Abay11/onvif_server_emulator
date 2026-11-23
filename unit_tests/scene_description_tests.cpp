@@ -13,6 +13,21 @@ using boost::property_tree::ptree;
 using osrv::scene::Buffer;
 } // namespace
 BOOST_AUTO_TEST_SUITE(SceneDescription)
+BOOST_AUTO_TEST_CASE(supported_sample_contains_license_plate_descriptor)
+{
+	auto xml = osrv::scene::FrameXml(osrv::scene::SampleFrame());
+	bool found = false;
+	for (const auto& [name, node] : xml)
+		if (name == "tt:Object")
+			if (auto plate = node.get_child_optional("tt:Appearance.tt:LicensePlateInfo"))
+			{
+				found = true;
+				BOOST_TEST(plate->get<std::string>("tt:PlateNumber") == "TEST123");
+				BOOST_TEST(plate->get<std::string>("tt:CountryCode") == "US");
+				BOOST_TEST(plate->get<double>("tt:PlateNumber.<xmlattr>.Likelihood") == 0.95);
+			}
+	BOOST_TEST(found);
+}
 BOOST_AUTO_TEST_CASE(snapshots_are_immutable_scoped_and_independent)
 {
 	Buffer buffer;
@@ -26,6 +41,50 @@ BOOST_AUTO_TEST_CASE(snapshots_are_immutable_scoped_and_independent)
 	BOOST_TEST(next.frames.front()->objects.front().x == 0.25);
 	BOOST_TEST(buffer.Read("other", "analytics", 0).frames.empty());
 	BOOST_TEST(buffer.Read("source", "other", 0).frames.empty());
+}
+BOOST_AUTO_TEST_CASE(human_descriptors_are_optional_and_follow_observations)
+{
+	Buffer buffer;
+	auto face = osrv::scene::SampleHumanFace();
+	face.yaw = -30;
+	face.pitch = 15;
+	face.roll = 5;
+	face.opticals = true;
+	buffer.Sample("source", {"analytics"}, "face", 0, 0, "2000-01-01T00:00:00Z", "HumanFace", {}, {},
+								osrv::scene::FaceModule, {}, {}, face);
+	auto first = buffer.Read("source", "analytics", 0).frames.front();
+	auto appearance = osrv::scene::FrameXml(*first).get_child("tt:Object.tt:Appearance");
+	BOOST_TEST(appearance.get<double>("tt:HumanFace.fc:PoseAngle.fc:PoseAngles.<xmlattr>.yaw") == -30);
+	BOOST_TEST(appearance.get<double>("tt:HumanFace.fc:PoseAngle.fc:PoseAngles.<xmlattr>.pitch") == 15);
+	BOOST_TEST(appearance.get<double>("tt:HumanFace.fc:PoseAngle.fc:PoseAngles.<xmlattr>.roll") == 5);
+	BOOST_TEST(appearance.get<bool>("tt:HumanFace.fc:Accessory.fc:Opticals.fc:Wear"));
+	BOOST_TEST(!appearance.get<bool>("tt:HumanFace.fc:Accessory.fc:Mask.fc:Wear"));
+	BOOST_TEST(!appearance.get_child_optional("tt:HumanBody"));
+	// A class label alone does not fabricate a descriptor; a new observation can omit it.
+	buffer.Sample("source", {"analytics"}, "face", 0, 0, "2000-01-01T00:00:01Z", "HumanFace", {}, {},
+								osrv::scene::FaceModule);
+	auto latest = buffer.Read("source", "analytics", first->sequence).frames.front();
+	BOOST_TEST(!osrv::scene::FrameXml(*latest).get_child_optional("tt:Object.tt:Appearance.tt:HumanFace"));
+	BOOST_REQUIRE(first->objects.front().face);
+	BOOST_TEST(first->objects.front().face->yaw == -30);
+}
+BOOST_AUTO_TEST_CASE(supported_scene_descriptors_match_the_synthetic_samples)
+{
+	ptree profiles;
+	boost::property_tree::read_json("../../server_configs/media_profiles.config", profiles);
+	utility::AnalyticsRules rules(profiles, [](const auto&, const auto&) {});
+	auto tracker = osrv::scene::FrameXml(rules.SupportedScene(osrv::scene::ModuleName));
+	const auto& body = tracker.get_child("tt:Object.tt:Appearance.tt:HumanBody");
+	BOOST_TEST(body.get<std::string>("<xmlattr>.xmlns:bd") == "http://www.onvif.org/ver20/analytics/humanbody");
+	BOOST_TEST(body.get<int>("bd:BodyMetric.bd:Height") == 175);
+	BOOST_TEST(body.get<std::string>("bd:Clothing.bd:Tops.bd:Category") == "LongSleeve");
+	BOOST_TEST(body.get<std::string>("bd:Clothing.bd:Bottoms.bd:Style") == "Jeans");
+	BOOST_TEST(body.get<int>("bd:Clothing.bd:Tops.bd:Color.tt:ColorCluster.tt:Color.<xmlattr>.Y") == 100);
+	BOOST_TEST(body.get<std::string>("bd:Behaviour.bd:Activity") == "Walking");
+	auto face = osrv::scene::FrameXml(rules.SupportedScene(osrv::scene::FaceModule));
+	BOOST_TEST(face.get<std::string>("tt:Object.tt:Appearance.tt:HumanFace.<xmlattr>.xmlns:fc") ==
+						 "http://www.onvif.org/ver20/analytics/humanface");
+	BOOST_TEST(face.get<double>("tt:Object.tt:Appearance.tt:HumanFace.fc:PoseAngle.fc:PoseAngles.<xmlattr>.yaw") == 0);
 }
 BOOST_AUTO_TEST_CASE(deletion_does_not_recycle_object_ids)
 {
@@ -84,6 +143,9 @@ BOOST_AUTO_TEST_CASE(scene_frames_and_rule_events_use_the_same_sample_identity_a
 	BOOST_TEST(events.front().data_value == frame->objects.front().id);
 	BOOST_TEST(events.front().utc_time == frame->utc_time);
 	BOOST_TEST(frame->objects.front().classification == "Human");
+	BOOST_REQUIRE(frame->objects.front().body);
+	BOOST_TEST(osrv::scene::FrameXml(*frame).get<int>("tt:Object.tt:Appearance.tt:HumanBody.bd:BodyMetric.bd:Height") ==
+						 175);
 	auto xml = osrv::event::serialize_metadata(events, {}, {*frame});
 	std::istringstream input(xml);
 	ptree parsed;
@@ -115,4 +177,31 @@ BOOST_AUTO_TEST_CASE(analytics_and_module_selection_are_independent_of_event_fil
 	config.get_child("AnalyticsModules").front().second.put_value("unsupported");
 	BOOST_CHECK_THROW(osrv::metadata::Compile(config), osrv::metadata::Fault);
 }
+BOOST_AUTO_TEST_CASE(modules_have_independent_snapshots_and_global_object_ids)
+{
+	Buffer buffer;
+	auto tracker = buffer.Sample("source", {"analytics"}, "7", 0, 0, "2000-01-01T00:00:00Z", "Human");
+	auto plate = buffer.Sample("source", {"analytics"}, "plate", 0, 0, "2000-01-01T00:00:01Z", "LicensePlate", {}, {},
+														 osrv::scene::LprModule);
+	auto face = buffer.Sample("source", {"analytics"}, "face", 0, 0, "2000-01-01T00:00:02Z", "HumanFace", {}, {},
+														osrv::scene::FaceModule);
+	BOOST_TEST(tracker != plate);
+	BOOST_TEST(face != plate);
+	BOOST_TEST(tracker != face);
+	auto batch = buffer.Read("source", "analytics", 0);
+	BOOST_REQUIRE(batch.frames.size() == 3u);
+	for (const auto& frame : batch.frames)
+	{
+		BOOST_TEST(frame->objects.size() == 1u);
+		BOOST_TEST(osrv::scene::FrameXml(*frame).get<std::string>("<xmlattr>.Source") == frame->module);
+	}
+	ptree config;
+	config.put("Analytics", true);
+	config.add_child("AnalyticsModules", ptree{}).push_back({"", ptree(osrv::scene::LprModule)});
+	auto selected = osrv::metadata::Compile(config);
+	BOOST_TEST(!selected->tracker);
+	BOOST_TEST(selected->modules.size() == 1u);
+	BOOST_TEST(selected->modules.contains(osrv::scene::LprModule));
+}
+
 BOOST_AUTO_TEST_SUITE_END()

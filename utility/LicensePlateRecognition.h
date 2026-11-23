@@ -21,12 +21,16 @@ struct ImagePair
 {
 	Image plate;
 	Image vehicle;
+	Image scene;
 	std::string plateUri;
 	std::string vehicleUri;
+	std::string sceneUri;
 };
 using Images = std::vector<ImagePair>;
 bool ImagesReady(const Images& images);
+Image PreviewImage(const Image& original);
 std::string ImagePath(size_t index, bool plate);
+std::string SceneImagePath(size_t index);
 Images LoadImages(const std::string& configsPath, const std::string& httpAddress);
 struct Sample
 {
@@ -43,6 +47,7 @@ struct Sample
 	std::string vehicleModel = "Synthetic Vehicle";
 	double height = 5; // Percentage of scene image height.
 	size_t imageIndex = 0;
+ std::array<int, 3> vehicleColor{0, 80, 200};
 };
 const std::array<Sample, 5>& TestVehicles();
 Sample SyntheticSample(size_t step);

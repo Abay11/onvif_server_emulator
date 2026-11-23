@@ -3,6 +3,7 @@
 #include "../utility/EventService.h"
 #include <boost/property_tree/json_parser.hpp>
 #include <boost/test/unit_test.hpp>
+#include <fstream>
 #include <limits>
 #include <set>
 
@@ -61,6 +62,142 @@ struct Fixture
 } // namespace
 
 BOOST_FIXTURE_TEST_SUITE(license_plates, Fixture)
+BOOST_AUTO_TEST_CASE(scene_images_match_the_recognized_plate_and_supported_metadata)
+{
+	auto supported = osrv::scene::FrameXml(detector.SupportedScene());
+	bool advertised = false;
+	for (const auto& [name, object] : supported)
+		if (name == "tt:Object" && object.get_child_optional("tt:Appearance.tt:LicensePlateInfo"))
+		{
+			advertised = true;
+			BOOST_TEST(object.get<std::string>("tt:Appearance.tt:ImageRef") == images.front().sceneUri);
+			BOOST_TEST(object.get<std::string>("tt:Appearance.tt:Image") == images.front().scene.base64);
+		}
+	BOOST_TEST(advertised);
+	osrv::scene::FramePtr first;
+	for (size_t index = 0; index < images.size(); ++index)
+	{
+		BOOST_TEST(images[index].scene.bytes.size() < 64 * 1024u);
+		BOOST_TEST(images[index].scene.bytes.substr(0, 8) == std::string("\x89PNG\r\n\x1a\n", 8));
+		BOOST_TEST(images[index].scene.bytes != images[index].plate.bytes);
+		auto input = utility::lpr::TestVehicles()[index];
+		detector.SamplePlate("VideoSource0", input);
+		auto frame = detector.Scenes()->Read("VideoSource0", "AnalyticsConfig_0", 0).frames.back();
+		if (!first)
+			first = frame;
+		auto xml = osrv::scene::FrameXml(*frame);
+		bool found = false;
+		for (const auto& [name, object] : xml)
+			if (name == "tt:Object" &&
+					object.get<std::string>("tt:Appearance.tt:LicensePlateInfo.tt:PlateNumber", "") == input.plate)
+			{
+				found = true;
+				BOOST_TEST(object.get<std::string>("tt:Appearance.tt:ImageRef") == images[index].sceneUri);
+				BOOST_TEST(object.get<std::string>("tt:Appearance.tt:Image") == images[index].scene.base64);
+				std::vector<std::string> order;
+				for (const auto& [child, _] : object.get_child("tt:Appearance"))
+					order.push_back(child);
+				BOOST_TEST(order[order.size() - 3] == "tt:LicensePlateInfo");
+				BOOST_TEST(order[order.size() - 2] == "tt:ImageRef");
+				BOOST_TEST(order.back() == "tt:Image");
+			}
+		BOOST_TEST(found);
+	}
+	BOOST_TEST(first->objects.front().image->base64 == images.front().scene.base64);
+	detector.SampleObject("VideoSource0", "human", 0, 0, "Human");
+	auto retained = detector.Scenes()->Read("VideoSource0", "AnalyticsConfig_0", 0).frames.back();
+	for (const auto& [name, object] : osrv::scene::FrameXml(*retained))
+		if (name == "tt:Object")
+		{
+			BOOST_TEST(!object.get_child_optional("tt:Appearance.tt:Image"));
+			if (object.get_child_optional("tt:Appearance.tt:LicensePlateInfo"))
+				BOOST_TEST(static_cast<bool>(object.get_child_optional("tt:Appearance.tt:ImageRef")));
+		}
+}
+BOOST_AUTO_TEST_CASE(scene_and_event_share_plate_geometry_confidence_and_sample_time)
+{
+	call("CreateRules", rule(simple("EventInterval", "10")));
+	plate.x = 0.97;
+	plate.y = -0.98;
+	auto events = sample();
+	BOOST_REQUIRE_EQUAL(events.size(), 1u);
+	auto batch = detector.Scenes()->Read("VideoSource0", "AnalyticsConfig_0", 0);
+	BOOST_REQUIRE_EQUAL(batch.frames.size(), 1u);
+	auto frame = batch.frames.back();
+	BOOST_REQUIRE_EQUAL(frame->objects.size(), 2u);
+	BOOST_REQUIRE(frame->objects.front().plate);
+	BOOST_TEST(frame->objects.front().classification == "LicensePlate");
+	BOOST_TEST(frame->utc_time == events.front().utc_time);
+	BOOST_TEST(frame->utc_time == "1970-01-01T00:00:00.000000Z");
+	auto xml = osrv::scene::FrameXml(*frame);
+	auto parentId = xml.get<std::string>("tt:Object.<xmlattr>.Parent");
+	bool vehicleFound = false;
+	for (const auto& [name, node] : xml)
+		if (name == "tt:Object" && node.get<std::string>("<xmlattr>.ObjectId") == parentId)
+		{
+			vehicleFound = true;
+			BOOST_TEST(node.get<std::string>("tt:Appearance.tt:VehicleInfo.tt:Type") == plate.vehicleType);
+			BOOST_TEST(node.get<double>("tt:Behaviour.tt:Speed") == plate.speed);
+			BOOST_TEST(node.get<int>("tt:Appearance.tt:Color.tt:ColorCluster.tt:Color.<xmlattr>.X") == plate.vehicleColor[0]);
+			BOOST_TEST(node.get<std::string>("tt:Appearance.tt:Color.tt:ColorCluster.tt:Color.<xmlattr>.Colorspace") ==
+								 "http://www.onvif.org/ver10/colorspace/RGB");
+		}
+	BOOST_TEST(vehicleFound);
+	auto info = xml.get_child("tt:Object.tt:Appearance.tt:LicensePlateInfo");
+	BOOST_TEST(info.get<std::string>("tt:PlateNumber") == plate.plate);
+	BOOST_TEST(info.get<std::string>("tt:CountryCode") == plate.country);
+	BOOST_TEST(info.get<double>("tt:PlateNumber.<xmlattr>.Likelihood") == plate.likelihood);
+	for (const auto& item : events.front().data_element_items)
+		if (item.get<std::string>("<xmlattr>.Name") == "BoundingBox")
+			BOOST_CHECK(item.get_child("tt:BoundingBox") == xml.get_child("tt:Object.tt:Appearance.tt:Shape.tt:BoundingBox"));
+	std::ofstream("lpr_scene.xml") << osrv::event::serialize_metadata(events, {}, {*frame});
+
+	// Throttled events still update the scene and preserve the tracked plate identity.
+	now += std::chrono::seconds(1);
+	plate.x = -0.25;
+	BOOST_TEST(sample().empty());
+	auto next = detector.Scenes()->Read("VideoSource0", "AnalyticsConfig_0", frame->sequence).frames.back();
+	BOOST_TEST(next->objects.front().id == frame->objects.front().id);
+	BOOST_TEST(next->objects.front().x == plate.x);
+	BOOST_TEST(frame->objects.front().x == 0.97);
+	BOOST_TEST(next->utc_time != frame->utc_time);
+	// Human samples and different plates do not overwrite the recognized object.
+	detector.SampleObject("VideoSource0", "1", 0, 0, "Human");
+	plate.country = "GB";
+	sample();
+	auto current = detector.Scenes()->Read("VideoSource0", "AnalyticsConfig_0", 0).frames.back();
+	BOOST_TEST(current->module == osrv::scene::LprModule);
+	BOOST_TEST(current->objects.size() == 4u);
+	std::set<std::string> ids;
+	for (const auto& object : current->objects)
+		ids.insert(object.id);
+	BOOST_TEST(ids.size() == 4u);
+	BOOST_TEST(detector.Scenes()->Read("VideoSource1", "AnalyticsConfig_0", 0).frames.empty());
+	BOOST_TEST(detector.Scenes()->Read("VideoSource0", "other", 0).frames.empty());
+}
+BOOST_AUTO_TEST_CASE(scene_observations_are_independent_of_rule_filters_and_rule_existence)
+{
+	call("CreateRules", rule(simple("Threshold", "1")));
+	BOOST_TEST(sample().empty());
+	auto first = detector.Scenes()->Read("VideoSource0", "AnalyticsConfig_0", 0).frames.back();
+	call("DeleteRules", "<tan:RuleName>plates</tan:RuleName>");
+	plate.country.clear();
+	plate.x = 0.25;
+	BOOST_TEST(sample().empty());
+	auto next = detector.Scenes()->Read("VideoSource0", "AnalyticsConfig_0", first->sequence).frames.back();
+	auto xml = osrv::scene::FrameXml(*next);
+	BOOST_TEST(next->objects.size() == 4u);
+	bool withoutCountry = false;
+	for (const auto& [name, node] : xml)
+		if (name == "tt:Object" && !node.get_child_optional("tt:Appearance.tt:LicensePlateInfo.tt:CountryCode"))
+			withoutCountry = true;
+	BOOST_TEST(withoutCountry);
+	plate.likelihood = -1;
+	BOOST_TEST(sample().empty());
+	BOOST_TEST(detector.Scenes()->Read("VideoSource0", "AnalyticsConfig_0", next->sequence).frames.empty());
+	BOOST_TEST(detector.SamplePlate("unknown", utility::lpr::Sample{"TEST123", "US"}).empty());
+	BOOST_TEST(detector.Scenes()->Read("unknown", "AnalyticsConfig_0", 0).frames.empty());
+}
 BOOST_AUTO_TEST_CASE(contract_roundtrip_restart_and_serialization)
 {
 	auto supported = call("GetSupportedRules").get_child("tan:SupportedRules");

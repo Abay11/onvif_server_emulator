@@ -117,35 +117,46 @@ ignores the deprecated timeout field.
 
 Set `tt:Analytics` to `true` in a metadata configuration and attach it to a profile
 that references both a VideoSourceConfiguration and a VideoAnalyticsConfiguration.
-The default metadata configurations retain `Analytics=false`. The fixed module
-`SyntheticObjectTracker` produces `tt:VideoAnalytics/tt:Frame` with UTC time,
+The default metadata configurations retain `Analytics=false`. Three fixed modules (`ObjectTracker`, `LicensePlateRecognition`, `FaceRecognition`) produce `tt:VideoAnalytics/tt:Frame` with UTC time,
 numeric object identifiers, identity transformation, normalized bounding boxes,
-centers and Human classification. `Frame.Source` identifies the module name.
-Media and Media2 include the module in the analytics configuration; Analytics
+centers and Human, Vehicle, LicensePlate or HumanFace classification, scoped to the originating module. LPR objects include
+`tt:Appearance/tt:LicensePlateInfo` with PlateNumber, its Likelihood and optional
+CountryCode. `Frame.Source` identifies the module name.
+Media and Media2 include these modules in the analytics configuration; Analytics
 supports `GetAnalyticsModules`, `GetSupportedAnalyticsModules` and
-`GetSupportedMetadata`. The latter returns a representative frame whose geometry
-is in the top-left image quadrant. The module type is the QName
-`osrv:SyntheticObjectTracker`, with `osrv` bound to
-`urn:onvif-server-emulator:analytics`. It is a built-in, read-only module with no
+`GetSupportedMetadata`. The latter returns representative frames whose geometry
+is in the top-left image quadrant. The module QName prefix `osrv` is bound to
+`urn:onvif-server-emulator:analytics`. These are built-in, read-only modules with no
 configurable parameters; module CRUD and options are not advertised.
 
 Omitting `tt:AnalyticsEngineConfiguration` selects all available modules. An empty
-element selects none. To select the supported module explicitly, include this
+element selects none. To select ObjectTracker explicitly, include this
 element after `tt:SessionTimeout` in the metadata configuration:
 
 ```xml
 <tt:AnalyticsEngineConfiguration xmlns:tt="http://www.onvif.org/ver10/schema"
     xmlns:osrv="urn:onvif-server-emulator:analytics">
-  <tt:AnalyticsModule Name="SyntheticObjectTracker" Type="osrv:SyntheticObjectTracker">
+  <tt:AnalyticsModule Name="ObjectTracker" Type="osrv:ObjectTracker">
     <tt:Parameters/>
   </tt:AnalyticsModule>
 </tt:AnalyticsEngineConfiguration>
 ```
 
+Each module uses its own QName in `urn:onvif-server-emulator:analytics`:
+`osrv:ObjectTracker`, `osrv:LicensePlateRecognition`, `osrv:FaceRecognition`.
+`GetSupportedMetadata` returns one MetadataInfo/SampleFrame per module; Type
+filters to a single module. Frame.Source is the corresponding module Name.
+These are implementation-defined analytics modules, not ONVIF event topics or
+standardized module types. ONVIF's LicensePlateInfo and HumanFace are object
+descriptor types; LicensePlateRecognition and FaceRecognition in Annex G are
+rule types. The standard event topics remain RuleEngine/Recognition/LicensePlate
+and RuleEngine/Recognition/Face. Line, Counting and Field rules consume the shared
+ObjectTracker samples and retain their own standard rule event topics.
+
 Only module selection is applied here; module parameters in this selector are
-ignored. Unknown module names/types return ConfigModify. The persisted JSON
-`Metadata[].AnalyticsModules` is either `["SyntheticObjectTracker"]` or an empty
-list (PropertyTree writes the latter as `""`); an absent key selects all modules.
+ignored. Unknown module names/types and duplicate selectors return ConfigModify. Multiple distinct modules may be selected. The persisted JSON
+`Metadata[].AnalyticsModules` contains module names or an empty
+list (PropertyTree writes the latter as `""`); an absent key selects all modules. Legacy persisted `SyntheticObjectTracker` selectors are accepted as an alias for all modules; responses serialize the current module names.
 `Events` and `Analytics` are independent: omitting Events yields a scene-only
 stream; enabling both yields scene frames and notifications. Event topic/content
 filters do not filter scene frames. A profile without an analytics association
@@ -157,16 +168,76 @@ ObjectId and UTC time. IDs remain stable for an object's lifetime and are not
 reused after deletion within a running simulator. Each frame describes the current
 objects; deletion records remove objects previously delivered to that media
 instance. The buffer retains 128 frames and at most 64 active objects per video
-source. A slow reader that falls behind receives the latest full snapshot and a
+source and module. A slow reader that falls behind receives the latest full snapshot and a
 diagnostic rather than an unbounded backlog. PLAY and synchronization resend the
 latest scene snapshot as well as event property states.
+
+The LPR simulator supplies plate observations to LicensePlateRecognition before applying
+recognition rule filters or EventInterval. Scene observations therefore remain
+available without an LPR rule and when a rule suppresses an event. A recognition
+event and its corresponding scene frame share the sample UTC, plate number,
+country, confidence and plate bounding box. Plate identities are tracked separately
+from Human objects, by video source, country and plate number. The plate bounding
+box uses the sample's width/height percentages, clipped to normalized image bounds.
+Each plate has a Vehicle parent referenced by Object.Parent. The vehicle carries
+Appearance/VehicleInfo (Type, Brand, Model), Behaviour/Speed in metres per second,
+and Appearance/Color/ColorCluster/Color with X=R, Y=G, Z=B in [0,255] and an explicit
+ONVIF RGB colorspace URI. These are synthetic scenario values shared with rule
+samples, not measurements extracted from the video. The vehicle ImageRef points
+to the existing full vehicle card; the plate Image/ImageRef remain plate previews.
+PlateType and IssuingEntity are omitted because the simulator has no observations
+for them. Like other synthetic objects, plates remain in the bounded current
+snapshot until evicted; this does not simulate a vehicle leaving the scene.
+
+LPR objects also carry `Appearance/ImageRef`, an absolute HTTP URL for the
+synthetic plate PNG preview, built from the advertised HTTP endpoint. The
+currently sampled plate additionally carries the same preview as base64 in
+`Appearance/Image`; retained objects keep their references without repeating
+their embedded bytes on every unrelated observation. `GetSupportedMetadata`
+includes both fields for TEST123. Image assets are immutable and shared between
+retained frames. This scene output is independent of the rule's `IncludeImage`
+setting, which controls recognition event fields only. Scene image
+HTTP routes at `/analytics/lpr/scene/plate*.png` provide these bytes without
+authentication. Previews are generated once at startup using the existing
+GStreamer pngdec, videoconvert, videoscale and pngenc plugins, fitting the plate
+into a 240x120 canvas with aspect ratio preserved and borders added. This avoids
+embedding the roughly megabyte-sized originals in RTP scene frames; recognition
+events retain the original full-resolution images. These images depict
+synthetic plates, rather than crops extracted from the live video.
 
 This is an intentional simulation limitation: the module describes synthetic
 object samples, not analysis of the video test pattern or arbitrary file input.
 UTC is the simulator sample time; exact correspondence to an encoded video frame
 is not implemented. Visual correlation requires a separate renderer/analyzer.
-LPR, face recognition and motion-region event generators do not produce scene
-frames through this module. PTZ metadata remains unsupported.
+FaceRecognition publishes separate HumanFace objects and compact PNG previews
+from the same recognition samples, with scene/event ObjectId and UTC correlation.
+Face objects also carry `Appearance/HumanFace`: `fc:PoseAngle/fc:PoseAngles`
+with yaw, pitch and roll in degrees (all zero for the synthetic frontal scenario),
+and `fc:Accessory` with `fc:Opticals/fc:Wear=false` and `fc:Mask/fc:Wear=false`.
+Human tracker objects carry `Appearance/HumanBody`: `bd:BodyMetric/bd:Height=175`
+centimetres, `bd:Clothing` with LongSleeve/Shirt tops and Trousers/Jeans bottoms,
+RGB colors (40,100,180) and (30,40,70), and `bd:Behaviour/bd:Activity=Walking`.
+The outer descriptor elements use the `tt` namespace; face children use
+`http://www.onvif.org/ver20/analytics/humanface` and body children use
+`http://www.onvif.org/ver20/analytics/humanbody`. Nested ColorCluster/Color use `tt`.
+These same nonempty descriptors appear in `GetSupportedMetadata` for FaceRecognition
+and ObjectTracker respectively, before ImageRef/Image in schema order.
+Descriptors are optional observations in the scene model; a class label alone
+does not generate them. The simulator attaches the fixed scenario values before
+publication, independently of recognition rules and event filters. Other optional
+face/body features are omitted, including age, gender, temperature, belongings
+and recognized-person identity. These values are simulation data, not biometric
+measurements or attributes inferred from the PNG previews or live video.
+The optional event ParentObjectId is omitted when there is no tracked parent.
+Motion-region event generators do not produce object scene frames. PTZ metadata remains unsupported.
+
+ONVIF image semantics: Appearance/Image and ImageRef describe the detected object
+(plate for LicensePlate, face for HumanFace, vehicle for Vehicle). PNG/JPEG image
+data are permitted. Frame/SceneImage and SceneImageRef are the optional full-scene
+fields; this simulator does not emit them. `FullImage` is a consumer product field,
+not an ONVIF XML element. No change from object crops to full-scene images is
+required by Analytics §5.4.13. This does not remove the simulator's lack of actual
+video-frame correlation.
 
 ### Persistence and active sessions
 
@@ -259,6 +330,27 @@ operations, `wsdl/ver10/media/wsdl/media.wsdl`,
 Analytics specification, Analytics WSDL 20.12 at
 `wsdl/ver20/analytics/wsdl/analytics.wsdl` (module queries and supported metadata),
 and the scene Frame/Object/Appearance/ObjectTree types in `metadatastream.xsd`.
+The license plate descriptor follows that release's Analytics §5.4.12 and
+`tt:LicensePlateInfo` / `tt:StringLikelihood` in `metadatastream.xsd`, also used by
+the existing recognition rule event. The same descriptor is documented in
+[Analytics 26.06 §5.4.12](https://www.onvif.org/specs/srv/analytics/ONVIF-Analytics-Service-Spec.pdf);
+schema validation continues to use the pinned 24.12 contract.
+Object images follow Analytics §5.4.13 Image Data and the same release's
+`Appearance/ImageRef` (`xs:anyURI`) and `Appearance/Image` (`xs:base64Binary`),
+in schema order after LicensePlateInfo. The embedded format is PNG.
+Face and body descriptors implement the subset described above from
+[Analytics 26.06 §§5.4.14–5.4.15](https://www.onvif.org/specs/srv/analytics/ONVIF-Analytics-Service-Spec.pdf).
+Their XML uses the compatible definitions in the pinned 24.12 release:
+`metadatastream.xsd` Appearance/HumanFace and Appearance/HumanBody,
+`wsdl/ver20/analytics/humanface.xsd` (HumanFace, PoseAngle, Accessory),
+`wsdl/ver20/analytics/humanbody.xsd` (HumanBody, BodyMetric, Clothing, Behaviour)
+and their imported `onvif.xsd` GeoOrientation and ColorDescriptor types.
+The Analytics WSDL and schema validation baseline remain the pinned 24.12 set;
+no newer-only face/body features are emitted. The scene smoke check validates
+both supported metadata responses and live RTP XML against that set and checks
+the scenario values separately. This covers the missing descriptor assertions in
+ANALYTICS-5-1-4-v20.06 and ANALYTICS-5-1-6-v20.06 without claiming a complete
+ONVIF test-tool or conformance run.
 See
 [the contract references/cache instructions](../experiments/rtsp_metadata/README.md)
 and [the immutable release](https://github.com/onvif/specs/tree/d7f3684501c4a6d58f879e72e1e3322c120f95e6).
@@ -292,6 +384,10 @@ python3 unit_tests/metadata_configuration_smoke.py --contract /contract
 python3 unit_tests/scene_metadata_smoke.py --contract /contract
 ```
 
+For the scene check, set `EventGenerationTimeout=1` on the enabled generators
+in a disposable `event.config` before starting the test server. Its bounded
+receive windows can expire before the default 30-second simulator tick.
+
 `/contract` is the pinned schema cache mounted into the test container.
 Omit that argument for a standard-library-only receiver without XSD validation.
 The configuration and scene scripts additionally use the validation-only
@@ -313,8 +409,13 @@ Run scripts that change profiles/rules sequentially against the same instance.
 The scene script also requires disposable default configs. It checks fixed module
 queries and faults, scene-only and mixed streams, module selection, profile and
 active-session isolation, and identical scene/event ObjectId and UTC in RTSP and
+PullPoint. It also checks a nonempty supported LicensePlateInfo descriptor,
+LPR scenes without rules over TCP/UDP, and matching plate number, country,
+confidence, bounding box and UTC across scene frames, RTSP events and
 PullPoint. Its Analytics schema loader explicitly includes `metadatastream.xsd`
-alongside `onvif.xsd`, which share the same target namespace.
+alongside `onvif.xsd`, which share the same target namespace. Image checks fetch
+the advertised URLs, verify PNG responses and compare them byte-for-byte with
+decoded base64 in supported metadata and live TCP/UDP scenes.
 
 All scripts accept explicit host/port options. The metadata script checks two
 RTSP consumers plus two PullPoints, identical live events, late property state,

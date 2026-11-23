@@ -8,13 +8,76 @@
 #include <cmath>
 #include <fstream>
 #include <iterator>
+#include <memory>
 #include <set>
 #include <vector>
+#include <gst/app/gstappsrc.h>
+#include <gst/app/gstappsink.h>
 
 namespace utility::lpr
 {
 namespace
 {
+Image encodedImage(std::string bytes)
+{
+	Image result;
+	result.bytes = std::move(bytes);
+	using namespace boost::archive::iterators;
+	using Encoder = base64_from_binary<transform_width<std::string::const_iterator, 6, 8>>;
+	result.base64.assign(Encoder(result.bytes.begin()), Encoder(result.bytes.end()));
+	result.base64.append((3 - result.bytes.size() % 3) % 3, '=');
+	return result;
+}
+Image thumbnail(const Image& original)
+{
+	GError* error = nullptr;
+	if (!gst_init_check(nullptr, nullptr, &error))
+	{
+		std::string reason = error ? error->message : "unknown error";
+		g_clear_error(&error);
+		throw std::runtime_error("Cannot initialize scene image conversion: " + reason);
+	}
+	auto cleanup = [](GstElement* element) {
+		gst_element_set_state(element, GST_STATE_NULL);
+		gst_object_unref(element);
+	};
+	std::unique_ptr<GstElement, decltype(cleanup)> pipeline(
+			gst_parse_launch("appsrc name=input ! pngdec ! videoconvert ! videoscale add-borders=true ! "
+											 "video/x-raw,format=RGB,width=240,height=120,pixel-aspect-ratio=1/1 ! "
+											 "pngenc snapshot=true compression-level=9 ! appsink name=output sync=false",
+											 &error),
+			cleanup);
+	if (error || !pipeline)
+	{
+		std::string reason = error ? error->message : "missing pipeline";
+		g_clear_error(&error);
+		throw std::runtime_error("Cannot create scene image converter: " + reason);
+	}
+	auto unref = [](GstElement* element) { gst_object_unref(element); };
+	std::unique_ptr<GstElement, decltype(unref)> input(gst_bin_get_by_name(GST_BIN(pipeline.get()), "input"), unref);
+	std::unique_ptr<GstElement, decltype(unref)> output(gst_bin_get_by_name(GST_BIN(pipeline.get()), "output"), unref);
+	if (gst_element_set_state(pipeline.get(), GST_STATE_PLAYING) == GST_STATE_CHANGE_FAILURE)
+		throw std::runtime_error("Cannot start scene image converter");
+	auto buffer = gst_buffer_new_allocate(nullptr, original.bytes.size(), nullptr);
+	if (!buffer)
+		throw std::runtime_error("Cannot allocate scene image buffer");
+	gst_buffer_fill(buffer, 0, original.bytes.data(), original.bytes.size());
+	if (gst_app_src_push_buffer(GST_APP_SRC(input.get()), buffer) != GST_FLOW_OK ||
+			gst_app_src_end_of_stream(GST_APP_SRC(input.get())) != GST_FLOW_OK)
+		throw std::runtime_error("Cannot submit scene image");
+	auto sampleUnref = [](GstSample* sample) { gst_sample_unref(sample); };
+	std::unique_ptr<GstSample, decltype(sampleUnref)> sample(
+			gst_app_sink_try_pull_sample(GST_APP_SINK(output.get()), 5 * GST_SECOND), sampleUnref);
+	if (!sample)
+		throw std::runtime_error("Scene PNG conversion failed or timed out");
+	GstMapInfo map;
+	buffer = gst_sample_get_buffer(sample.get());
+	if (!buffer || !gst_buffer_map(buffer, &map, GST_MAP_READ))
+		throw std::runtime_error("Cannot read scene PNG");
+	std::string bytes(reinterpret_cast<const char*>(map.data), map.size);
+	gst_buffer_unmap(buffer, &map);
+	return encodedImage(std::move(bytes));
+}
 const std::vector<std::pair<std::string, std::string>> Simple = {
 		{"IncludeImage", "xs:string"}, {"PlateLocation", "xs:string"}, {"Country", "xs:string"},
 		{"Sensitivity", "xs:float"},	 {"Threshold", "xs:float"},			 {"PlateMinWidth", "xs:float"},
@@ -34,6 +97,8 @@ Tree geometryXml(const Tree& rule, const std::string& name)
 }
 } // namespace
 
+Image PreviewImage(const Image& original) { return thumbnail(original); }
+
 const std::array<Sample, 5>& TestVehicles()
 {
 	auto make = [](const char* plate, const char* country, const char* type, const char* brand, const char* model,
@@ -49,6 +114,8 @@ const std::array<Sample, 5>& TestVehicles()
 		sample.width = width;
 		sample.likelihood = likelihood;
 		sample.imageIndex = index;
+ static constexpr std::array<int, 3> colors[] = {{0,80,200},{200,30,30},{240,240,240},{240,200,0},{30,140,60}};
+ sample.vehicleColor = colors[index];
 		return sample;
 	};
 	static const std::array<Sample, 5> vehicles{
@@ -80,6 +147,13 @@ std::string ImagePath(size_t index, bool plate)
 	return std::string("/analytics/lpr/") + (plate ? "plate" : "vehicle") + suffix + ".png";
 }
 
+std::string SceneImagePath(size_t index)
+{
+	auto path = ImagePath(index, true);
+	path.insert(std::string("/analytics/lpr").size(), "/scene");
+	return path;
+}
+
 bool ImagesReady(const Images& images)
 {
 	return !images.empty() && std::all_of(images.begin(), images.end(), [](const auto& pair) {
@@ -99,11 +173,7 @@ Images LoadImages(const std::string& configsPath, const std::string& httpAddress
 		result.bytes.assign(std::istreambuf_iterator<char>(file), {});
 		if (file.bad() || result.bytes.empty())
 			throw std::runtime_error("Cannot read LPR test image: " + path);
-		using namespace boost::archive::iterators;
-		using Encoder = base64_from_binary<transform_width<std::string::const_iterator, 6, 8>>;
-		result.base64.assign(Encoder(result.bytes.begin()), Encoder(result.bytes.end()));
-		result.base64.append((3 - result.bytes.size() % 3) % 3, '=');
-		return result;
+		return encodedImage(std::move(result.bytes));
 	};
 	Images result;
 	auto base = httpAddress;
@@ -115,8 +185,10 @@ Images LoadImages(const std::string& configsPath, const std::string& httpAddress
 		ImagePair pair;
 		pair.plate = load("lpr-plate-test" + suffix + ".png");
 		pair.vehicle = load("lpr-test" + suffix + ".png");
+		pair.scene = thumbnail(pair.plate);
 		pair.plateUri = base + ImagePath(index, true);
 		pair.vehicleUri = base + ImagePath(index, false);
+		pair.sceneUri = base + SceneImagePath(index);
 		result.push_back(std::move(pair));
 	}
 	return result;
