@@ -4,6 +4,7 @@
 #include <boost/property_tree/ptree.hpp>
 #include <functional>
 #include <memory>
+#include <set>
 #include <stdexcept>
 
 namespace utility::media
@@ -28,6 +29,7 @@ struct Settings
 	bool events = false;
 	bool analytics = false;
 	bool tracker = true;
+ std::set<std::string> modules{scene::ModuleName, scene::LprModule, scene::FaceModule};
 	std::string video_source, analytics_configuration;
 	std::string identity;
 	std::function<bool(const event::NotificationMessage&, const std::map<std::string, std::string>&)> accepts;

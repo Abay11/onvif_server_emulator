@@ -13,6 +13,21 @@ using boost::property_tree::ptree;
 using osrv::scene::Buffer;
 } // namespace
 BOOST_AUTO_TEST_SUITE(SceneDescription)
+BOOST_AUTO_TEST_CASE(supported_sample_contains_license_plate_descriptor)
+{
+	auto xml = osrv::scene::FrameXml(osrv::scene::SampleFrame());
+	bool found = false;
+	for (const auto& [name, node] : xml)
+		if (name == "tt:Object")
+			if (auto plate = node.get_child_optional("tt:Appearance.tt:LicensePlateInfo"))
+			{
+				found = true;
+				BOOST_TEST(plate->get<std::string>("tt:PlateNumber") == "TEST123");
+				BOOST_TEST(plate->get<std::string>("tt:CountryCode") == "US");
+				BOOST_TEST(plate->get<double>("tt:PlateNumber.<xmlattr>.Likelihood") == 0.95);
+			}
+	BOOST_TEST(found);
+}
 BOOST_AUTO_TEST_CASE(snapshots_are_immutable_scoped_and_independent)
 {
 	Buffer buffer;
@@ -115,4 +130,31 @@ BOOST_AUTO_TEST_CASE(analytics_and_module_selection_are_independent_of_event_fil
 	config.get_child("AnalyticsModules").front().second.put_value("unsupported");
 	BOOST_CHECK_THROW(osrv::metadata::Compile(config), osrv::metadata::Fault);
 }
+BOOST_AUTO_TEST_CASE(modules_have_independent_snapshots_and_global_object_ids)
+{
+	Buffer buffer;
+	auto tracker = buffer.Sample("source", {"analytics"}, "7", 0, 0, "2000-01-01T00:00:00Z", "Human");
+	auto plate = buffer.Sample("source", {"analytics"}, "plate", 0, 0, "2000-01-01T00:00:01Z", "LicensePlate", {}, {},
+														 osrv::scene::LprModule);
+	auto face = buffer.Sample("source", {"analytics"}, "face", 0, 0, "2000-01-01T00:00:02Z", "HumanFace", {}, {},
+														osrv::scene::FaceModule);
+	BOOST_TEST(tracker != plate);
+	BOOST_TEST(face != plate);
+	BOOST_TEST(tracker != face);
+	auto batch = buffer.Read("source", "analytics", 0);
+	BOOST_REQUIRE(batch.frames.size() == 3u);
+	for (const auto& frame : batch.frames)
+	{
+		BOOST_TEST(frame->objects.size() == 1u);
+		BOOST_TEST(osrv::scene::FrameXml(*frame).get<std::string>("<xmlattr>.Source") == frame->module);
+	}
+	ptree config;
+	config.put("Analytics", true);
+	config.add_child("AnalyticsModules", ptree{}).push_back({"", ptree(osrv::scene::LprModule)});
+	auto selected = osrv::metadata::Compile(config);
+	BOOST_TEST(!selected->tracker);
+	BOOST_TEST(selected->modules.size() == 1u);
+	BOOST_TEST(selected->modules.contains(osrv::scene::LprModule));
+}
+
 BOOST_AUTO_TEST_SUITE_END()

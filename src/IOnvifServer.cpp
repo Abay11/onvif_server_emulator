@@ -129,12 +129,18 @@ std::shared_ptr<utility::AnalyticsRules> IOnvifServer::Rules()
 			};
 			serve(route(true), images[index].plate.bytes);
 			serve(route(false), images[index].vehicle.bytes);
+			auto scenePath = utility::lpr::SceneImagePath(index);
+			scenePath.insert(scenePath.size() - 4, "\\");
+			serve("^" + scenePath + "$", images[index].scene.bytes);
 		}
 		for (size_t index = 0; index < faces.size(); ++index)
 		{
 			auto path = utility::face::ImagePath(index);
 			path.insert(path.size() - 4, "\\");
 			serve("^" + path + "$", faces[index].image.bytes);
+ auto previewPath = utility::face::SceneImagePath(index);
+ previewPath.insert(previewPath.size() - 4, "\\");
+ serve("^" + previewPath + "$", faces[index].preview.bytes);
 		}
 		analytics_rules_ = std::make_shared<utility::AnalyticsRules>(
 				manager->ReaderWriter()->ConfigsTree(),

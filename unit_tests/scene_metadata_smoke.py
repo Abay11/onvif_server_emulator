@@ -5,6 +5,7 @@ Exercises the fixed module, metadata selection, profile isolation and shared
 scene/event sample identity over real RTSP. Requires metadata transport enabled.
 """
 import argparse
+import base64
 from contextlib import ExitStack
 from copy import deepcopy
 import http.client
@@ -12,15 +13,20 @@ from pathlib import Path
 import sys
 import time
 import xml.etree.ElementTree as ET
+from urllib.parse import urlsplit
 
 from event_delivery_smoke import call, pull, A, T, W, S
 from metadata_configuration_smoke import soap, attach, stream_path, M, M2
 from rtsp_metadata_smoke import Receiver
 
 ANALYTICS = "http://www.onvif.org/ver20/analytics/wsdl"
-MODULE = "SyntheticObjectTracker"
+MODULE = "ObjectTracker"
+LPR_MODULE = "LicensePlateRecognition"
+FACE_MODULE = "FaceRecognition"
 URN = "urn:onvif-server-emulator:analytics"
 TOPIC = "tns1:RuleEngine/LineDetector/Crossed"
+LPR_TOPIC = "tns1:RuleEngine/Recognition/LicensePlate"
+FACE_TOPIC = "tns1:RuleEngine/Recognition/Face"
 
 
 def main():
@@ -91,23 +97,69 @@ def main():
         stack.callback(client.close)
         return client
 
-    def frame(client):
+    image_cache = {}
+
+    def check_images(root, required=False):
+        found = False
+        for appearance in root.findall(f".//{{{T}}}Object/{{{T}}}Appearance"):
+            reference = appearance.find(f"{{{T}}}ImageRef")
+            embedded = appearance.find(f"{{{T}}}Image")
+            if reference is None:
+                assert embedded is None, "Embedded image has no matching reference in this simulator"
+                continue
+            assert reference.text, "Empty ImageRef"
+            if reference.text not in image_cache:
+                target = urlsplit(reference.text)
+                assert target.scheme == "http" and target.hostname, reference.text
+                connection = http.client.HTTPConnection(target.hostname, target.port, timeout=15)
+                try:
+                    connection.request("GET", target.path)
+                    response = connection.getresponse()
+                    image = response.read()
+                    assert response.status == 200 and response.getheader("Content-Type") == "image/png"
+                    assert image.startswith(b"\x89PNG\r\n\x1a\n"), "ImageRef did not return PNG"
+                    image_cache[reference.text] = image
+                finally:
+                    connection.close()
+            if embedded is not None:
+                found = True
+                assert embedded.text, "Empty Image"
+                assert base64.b64decode(embedded.text, validate=True) == image_cache[reference.text], "Image/ImageRef differ"
+        if required:
+            assert found, "No embedded object image"
+        return found
+
+    def frame(client, only=None):
         deadline = time.monotonic() + 12
         while time.monotonic() < deadline:
             root = client.document()
             assert not root.findall(f".//{{{W}}}NotificationMessage"), "Events leaked into a scene-only stream"
-            result = root.find(f"{{{T}}}VideoAnalytics/{{{T}}}Frame")
+            if only:
+                assert all(node.get("Source") == only for node in root.findall(f"{{{T}}}VideoAnalytics/{{{T}}}Frame"))
+            result = root.find(f"{{{T}}}VideoAnalytics/{{{T}}}Frame[@Source='{MODULE}']")
             if result is not None:
-                assert result.get("Source") == MODULE
-                obj = result.find(f"{{{T}}}Object")
-                assert obj is not None and int(obj.get("ObjectId")) > 0
-                assert obj.find(f"{{{T}}}Appearance/{{{T}}}Class/{{{T}}}Type").text == "Human"
+                if result.get("Source") != MODULE:
+                    continue
+                objects = result.findall(f"{{{T}}}Object")
+                assert all(int(obj.get("ObjectId")) > 0 for obj in objects)
+                if not any(obj.find(f"{{{T}}}Appearance/{{{T}}}Class/{{{T}}}Type").text == "Human"
+                           for obj in objects):
+                    continue
                 for box in result.findall(f".//{{{T}}}BoundingBox"):
                     left, right = float(box.get("left")), float(box.get("right"))
                     bottom, top = float(box.get("bottom")), float(box.get("top"))
                     assert -1 <= left <= right <= 1 and -1 <= bottom <= top <= 1
                 return result
         raise TimeoutError("No synthetic scene frame")
+
+    def plate_frame(client):
+        deadline = time.monotonic() + 40
+        while time.monotonic() < deadline:
+            root = client.document()
+            assert not root.findall(f".//{{{W}}}NotificationMessage"), "Events leaked into a scene-only stream"
+            if root.find(f".//{{{T}}}Object/{{{T}}}Appearance/{{{T}}}LicensePlateInfo/{{{T}}}PlateNumber") is not None and check_images(root):
+                return
+        raise TimeoutError("No LPR descriptor in scene-only stream")
 
     def quiet(client):
         for _ in range(3):
@@ -116,6 +168,8 @@ def main():
             assert not root.findall(f".//{{{W}}}NotificationMessage")
 
     rule_created = False
+    plate_rule_created = False
+    face_rule_created = False
     subscription = None
     try:
         caps = analytics("GetServiceCapabilities")
@@ -123,9 +177,18 @@ def main():
         modules = analytics("GetAnalyticsModules", "<m:ConfigurationToken>AnalyticsConfig_0</m:ConfigurationToken>")
         assert any(node.get("Name") == MODULE for node in modules.findall(f".//{{{ANALYTICS}}}AnalyticsModule"))
         analytics("GetSupportedAnalyticsModules", "<m:ConfigurationToken>AnalyticsConfig_0</m:ConfigurationToken>")
-        analytics("GetSupportedMetadata")
-        analytics("GetSupportedMetadata", f'<m:Type xmlns:alias="{URN}"> alias:SyntheticObjectTracker </m:Type>')
-        sample = analytics("GetSupportedMetadata", "<m:Type>osrv:SyntheticObjectTracker</m:Type>")
+        supported = analytics("GetSupportedMetadata")
+        assert supported.find(f".//{{{T}}}Appearance/{{{T}}}LicensePlateInfo/{{{T}}}PlateNumber").text
+        check_images(supported, required=True)
+        samples = supported.findall(f".//{{{ANALYTICS}}}AnalyticsModule")
+        assert {node.get("Type") for node in samples} == {"osrv:ObjectTracker", "osrv:LicensePlateRecognition", "osrv:FaceRecognition"}
+        for name in (MODULE, LPR_MODULE, FACE_MODULE):
+            response = analytics("GetSupportedMetadata", f"<m:Type>osrv:{name}</m:Type>")
+            nodes = response.findall(f".//{{{ANALYTICS}}}AnalyticsModule")
+            assert len(nodes) == 1 and nodes[0].get("Type") == f"osrv:{name}"
+            assert nodes[0].find(f"{{{ANALYTICS}}}SampleFrame").get("Source") == name
+        analytics("GetSupportedMetadata", f'<m:Type xmlns:alias="{URN}"> alias:ObjectTracker </m:Type>')
+        sample = analytics("GetSupportedMetadata", "<m:Type>osrv:ObjectTracker</m:Type>")
         for box in sample.findall(f".//{{{T}}}BoundingBox"):
             assert float(box.get("right")) <= 0 and float(box.get("bottom")) >= 0, "Sample is not in top-left quadrant"
         failure = analytics("GetSupportedMetadata", "<m:Type>osrv:Unknown</m:Type>", 400)
@@ -143,12 +206,14 @@ def main():
         with ExitStack() as stack:
             first = receiver(stack, "ProfileToken0")
             frame(first)
+            plate_frame(first)  # Scene observations exist before an LPR rule is created.
             isolated = receiver(stack, "ProfileToken1", "udp")
             quiet(isolated)
             media("AddConfiguration", '<m:ProfileToken>ProfileToken1</m:ProfileToken><m:Configuration>'
                   '<m:Type>Analytics</m:Type><m:Token>AnalyticsConfig_0</m:Token></m:Configuration>', True)
             associated = receiver(stack, "ProfileToken1", "udp")
             frame(associated)
+            plate_frame(associated)
             quiet(isolated)  # Old prepared session retains its profile snapshot.
             engine = ET.SubElement(config, f"{{{T}}}AnalyticsEngineConfiguration")
             save()
@@ -160,25 +225,111 @@ def main():
             ET.SubElement(invalid_module, f"{{{T}}}Parameters")
             failure = media("SetMetadataConfiguration", ET.tostring(invalid, encoding="unicode"), True, 400)
             assert failure.find(f".//{{{S}}}Subcode/{{{S}}}Subcode/{{{S}}}Value").text == "ter:ConfigModify"
-            module = ET.SubElement(engine, f"{{{T}}}AnalyticsModule", Name=MODULE, Type="osrv:SyntheticObjectTracker")
+            module = ET.SubElement(engine, f"{{{T}}}AnalyticsModule", Name=MODULE, Type="osrv:ObjectTracker")
             params = ET.SubElement(module, f"{{{T}}}Parameters")
             ET.SubElement(params, f"{{{T}}}SimpleItem", Name="Ignored", Value="1")
             save()
             selected = receiver(stack, "ProfileToken0")
-            frame(selected)
+            frame(selected, only=MODULE)
+            for name in (LPR_MODULE, FACE_MODULE):
+                engine.clear()
+                single = ET.SubElement(engine, f"{{{T}}}AnalyticsModule", Name=name, Type=f"osrv:{name}")
+                ET.SubElement(single, f"{{{T}}}Parameters")
+                save()
+                client = receiver(stack, "ProfileToken0")
+                deadline = time.monotonic() + 12
+                seen = False
+                while time.monotonic() < deadline:
+                    root = client.document()
+                    assert not root.findall(f".//{{{W}}}NotificationMessage")
+                    nodes = root.findall(f"{{{T}}}VideoAnalytics/{{{T}}}Frame")
+                    assert all(node.get("Source") == name for node in nodes), "Module selection leaked another engine"
+                    if nodes and check_images(root):
+                        seen = True
+                        break
+                assert seen, f"No image frame from selected {name}"
+            engine.clear()
+            for name in (MODULE, LPR_MODULE, FACE_MODULE):
+                selected_module = ET.SubElement(engine, f"{{{T}}}AnalyticsModule", Name=name, Type=f"osrv:{name}")
+                ET.SubElement(selected_module, f"{{{T}}}Parameters")
+            save()
             endpoint = f"http://{args.host}:{args.http_port}/onvif/event_service"
             subscription = call(endpoint, "CreatePullPointSubscription").find(f".//{{{A}}}Address").text
+            analytics("CreateRules", '<m:ConfigurationToken>AnalyticsConfig_0</m:ConfigurationToken>'
+                      '<m:Rule Name="scene-plate" Type="tt:LicensePlateRecognition"><tt:Parameters>'
+                      '<tt:SimpleItem Name="IncludeImage" Value=""/>'
+                      '<tt:SimpleItem Name="EventInterval" Value="0"/>'
+                      '</tt:Parameters></m:Rule>')
+            plate_rule_created = True
+            analytics("CreateRules", '<m:ConfigurationToken>AnalyticsConfig_0</m:ConfigurationToken>'
+                      '<m:Rule Name="scene-face" Type="tt:FaceRecognition"><tt:Parameters>'
+                      '<tt:SimpleItem Name="IncludeImage" Value=""/>'
+                      '</tt:Parameters></m:Rule>')
+            face_rule_created = True
             event_node = ET.Element(f"{{{T}}}Events")
             index = list(config).index(config.find(f"{{{T}}}Analytics"))
             config.insert(index, event_node)
             save()
             mixed = receiver(stack, "ProfileToken0")
             frames, rtsp_events, pull_events = set(), set(), set()
+            plates, rtsp_plates, pull_plates = set(), set(), set()
+            faces, rtsp_faces, pull_faces = set(), set(), set()
+
+            def plate_key(utc, info, likelihood, box):
+                country = info.find(f"{{{T}}}CountryCode")
+                return (utc, info.find(f"{{{T}}}PlateNumber").text,
+                        country.text if country is not None else "", float(likelihood),
+                        tuple(float(box.get(side)) for side in ("left", "right", "bottom", "top")))
+
             def collect(root):
+                check_images(root)
                 for item in root.findall(f"{{{T}}}VideoAnalytics/{{{T}}}Frame"):
                     for obj in item.findall(f"{{{T}}}Object"):
                         frames.add((item.get("UtcTime"), obj.get("ObjectId")))
+                        if item.get("Source") == FACE_MODULE:
+                            assert obj.find(f"{{{T}}}Appearance/{{{T}}}Class/{{{T}}}Type").text == "HumanFace"
+                            faces.add((item.get("UtcTime"), obj.get("ObjectId")))
+                        appearance = obj.find(f"{{{T}}}Appearance")
+                        vehicle = appearance.find(f"{{{T}}}VehicleInfo")
+                        if vehicle is not None:
+                            assert item.get("Source") == LPR_MODULE
+                            assert vehicle.find(f"{{{T}}}Type").text in {"Car", "Truck", "Bus", "Motorcycle"}
+                            assert float(obj.find(f"{{{T}}}Behaviour/{{{T}}}Speed").text) >= 0
+                            color = appearance.find(f"{{{T}}}Color/{{{T}}}ColorCluster/{{{T}}}Color")
+                            assert color.get("Colorspace") == "http://www.onvif.org/ver10/colorspace/RGB"
+                            assert all(0 <= float(color.get(component)) <= 255 for component in ("X", "Y", "Z"))
+                        info = appearance.find(f"{{{T}}}LicensePlateInfo")
+                        if info is not None:
+                            assert item.get("Source") == LPR_MODULE
+                            assert item.find(f"{{{T}}}Object[@ObjectId='{obj.get('Parent')}']/{{{T}}}Appearance/{{{T}}}VehicleInfo") is not None
+                            plates.add(plate_key(item.get("UtcTime"), info,
+                                      info.find(f"{{{T}}}PlateNumber").get("Likelihood", "1"),
+                                      appearance.find(f"{{{T}}}Shape/{{{T}}}BoundingBox")))
                 rtsp_events.update(keys(root.findall(f".//{{{W}}}NotificationMessage")))
+                rtsp_plates.update(plate_keys(root.findall(f".//{{{W}}}NotificationMessage")))
+                rtsp_faces.update(face_keys(root.findall(f".//{{{W}}}NotificationMessage")))
+
+            def face_keys(messages):
+                result = set()
+                for message in messages:
+                    if message.find(f"{{{W}}}Topic").text != FACE_TOPIC:
+                        continue
+                    body = message.find(f"{{{W}}}Message/{{{T}}}Message")
+                    obj = body.find(f"{{{T}}}Data/{{{T}}}ElementItem[@Name='ObjectId']/{{{T}}}ObjectId")
+                    result.add((body.get("UtcTime"), obj.get("ObjectId")))
+                return result
+
+            def plate_keys(messages):
+                result = set()
+                for message in messages:
+                    if message.find(f"{{{W}}}Topic").text != LPR_TOPIC:
+                        continue
+                    body = message.find(f"{{{W}}}Message/{{{T}}}Message")
+                    data = body.find(f"{{{T}}}Data")
+                    result.add(plate_key(body.get("UtcTime"), data.find(f".//{{{T}}}LicensePlateInfo"),
+                               data.find(f"{{{T}}}SimpleItem[@Name='Likelihood']").get("Value"),
+                               data.find(f".//{{{T}}}BoundingBox")))
+                return result
             def keys(messages):
                 result = set()
                 for message in messages:
@@ -192,22 +343,34 @@ def main():
             while time.monotonic() < deadline:
                 for _ in range(3):
                     collect(mixed.document())
-                pull_events.update(keys(pull(subscription)))
-                if frames & rtsp_events & pull_events:
+                messages = pull(subscription)
+                pull_events.update(keys(messages))
+                pull_plates.update(plate_keys(messages))
+                pull_faces.update(face_keys(messages))
+                if frames & rtsp_events & pull_events and plates & rtsp_plates & pull_plates and faces & rtsp_faces & pull_faces:
                     break
             assert frames & rtsp_events & pull_events, "Scene ObjectId/UtcTime did not match RTSP and PullPoint line events"
+            assert plates & rtsp_plates & pull_plates, "LPR scene/event plate, country, confidence, box and UTC did not match"
+            assert faces & rtsp_faces & pull_faces, "Face scene/event ObjectId/UtcTime did not match"
             config.remove(event_node)
             config.find(f"{{{T}}}Analytics").text = "false"
             save()
             quiet(receiver(stack, "ProfileToken0"))
         print("PASS scene TCP/UDP, fixed module discovery, schema/geometry, analytics selection, profile isolation, "
-              "active-session snapshots and identical scene/event ObjectId + UtcTime across RTSP/PullPoint")
+              "active-session snapshots, line ObjectId/UtcTime and LPR plate/country/confidence/box/UtcTime "
+              "across scene/RTSP/PullPoint, downloadable PNG ImageRef and matching base64 Image, independent modules and Face ObjectId/UtcTime")
     finally:
         if subscription:
             call(subscription, "Unsubscribe")
         if rule_created:
             analytics("DeleteRules", '<m:ConfigurationToken>AnalyticsConfig_0</m:ConfigurationToken>'
                       '<m:RuleName>stage5-scene-line</m:RuleName>')
+        if face_rule_created:
+            analytics("DeleteRules", '<m:ConfigurationToken>AnalyticsConfig_0</m:ConfigurationToken>'
+                      '<m:RuleName>scene-face</m:RuleName>')
+        if plate_rule_created:
+            analytics("DeleteRules", '<m:ConfigurationToken>AnalyticsConfig_0</m:ConfigurationToken>'
+                      '<m:RuleName>scene-plate</m:RuleName>')
         media("RemoveConfiguration", '<m:ProfileToken>ProfileToken1</m:ProfileToken>'
               '<m:Configuration><m:Type>Analytics</m:Type></m:Configuration>', True)
         for profile in ("ProfileToken0", "ProfileToken1"):

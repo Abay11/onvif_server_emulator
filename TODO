@@ -6,3 +6,4 @@ Audio output (codecs, output selections)
 Audio input (codecs)
 OSD (Time, PTZ status, Ptz Preset)
 PTZ operations
+Core dump save

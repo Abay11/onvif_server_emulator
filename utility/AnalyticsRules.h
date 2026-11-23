@@ -51,6 +51,7 @@ public:
 	std::deque<Message> SynchronizeFields() const;
 	std::deque<Message> TickFields();
 	std::deque<Message> SamplePlate(const std::string& videoSource, const lpr::Sample& sample);
+	osrv::scene::Frame SupportedScene(const std::string& module = osrv::scene::LprModule) const;
 	std::deque<Message> SampleFace(const std::string& videoSource, const face::Sample& sample);
 	void ForgetObject(const std::string& videoSource, const std::string& objectId);
 	std::vector<std::string> VideoSources() const;
@@ -77,6 +78,8 @@ private:
 	SaveRules save_;
 	Clock clock_;
 	lpr::Images images_;
+	std::vector<osrv::scene::ImagePtr> scene_images_;
+ std::vector<osrv::scene::ImagePtr> face_scene_images_;
 	face::Images faces_;
 	std::shared_ptr<osrv::scene::Buffer> scenes_ = std::make_shared<osrv::scene::Buffer>();
 	mutable std::mutex mutex_;

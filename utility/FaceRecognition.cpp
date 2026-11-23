@@ -15,6 +15,10 @@ std::string ImagePath(size_t index)
 	return "/analytics/face/face-00" + std::to_string(index + 1) + ".png";
 }
 
+std::string SceneImagePath(size_t index)
+{
+ return "/analytics/face/scene/face-00" + std::to_string(index + 1) + ".png";
+}
 Images LoadImages(const std::string& configsPath, const std::string& httpAddress)
 {
 	Images result;
@@ -36,6 +40,8 @@ Images LoadImages(const std::string& configsPath, const std::string& httpAddress
 		image.image.base64.assign(Encoder(image.image.bytes.begin()), Encoder(image.image.bytes.end()));
 		image.image.base64.append((3 - image.image.bytes.size() % 3) % 3, '=');
 		image.uri = base + ImagePath(index);
+ image.preview = lpr::PreviewImage(image.image);
+ image.previewUri = base + SceneImagePath(index);
 		result.push_back(std::move(image));
 	}
 	return result;
@@ -124,10 +130,8 @@ Tree Description()
 														{"EnrollmentID", "xs:string"},
 														{"RefImageUri", "xs:anyURI"}})
 		add("tt:Messages.tt:Data.tt:SimpleItemDescription", name, type);
-	for (auto [name, type] : {std::pair{"ObjectId", "tt:ObjectId"},
-														{"ParentObjectId", "tt:ObjectId"},
-														{"Image", "xs:base64Binary"},
-														{"BoundingBox", "tt:Rectangle"}})
+	for (auto [name, type] :
+			 {std::pair{"ObjectId", "tt:ObjectId"}, {"Image", "xs:base64Binary"}, {"BoundingBox", "tt:Rectangle"}})
 		add("tt:Messages.tt:Data.tt:ElementItemDescription", name, type);
 	desc.put("tt:Messages.tt:ParentTopic", Topic);
 	return desc;

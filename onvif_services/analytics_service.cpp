@@ -13,6 +13,7 @@
 #include "../utility/SoapHelper.h"
 #include "../utility/XmlParser.h"
 
+#include <algorithm>
 #include <boost/algorithm/string/trim.hpp>
 #include <boost/property_tree/json_parser.hpp>
 #include <boost/property_tree/ptree.hpp>
@@ -67,7 +68,7 @@ void fillConfiguration(const pt::ptree& jsonConfigNode, pt::ptree& xmlConfigOut,
 	utility::AnalyticsModulesReaderByConfigToken reader{cfgToken, profiles};
 	pt::ptree analyticsEngine;
 	analytics::fillModules(reader.Modules(), analyticsEngine, "tt");
-	analyticsEngine.add_child("tt:AnalyticsModule", scene::ModuleXml());
+	for (const auto& module : scene::Modules()) analyticsEngine.add_child("tt:AnalyticsModule", scene::ModuleXml(module.name));
 	xmlConfigOut.add_child("tt:AnalyticsEngineConfiguration", analyticsEngine);
 	pt::ptree rules;
 	if (auto configured = jsonConfigNode.get_child_optional("rules"))
@@ -121,9 +122,12 @@ struct RulesHandler : public OnvifRequestBase
 struct SceneDescriptionHandler : public OnvifRequestBase
 {
 	utility::media::MediaProfilesManager& manager;
+	std::shared_ptr<utility::AnalyticsRules> rules;
 	SceneDescriptionHandler(const std::string& operation, const std::map<std::string, std::string>& ns,
-													const std::shared_ptr<pt::ptree>& configs, utility::media::MediaProfilesManager& manager)
-			: OnvifRequestBase(operation, auth::SECURITY_LEVELS::READ_MEDIA, ns, configs), manager(manager)
+													const std::shared_ptr<pt::ptree>& configs, utility::media::MediaProfilesManager& manager,
+													std::shared_ptr<utility::AnalyticsRules> rules)
+			: OnvifRequestBase(operation, auth::SECURITY_LEVELS::READ_MEDIA, ns, configs), manager(manager),
+				rules(std::move(rules))
 	{
 	}
 	void operator()(std::shared_ptr<HttpServer::Response> response, std::shared_ptr<HttpServer::Request> request) override
@@ -140,18 +144,23 @@ struct SceneDescriptionHandler : public OnvifRequestBase
 		{
 			utility::AnalyticsModulesReaderByConfigToken reader(configuration, manager.ReaderWriter()->ConfigsTree());
 			analytics::fillModules(reader.Modules(), result, "tan");
-			result.add_child("tan:AnalyticsModule", scene::ModuleXml());
+			for (const auto& module : scene::Modules())
+				result.add_child("tan:AnalyticsModule", scene::ModuleXml(module.name));
 		}
 		else if (operation == "GetSupportedAnalyticsModules")
 		{
-			pt::ptree description;
-			description.put("<xmlattr>.Name", scene::ModuleType);
-			description.put("<xmlattr>.fixed", true);
-			description.put("tt:Parameters", "");
-			result.add_child("tan:SupportedAnalyticsModules.tt:AnalyticsModuleDescription", description);
+			for (const auto& module : scene::Modules())
+			{
+				pt::ptree description;
+				description.put("<xmlattr>.Name", module.type);
+				description.put("<xmlattr>.fixed", true);
+				description.put("tt:Parameters", "");
+				result.add_child("tan:SupportedAnalyticsModules.tt:AnalyticsModuleDescription", description);
+			}
 		}
 		else
 		{
+			std::string selectedModule;
 			auto elements = exns::find_hierarchy_elements("Envelope.Body." + operation + ".Type", doc);
 			if (!elements.empty())
 			{
@@ -181,7 +190,9 @@ struct SceneDescriptionHandler : public OnvifRequestBase
 				auto colon = type.find(':');
 				auto prefix = colon == std::string::npos ? "" : type.substr(0, colon);
 				auto local = colon == std::string::npos ? type : type.substr(colon + 1);
-				if (bindings[prefix] != scene::ModuleNamespace || local != "SyntheticObjectTracker")
+				auto found = std::find_if(scene::Modules().begin(), scene::Modules().end(),
+																	[&](const auto& module) { return module.type == "osrv:" + local; });
+				if (bindings[prefix] != scene::ModuleNamespace || found == scene::Modules().end())
 				{
 					auto envelope = utility::soap::getEnvelopeTree(ns_);
 					envelope.put("s:Body.s:Fault.s:Code.s:Value", "s:Sender");
@@ -196,11 +207,17 @@ struct SceneDescriptionHandler : public OnvifRequestBase
 					utility::http::fillResponseWithHeaders(*response, out.str(), utility::http::ClientErrorDefaultWriter);
 					return;
 				}
+				selectedModule = found->name;
 			}
-			pt::ptree metadata;
-			metadata.put("<xmlattr>.Type", scene::ModuleType);
-			metadata.add_child("tan:SampleFrame", scene::FrameXml(scene::SampleFrame()));
-			result.add_child("tan:AnalyticsModule", metadata);
+			for (const auto& module : scene::Modules())
+			{
+				if (!selectedModule.empty() && selectedModule != module.name)
+					continue;
+				pt::ptree metadata;
+				metadata.put("<xmlattr>.Type", module.type);
+				metadata.add_child("tan:SampleFrame", scene::FrameXml(rules->SupportedScene(module.name)));
+				result.add_child("tan:AnalyticsModule", metadata);
+			}
 		}
 		auto envelope = utility::soap::getEnvelopeTree(ns_);
 		envelope.add_child("s:Body.tan:" + operation + "Response", result);
@@ -260,7 +277,7 @@ AnalyticsService::AnalyticsService(const std::string& service_uri, const std::st
 {
 	for (const auto* operation : {"GetAnalyticsModules", "GetSupportedAnalyticsModules", "GetSupportedMetadata"})
 		requestHandlers_.push_back(std::make_shared<analytics::SceneDescriptionHandler>(
-				operation, xml_namespaces_, configs_ptree_, *srv->MediaProfilesManager()));
+				operation, xml_namespaces_, configs_ptree_, *srv->MediaProfilesManager(), srv->Rules()));
 	requestHandlers_.push_back(std::make_shared<analytics::GetServiceCapabilitiesHandler>(
 			xml_namespaces_, configs_ptree_, *srv->DeviceService()->Configs()));
 	for (const auto* operation :

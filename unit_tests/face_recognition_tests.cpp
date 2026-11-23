@@ -59,6 +59,23 @@ struct Fixture
 };
 } // namespace
 BOOST_FIXTURE_TEST_SUITE(face_recognition, Fixture)
+BOOST_AUTO_TEST_CASE(scene_identity_timestamp_and_module_match_recognition)
+{
+	call("CreateRules", rule());
+	auto events = sample(0);
+	BOOST_REQUIRE(events.size() == 1u);
+	auto batch = detector.Scenes()->Read("VideoSource0", "AnalyticsConfig_0", 0);
+	BOOST_REQUIRE(batch.frames.size() == 1u);
+	const auto& frame = *batch.frames.front();
+	BOOST_TEST(frame.module == osrv::scene::FaceModule);
+	BOOST_TEST(frame.utc_time == events.front().utc_time);
+	BOOST_TEST(frame.objects.front().classification == "HumanFace");
+	BOOST_TEST(frame.objects.front().id ==
+						 events.front().data_element_items[1].get<std::string>("tt:ObjectId.<xmlattr>.ObjectId"));
+	auto xml = osrv::scene::FrameXml(frame);
+	BOOST_TEST(xml.get<std::string>("tt:Object.tt:Appearance.tt:ImageRef") == images.front().previewUri);
+	BOOST_TEST(xml.get<double>("tt:Object.tt:Appearance.tt:Shape.tt:BoundingBox.<xmlattr>.left") == -0.45);
+}
 BOOST_AUTO_TEST_CASE(contract_images_and_serialization)
 {
 	bool found = false;
@@ -69,7 +86,7 @@ BOOST_AUTO_TEST_CASE(contract_images_and_serialization)
 			found = true;
 			BOOST_TEST(!desc.get<bool>("tt:Messages.<xmlattr>.IsProperty"));
 			BOOST_TEST(desc.get<std::string>("tt:Messages.tt:ParentTopic") == utility::face::Topic);
-			BOOST_TEST(desc.get_child("tt:Messages.tt:Data").count("tt:ElementItemDescription") == 4u);
+			BOOST_TEST(desc.get_child("tt:Messages.tt:Data").count("tt:ElementItemDescription") == 3u);
 		}
 	BOOST_TEST(found);
 	BOOST_TEST(call("GetRuleOptions", "", true).count("tan:RuleOptions") == 2u);
@@ -87,7 +104,7 @@ BOOST_AUTO_TEST_CASE(contract_images_and_serialization)
 		BOOST_TEST(msg.data_name == "Likelihood");
 		BOOST_TEST(std::stod(msg.data_value) == 0.98);
 		BOOST_TEST(msg.data_simple_items.size() == 4u);
-		BOOST_TEST(msg.data_element_items.size() == 4u);
+		BOOST_TEST(msg.data_element_items.size() == 3u);
 		ids.insert(msg.data_simple_items[0].second);
 		uris.insert(msg.data_simple_items[2].second);
 		BOOST_TEST(msg.data_simple_items[2].second == images[i].uri);
@@ -98,12 +115,11 @@ BOOST_AUTO_TEST_CASE(contract_images_and_serialization)
 		binaries.insert(images[i].image.bytes);
 		BOOST_TEST(msg.data_element_items[0].get<double>("tt:BoundingBox.<xmlattr>.left") == -0.45);
 		BOOST_TEST(msg.data_element_items[1].get<int>("tt:ObjectId.<xmlattr>.ObjectId") == i + 1);
-		BOOST_TEST(msg.data_element_items[2].get<int>("tt:ParentObjectId.<xmlattr>.ObjectId") == i + 101);
-		BOOST_CHECK(msg.data_element_items[3].get<std::string>("tt:Image") == images[i].image.base64);
+		BOOST_CHECK(msg.data_element_items[2].get<std::string>("tt:Image") == images[i].image.base64);
 		auto serialized = osrv::event::serialize_notification_messages(events, "subscription");
 		const auto& data = serialized.get_child("wsnt:NotificationMessage.wsnt:Message.tt:Message.tt:Data");
 		BOOST_TEST(data.count("tt:SimpleItem") == 5u);
-		BOOST_TEST(data.count("tt:ElementItem") == 4u);
+		BOOST_TEST(data.count("tt:ElementItem") == 3u);
 	}
 	BOOST_TEST(ids.size() == 3u);
 	BOOST_TEST(uris.size() == 3u);
@@ -118,13 +134,13 @@ BOOST_AUTO_TEST_CASE(modes_threshold_persistence_and_delete)
 	BOOST_TEST(sample(0, 0.97).empty());
 	auto events = sample();
 	BOOST_REQUIRE_EQUAL(events.size(), 1u);
-	BOOST_TEST(events.front().data_element_items.size() == 3u);
+	BOOST_TEST(events.front().data_element_items.size() == 2u);
 	BOOST_TEST(events.front().data_simple_items.size() == 4u);
 	call("ModifyRules", rule(simple("IncludeImage", "")));
 	events = sample();
 	BOOST_REQUIRE_EQUAL(events.size(), 1u);
 	BOOST_TEST(events.front().data_simple_items.size() == 3u);
-	BOOST_TEST(events.front().data_element_items.size() == 3u);
+	BOOST_TEST(events.front().data_element_items.size() == 2u);
 	BOOST_TEST(call("GetRules").get<std::string>("tan:Rule.<xmlattr>.Type") == utility::face::Type);
 	utility::AnalyticsRules restored(
 			profiles, [](const auto&, const auto&) {}, std::chrono::system_clock::now, {}, images);

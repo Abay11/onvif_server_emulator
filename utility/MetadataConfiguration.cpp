@@ -277,14 +277,24 @@ std::shared_ptr<const Settings> Compile(const pt::ptree& config)
 	settings->analytics = config.get<bool>("Analytics", false);
 	if (auto modules = config.get_child_optional("AnalyticsModules"))
 	{
-		settings->tracker = false;
+		settings->modules.clear();
 		for (const auto& [_, module] : *modules)
 		{
-			if (module.data() != scene::ModuleName)
-				throw Fault("ConfigModify", "Unsupported analytics metadata module");
-			settings->tracker = true;
+			if (module.data() == "SyntheticObjectTracker")
+				for (const auto& entry : scene::Modules())
+					settings->modules.insert(entry.name);
+			else
+			{
+				auto supported = std::find_if(scene::Modules().begin(), scene::Modules().end(),
+																			[&](const auto& entry) { return entry.name == module.data(); });
+				if (supported == scene::Modules().end())
+					throw Fault("ConfigModify", "Unsupported analytics metadata module");
+				settings->modules.insert(supported->name);
+			}
 		}
+		settings->tracker = settings->modules.contains(scene::ModuleName);
 	}
+
 	std::ostringstream identity;
 	pt::write_json(identity, config);
 	settings->identity = identity.str();
@@ -407,9 +417,10 @@ pt::ptree ConfigurationXml(const pt::ptree& config, const pt::ptree& profiles)
 	if (auto selected = config.get_child_optional("AnalyticsModules"))
 	{
 		pt::ptree engine;
-		for (const auto& [_, name] : *selected)
-			if (name.data() == scene::ModuleName)
-				engine.add_child("tt:AnalyticsModule", scene::ModuleXml());
+		auto compiled = Compile(config);
+		for (const auto& entry : scene::Modules())
+			if (compiled->modules.contains(entry.name))
+				engine.add_child("tt:AnalyticsModule", scene::ModuleXml(entry.name));
 		out.add_child("tt:AnalyticsEngineConfiguration", engine);
 	}
 	return out;
@@ -721,13 +732,21 @@ pt::ptree Control::Execute(const std::string& operation, const std::string& xml,
 				auto moduleNs = scope;
 				bindings(module, moduleNs);
 				child(module, "Parameters");
+				const auto name = module.get<std::string>("<xmlattr>.Name", "");
+				const auto type = expanded(module.get<std::string>("<xmlattr>.Type", ""), moduleNs);
+				const bool legacy = name == "SyntheticObjectTracker" &&
+														type == std::string("{") + scene::ModuleNamespace + "}SyntheticObjectTracker";
+				auto found = std::find_if(scene::Modules().begin(), scene::Modules().end(), [&](const auto& entry) {
+					return entry.name == name &&
+								 type == std::string("{") + scene::ModuleNamespace + "}" + entry.type.substr(entry.type.find(':') + 1);
+				});
 				if (expanded(key, moduleNs) != std::string("{") + Schema + "}AnalyticsModule" ||
-						module.get<std::string>("<xmlattr>.Name", "") != scene::ModuleName ||
-						expanded(module.get<std::string>("<xmlattr>.Type", ""), moduleNs) !=
-								std::string("{") + scene::ModuleNamespace + "}SyntheticObjectTracker" ||
-						!selected.empty())
+						(!legacy && found == scene::Modules().end()))
 					throw Fault("ConfigModify", "Unsupported analytics metadata module selection");
-				selected.push_back({"", pt::ptree(scene::ModuleName)});
+				if (std::any_of(selected.begin(), selected.end(),
+												[&](const auto& entry) { return entry.second.data() == name; }))
+					throw Fault("ConfigModify", "Duplicate analytics metadata module selection");
+				selected.push_back({"", pt::ptree(name)});
 			}
 			updated.add_child("AnalyticsModules", selected);
 		}

@@ -811,9 +811,10 @@
             "oneOf": [
               {
                 "type": "array",
-                "maxItems": 1,
+                "maxItems": 3,
+                "uniqueItems": true,
                 "items": {
-                  "const": "SyntheticObjectTracker"
+                  "enum": ["ObjectTracker", "LicensePlateRecognition", "FaceRecognition", "SyntheticObjectTracker"]
                 }
               },
               {

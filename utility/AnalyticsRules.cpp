@@ -210,9 +210,15 @@ Tree readRule(const Tree& xml, const Tree& src, const Tree* previous)
 }
 } // namespace
 
-AnalyticsRules::AnalyticsRules(const Tree& profiles, SaveRules save, Clock clock, lpr::Images images, face::Images faces)
-		: profiles_(profiles), save_(std::move(save)), clock_(std::move(clock)), images_(std::move(images)), faces_(std::move(faces))
+AnalyticsRules::AnalyticsRules(const Tree& profiles, SaveRules save, Clock clock, lpr::Images images,
+															 face::Images faces)
+		: profiles_(profiles), save_(std::move(save)), clock_(std::move(clock)), images_(std::move(images)),
+			faces_(std::move(faces))
 {
+	for (const auto& pair : images_)
+		scene_images_.push_back(std::make_shared<const osrv::scene::Image>(pair.sceneUri, pair.scene.base64));
+	for (const auto& image : faces_)
+		face_scene_images_.push_back(std::make_shared<const osrv::scene::Image>(image.previewUri, image.preview.base64));
 	size_t count = 0;
 	for (auto& [_, cfg] : profiles_.get_child("Analytics"))
 	{
@@ -769,6 +775,35 @@ std::deque<AnalyticsRules::Message> AnalyticsRules::TickFields()
 	return result;
 }
 
+osrv::scene::Frame AnalyticsRules::SupportedScene(const std::string& module) const
+{
+	auto frame = osrv::scene::SampleFrame(scene_images_.empty() ? nullptr : scene_images_.front());
+	frame.module = module;
+	if (module == osrv::scene::ModuleName)
+	{
+		frame.objects.resize(1);
+		frame.image_object_id.clear();
+	}
+	else if (module == osrv::scene::FaceModule)
+	{
+		frame.objects = {
+				{"5", -0.55, 0.55, "HumanFace", {}, face_scene_images_.empty() ? nullptr : face_scene_images_.front()}};
+		frame.image_object_id = "5";
+	}
+	else
+	{
+		frame.objects.erase(frame.objects.begin());
+		osrv::scene::Object vehicle{"4", -0.4, 0.6, "Vehicle"};
+		const auto& sample = lpr::TestVehicles().front();
+		vehicle.vehicle =
+				osrv::scene::Vehicle{sample.vehicleType,		 sample.vehicleBrand,		 sample.vehicleModel,		sample.speed,
+														 sample.vehicleColor[0], sample.vehicleColor[1], sample.vehicleColor[2]};
+		frame.objects.front().parent = vehicle.id;
+		frame.objects.push_back(vehicle);
+	}
+	return frame;
+}
+
 std::deque<AnalyticsRules::Message> AnalyticsRules::SamplePlate(const std::string& videoSource,
 																																const lpr::Sample& sample)
 {
@@ -784,9 +819,36 @@ std::deque<AnalyticsRules::Message> AnalyticsRules::SamplePlate(const std::strin
 			 sample.direction != "Departing") ||
 			(sample.vehicleType != "Car" && sample.vehicleType != "Bus" && sample.vehicleType != "Truck" &&
 			 sample.vehicleType != "Bicycle" && sample.vehicleType != "Motorcycle") ||
-			(sample.location != "Front" && sample.location != "Rear"))
+			(sample.location != "Front" && sample.location != "Rear") ||
+			std::any_of(
+					sample.vehicleColor.begin(), sample.vehicleColor.end(),
+					[](int component) { return component < 0 || component > 255; }))
 		return result;
 	auto now = clock_();
+	auto micros = std::chrono::duration_cast<std::chrono::microseconds>(now.time_since_epoch()).count();
+	auto utc = datetime::posix_datetime_to_utc(boost::posix_time::ptime(boost::gregorian::date(1970, 1, 1)) +
+																						 boost::posix_time::microseconds(micros));
+	std::vector<std::string> configurations;
+	for (const auto& [_, cfg] : profiles_.get_child("Analytics"))
+		if (source(profiles_, cfg.get<std::string>("token")).get<std::string>("SourceToken") == videoSource)
+			configurations.push_back(cfg.get<std::string>("token"));
+	// Scene observations precede rule filtering and event throttling. Length-prefix the country to keep IDs unambiguous.
+	if (!configurations.empty())
+	{
+		const auto key = "lpr:" + std::to_string(sample.country.size()) + ":" + sample.country + sample.plate;
+		auto vehicleImage = images_.empty()
+														? nullptr
+														: std::make_shared<const osrv::scene::Image>(images_.at(sample.imageIndex).vehicleUri, "");
+		auto parent =
+				scenes_->Sample(videoSource, configurations, key + ":vehicle", sample.x, sample.y, utc, "Vehicle", {},
+												vehicleImage, osrv::scene::LprModule,
+												osrv::scene::Vehicle{sample.vehicleType, sample.vehicleBrand, sample.vehicleModel, sample.speed,
+																						 sample.vehicleColor[0], sample.vehicleColor[1], sample.vehicleColor[2]});
+		scenes_->Sample(
+				videoSource, configurations, key, sample.x, sample.y, utc, "LicensePlate",
+				osrv::scene::LicensePlate{sample.plate, sample.country, sample.likelihood, sample.width, sample.height},
+				scene_images_.empty() ? nullptr : scene_images_.at(sample.imageIndex), osrv::scene::LprModule, {}, parent);
+	}
 	for (const auto& [_, cfg] : profiles_.get_child("Analytics"))
 	{
 		auto token = cfg.get<std::string>("token");
@@ -828,7 +890,7 @@ std::deque<AnalyticsRules::Message> AnalyticsRules::SamplePlate(const std::strin
 			Message msg;
 			msg.analytics_configuration = cfg.get<std::string>("token");
 			msg.topic = lpr::Topic;
-			msg.utc_time = datetime::system_utc_datetime();
+			msg.utc_time = utc;
 			msg.source_item_descriptions = {{"VideoSource", videoSource}, {"Rule", rule.get<std::string>("Name")}};
 			msg.data_name = "Likelihood";
 			msg.data_value = std::to_string(sample.likelihood);
@@ -882,9 +944,21 @@ std::deque<AnalyticsRules::Message> AnalyticsRules::SampleFace(const std::string
 {
 	std::lock_guard lock(mutex_);
 	std::deque<Message> result;
-	if (!face::ImagesReady(faces_) || sample.imageIndex >= faces_.size() ||
-			!std::isfinite(sample.likelihood) || sample.likelihood < 0 || sample.likelihood > 1)
+	if (!face::ImagesReady(faces_) || sample.imageIndex >= faces_.size() || !std::isfinite(sample.likelihood) ||
+			sample.likelihood < 0 || sample.likelihood > 1)
 		return result;
+	auto now = clock_();
+	auto micros = std::chrono::duration_cast<std::chrono::microseconds>(now.time_since_epoch()).count();
+	auto utc = datetime::posix_datetime_to_utc(boost::posix_time::ptime(boost::gregorian::date(1970, 1, 1)) +
+																						 boost::posix_time::microseconds(micros));
+	std::vector<std::string> configurations;
+	for (const auto& [_, cfg] : profiles_.get_child("Analytics"))
+		if (source(profiles_, cfg.get<std::string>("token")).get<std::string>("SourceToken") == videoSource)
+			configurations.push_back(cfg.get<std::string>("token"));
+	std::string objectId;
+	if (!configurations.empty())
+		objectId = scenes_->Sample(videoSource, configurations, "face:" + std::to_string(sample.imageIndex), 0, 0.125, utc,
+															 "HumanFace", {}, face_scene_images_.at(sample.imageIndex), osrv::scene::FaceModule);
 	const auto& image = faces_[sample.imageIndex];
 	static constexpr const char* labels[] = {"Whitelisted", "Blacklisted", "Temporary"};
 	for (const auto& [_, cfg] : profiles_.get_child("Analytics"))
@@ -898,12 +972,13 @@ std::deque<AnalyticsRules::Message> AnalyticsRules::SampleFace(const std::string
 			Message msg;
 			msg.analytics_configuration = cfg.get<std::string>("token");
 			msg.topic = face::Topic;
-			msg.utc_time = datetime::system_utc_datetime();
+			msg.utc_time = utc;
 			msg.source_item_descriptions = {{"VideoSource", videoSource}, {"Rule", rule.get<std::string>("Name")}};
 			msg.data_name = "Likelihood";
 			msg.data_value = std::to_string(sample.likelihood);
 			msg.data_simple_items = {{"EnrollmentID", "TEST-PERSON-00" + std::to_string(sample.imageIndex + 1)},
-					{"Label", labels[sample.imageIndex]}, {"RefImageUri", image.uri}};
+															 {"Label", labels[sample.imageIndex]},
+															 {"RefImageUri", image.uri}};
 			auto element = [&](const std::string& name, const Tree& payload) {
 				Tree value;
 				value.put("<xmlattr>.Name", name);
@@ -916,10 +991,8 @@ std::deque<AnalyticsRules::Message> AnalyticsRules::SampleFace(const std::string
 			box.put("<xmlattr>.bottom", -0.4);
 			box.put("<xmlattr>.top", 0.65);
 			element("BoundingBox", box);
-			id.put("<xmlattr>.ObjectId", sample.imageIndex + 1);
+			id.put("<xmlattr>.ObjectId", objectId);
 			element("ObjectId", id);
-			id.put("<xmlattr>.ObjectId", sample.imageIndex + 101);
-			element("ParentObjectId", id);
 			auto mode = rule.get<std::string>("IncludeImage");
 			if (!mode.empty())
 			{

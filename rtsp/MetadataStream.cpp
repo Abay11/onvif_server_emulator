@@ -172,22 +172,25 @@ private:
 		if (batch.needs_synchronization)
 			synchronize_.store(true);
 		std::vector<scene::Frame> frames;
-		if (scenes_ && settings_ && settings_->analytics && settings_->tracker)
+		if (scenes_ && settings_ && settings_->analytics && !settings_->modules.empty())
 		{
 			auto batch = scenes_->Read(settings_->video_source, settings_->analytics_configuration, scene_cursor_);
 			if (batch.skipped)
 				logger_.Warn("RTSP scene consumer skipped old samples; publishing a current snapshot");
 			for (const auto& sample : batch.frames)
 			{
+				scene_cursor_ = sample->sequence;
+				if (!settings_->modules.contains(sample->module))
+					continue;
 				auto frame = *sample;
 				std::set<std::string> current;
 				for (const auto& object : frame.objects)
 					current.insert(object.id);
 				frame.deleted.clear();
-				for (const auto& id : scene_objects_)
+				for (const auto& id : scene_objects_[frame.module])
 					if (!current.contains(id))
 						frame.deleted.push_back(id);
-				scene_objects_ = std::move(current);
+				scene_objects_[frame.module] = std::move(current);
 				scene_cursor_ = frame.sequence;
 				frames.push_back(std::move(frame));
 			}
@@ -198,7 +201,7 @@ private:
 
 	std::shared_ptr<scene::ISource> scenes_;
 	std::uint64_t scene_cursor_ = 0;
-	std::set<std::string> scene_objects_;
+	std::map<std::string, std::set<std::string>> scene_objects_;
 	std::shared_ptr<const metadata::Settings> settings_;
 	GstElement* element_;
 	GstElement* appsrc_;

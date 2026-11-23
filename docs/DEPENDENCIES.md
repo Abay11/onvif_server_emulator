@@ -36,7 +36,7 @@ a GPL codec library.
 
 | Component | Where used | License findings |
 | --- | --- | --- |
-| GStreamer base/good/x plugins | Test video/audio sources, converters, resampling, queues, RTP payloaders, `alawenc`, `mulawenc`, `timeoverlay` | Primarily LGPL-2.1-or-later plus per-file permissive terms; inspect the exact package notices. `gstreamer1.0-x` supplies the Pango overlay plugin. |
+| GStreamer base/good/x plugins | Test video/audio sources, converters, resampling, queues, RTP payloaders, `alawenc`, `mulawenc`, `timeoverlay`; `pngdec`, `videoscale`, `pngenc` for startup scene previews | Primarily LGPL-2.1-or-later plus per-file permissive terms; inspect the exact package notices. `gstreamer1.0-x` supplies the Pango overlay plugin. |
 | x264 / `x264enc` (ugly) | Hardcoded high/low live video and replay in `RtspServer.cpp`, including file-backed streams | Debian `libx264-164` uses GPL-2.0-or-later for its main code. Runtime version `0.164.3108+git31e19f9`. A separate upstream commercial license, if obtained, does not automatically cover Debian's binary or other GPL dependencies. |
 | gst-libav and FFmpeg | `avenc_aac`, `avenc_g726` in `utility/AudioSourceReader.cpp`; file playback through `decodebin` can load additional decoders | The inspected FFmpeg 7.1.5 library reports **GPL version 2 or later**, and `avcodec_configuration()` includes `--enable-gpl`, `--enable-libx264` and `--enable-libx265`. Do not label this distribution LGPL-only based on FFmpeg's default upstream license. See [FFmpeg's explanation](https://ffmpeg.org/legal.html). |
 | GStreamer bad plugins | Replay `rtponviftimestamp` and extra installed plugins | Mixed dependency obligations. Removing `ugly` alone does not eliminate GPL components in the rest of the image. |
