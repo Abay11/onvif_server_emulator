@@ -232,6 +232,8 @@ listener follows the same protocol selection. The WebUI Network configuration
 section edits these settings separately from media configuration.
 
 URLs are built through `HttpAddress()`, `RtspAddress()`, and `PullPointAddress()`.
+Device GetServices uses `PlainHttpAddress()` or `HttpsAddress()` according to the
+actual request transport, independently of the advertised web preference.
 PullPoint on the shared HTTP listener uses the advertised HTTP endpoint; a separate
 listener uses its advertised port or `PullPoint.Port`. Advertised settings and
 forwarding simulation do not create NAT or firewall rules.

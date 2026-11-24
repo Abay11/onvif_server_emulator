@@ -57,12 +57,27 @@ transport security.
 
 ## Advertised URLs and deployment
 
-`advertised.web_scheme` selects the protocol for service, discovery, snapshot,
-analytics image and subscription URLs:
+`advertised.web_scheme` selects the preferred protocol for discovery, legacy
+GetCapabilities, snapshot, analytics image and subscription URLs:
 
 - `auto` (default): HTTP when enabled, otherwise HTTPS.
 - `http`: use HTTP; the HTTP listener must be enabled.
 - `https`: use HTTPS, including while HTTP remains enabled; the HTTPS listener must be enabled.
+
+Device `GetServices` selects its XAddr scheme from the actual request transport:
+HTTP requests return HTTP addresses; HTTPS requests return HTTPS addresses, even
+when the advertised preference differs. The corresponding `advertised.http_port`
+or `advertised.https_port` override still applies; HTTP also retains its legacy
+forwarding simulation fallback. This prevents HTTPS service discovery from
+sending a client back to an HTTP Media2 endpoint. The configured advertised IPv4
+is retained. Forwarding headers do not select the transport.
+
+The transport rule follows [ONVIF Core 25.12 §8.1.2.2](https://www.onvif.org/specs/2512/ONVIF-Core-Spec-v2512.pdf)
+and the Service/XAddr definition in the
+[Device ver10 WSDL](https://www.onvif.org/ver10/device/wsdl/devicemgmt.wsdl), with
+[ONVIF ver10 schema](https://www.onvif.org/ver10/schema/onvif.xsd) imports. The
+GetServices wire structure and access class PRE_AUTH are unchanged. Validation
+uses the existing pinned 24.12 schema cache, whose relevant types are unchanged.
 
 Select **Advertised web protocol → HTTPS** in Network configuration to announce
 HTTPS endpoints through Discovery while keeping both listeners available.
@@ -104,3 +119,31 @@ TLS certificate verification, separate TLS PullPoint and invalid configuration r
 CTest and `unit_tests/network_smoke.py` with the usual authentication-disabled
 copy to check discovery and TCP/UDP media. Windows/WSL and VMS acceptance still
 requires the actual deployment described in [WSL2.md](WSL2.md).
+
+## Device GetNetworkProtocols
+
+`GetNetworkProtocols` is implemented at `/onvif/device_service` with access class
+`READ_SYSTEM`. It accepts an empty Device request and returns three
+`tds:NetworkProtocols` entries: HTTP, HTTPS and RTSP. Each entry contains
+`tt:Name`, `tt:Enabled` and `tt:Port`, in schema order. HTTP/HTTPS report the active
+process's startup enable flags, including disabled listeners; RTSP is always
+enabled. Ports come from `addresses.http_port`, `addresses.https_port` and
+`addresses.rtsp_port`. These are the main protocol listener settings, independent
+of advertised/NAT port overrides, the selected advertised web scheme, and the
+separate service-specific PullPoint endpoint. Saved settings take effect after
+restart. `SetNetworkProtocols` remains unimplemented; use configuration and restart.
+
+Wrong operation namespaces, parameters, text or non-namespace attributes are
+rejected with a Sender/InvalidArgVal SOAP fault. Standard authentication and
+READ_SYSTEM authorization apply; there are no operation-specific faults.
+
+Contract: [ONVIF Core 26.06 §8.2.12](https://www.onvif.org/specs/core/ONVIF-Core-Specification.pdf),
+[Device ver10 WSDL](https://www.onvif.org/ver10/device/wsdl/devicemgmt.wsdl)
+(embedded schema version 26.06, action
+`http://www.onvif.org/ver10/device/wsdl/GetNetworkProtocols`) and
+[ONVIF ver10 XSD](https://www.onvif.org/ver10/schema/onvif.xsd), types
+NetworkProtocol/NetworkProtocolType. The optional `--contract-dir /contract` flag
+on `unit_tests/https_smoke.py` validates representative GetNetworkProtocols and
+GetServices requests/responses and SOAP faults offline against the existing pinned ONVIF 24.12 cache. These operation
+and data types are unchanged in the referenced contract. See
+[cache preparation](../experiments/rtsp_metadata/README.md#pinned-contract).

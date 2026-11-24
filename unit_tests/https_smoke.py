@@ -11,14 +11,18 @@ import shutil
 import socket
 import ssl
 import subprocess
+import sys
 import tempfile
 import time
 import uuid
 import urllib.request
+from urllib.parse import urlsplit
 import xml.etree.ElementTree as ET
 
 ROOT = Path(__file__).resolve().parents[1]
 SOAP = 'http://www.w3.org/2003/05/soap-envelope'
+NETWORK_SCHEMA = None
+FAULT_SCHEMA = None
 
 
 def request(scheme, port, path, body=None, headers=None, context=None):
@@ -35,10 +39,19 @@ def request(scheme, port, path, body=None, headers=None, context=None):
 def soap(scheme, port, service, operation, body='', context=None, expected=200):
     ns = {'device': 'http://www.onvif.org/ver10/device/wsdl', 'event': 'http://www.onvif.org/ver10/events/wsdl', 'media': 'http://www.onvif.org/ver10/media/wsdl', 'media2': 'http://www.onvif.org/ver20/media/wsdl'}[service]
     xml = f'<s:Envelope xmlns:s="{SOAP}" xmlns:t="{ns}"><s:Body><t:{operation}>{body}</t:{operation}></s:Body></s:Envelope>'
+    if NETWORK_SCHEMA is not None and operation in ('GetNetworkProtocols', 'GetServices') and expected == 200:
+        NETWORK_SCHEMA.validate(ET.tostring(ET.fromstring(xml).find(f'{{{SOAP}}}Body')[0]))
     status, _, data = request(scheme, port, f'/onvif/{service}_service', xml,
                               {'Content-Type': 'application/soap+xml'}, context)
     assert status == expected, (status, data)
-    return ET.fromstring(data)
+    result = ET.fromstring(data)
+    if NETWORK_SCHEMA is not None and operation in ('GetNetworkProtocols', 'GetServices'):
+        if expected == 200:
+            NETWORK_SCHEMA.validate(ET.tostring(result.find(f'{{{SOAP}}}Body')[0]))
+        else:
+            from lxml import etree
+            FAULT_SCHEMA.assertValid(etree.fromstring(data))
+    return result
 
 
 def values(tree, name):
@@ -60,10 +73,30 @@ def exercise(http, https, https_port, context, network=False, browser=False, pul
             continue
         status, _, data = request(protocol, listen_port, '/snapshot.jpeg', context=context)
         assert status == 200 and data.startswith(b'\xff\xd8')
-        services = soap(protocol, listen_port, 'device', 'GetServices', context=context)
-        assert values(services, 'XAddr') and all(addr.startswith(base) for addr in values(services, 'XAddr'))
+        service_base = f'{protocol}://127.0.0.1:{listen_port}/'
+        for include in ('false', 'true'):
+            services = soap(protocol, listen_port, 'device', 'GetServices',
+                            f'<t:IncludeCapability>{include}</t:IncludeCapability>', context=context)
+            assert values(services, 'XAddr') and all(addr.startswith(service_base) for addr in values(services, 'XAddr'))
+        media2 = next(node for node in services.iter() if node.tag.endswith('}Service') and
+                      values(node, 'Namespace') == ['http://www.onvif.org/ver20/media/wsdl'])
+        address = urlsplit(values(media2, 'XAddr')[0])
+        payload = (f'<s:Envelope xmlns:s="{SOAP}" xmlns:m="http://www.onvif.org/ver20/media/wsdl">'
+                   '<s:Body><m:GetProfiles><m:Type>VideoSource</m:Type><m:Type>VideoEncoder</m:Type>'
+                   '</m:GetProfiles></s:Body></s:Envelope>')
+        status, _, profiles = request(address.scheme, address.port, address.path, payload,
+                                       {'Content-Type': 'application/soap+xml'}, context)
+        assert status == 200 and b'ProfileToken0' in profiles, (status, profiles)
         capabilities = soap(protocol, listen_port, 'device', 'GetCapabilities', context=context)
         assert values(capabilities, 'XAddr') and all(addr.startswith(base) for addr in values(capabilities, 'XAddr'))
+        protocols = soap(protocol, listen_port, 'device', 'GetNetworkProtocols', context=context)
+        entries = [node for node in protocols.iter() if node.tag.endswith('}NetworkProtocols')]
+        assert len(entries) == 3
+        assert [(values(node, 'Name')[0], values(node, 'Enabled')[0], int(values(node, 'Port')[0]))
+                for node in entries] == [('HTTP', str(http).lower(), 8080),
+                                         ('HTTPS', str(https).lower(), https_port), ('RTSP', 'true', 8554)]
+        fault = soap(protocol, listen_port, 'device', 'GetNetworkProtocols', '<t:Unexpected/>', context=context, expected=400)
+        assert 'ter:InvalidArgVal' in values(fault, 'Value')
         for media in ('media', 'media2'):
             snapshot = soap(protocol, listen_port, media, 'GetSnapshotUri', '<t:ProfileToken>ProfileToken0</t:ProfileToken>', context=context)
             assert values(snapshot, 'Uri') == [base + 'snapshot.jpeg']
@@ -168,7 +201,22 @@ def digest_check(context):
                                              urllib.request.HTTPSHandler(context=context))
         with opener.open(urllib.request.Request(url, xml, {'Content-Type': 'application/soap+xml'}), timeout=5) as result:
             assert result.status == 200 and b'ProfileToken0' in result.read()
-    print('PASS HTTP and HTTPS: Digest challenge and authenticated SOAP request')
+    services = soap('https', 8443, 'device', 'GetServices',
+                    '<t:IncludeCapability>false</t:IncludeCapability>', context=context)
+    media2 = next(node for node in services.iter() if node.tag.endswith('}Service') and
+                  values(node, 'Namespace') == ['http://www.onvif.org/ver20/media/wsdl'])
+    url = values(media2, 'XAddr')[0]
+    assert url == 'https://127.0.0.1:8443/onvif/media2_service', url
+    xml = (f'<s:Envelope xmlns:s="{SOAP}" xmlns:m="http://www.onvif.org/ver20/media/wsdl">'
+           '<s:Body><m:GetProfiles><m:Type>VideoSource</m:Type><m:Type>VideoEncoder</m:Type>'
+           '</m:GetProfiles></s:Body></s:Envelope>').encode()
+    passwords = urllib.request.HTTPPasswordMgrWithDefaultRealm()
+    passwords.add_password(None, url, 'a', 'a1')
+    opener = urllib.request.build_opener(urllib.request.HTTPDigestAuthHandler(passwords),
+                                         urllib.request.HTTPSHandler(context=context))
+    with opener.open(urllib.request.Request(url, xml, {'Content-Type': 'application/soap+xml'}), timeout=5) as result:
+        assert result.status == 200 and b'ProfileToken0' in result.read()
+    print('PASS HTTP/HTTPS Digest and HTTPS GetServices -> Media2 GetProfiles without transport downgrade')
 
 
 def reboot_check(context):
@@ -196,7 +244,8 @@ def reboot_check(context):
         raise AssertionError('New HTTPS port did not start after restart')
     stopped(8080); stopped(9443)
     assert request('https', 10443, '/admin/api/status', headers=headers, context=context)[0] == 401
-    services = soap('https', 10443, 'device', 'GetServices', context=context)
+    services = soap('https', 10443, 'device', 'GetServices',
+                    '<t:IncludeCapability>false</t:IncludeCapability>', context=context)
     assert all(addr.startswith('https://127.0.0.1:10443/') for addr in values(services, 'XAddr'))
     print('PASS HTTPS save/restart: new port, updated advertised URLs, expired session')
 
@@ -241,7 +290,29 @@ def main():
     parser.add_argument('--binary', type=Path, default=Path('build/main'))
     parser.add_argument('--network', action='store_true')
     parser.add_argument('--browser', action='store_true')
+    parser.add_argument('--contract-dir', type=Path, help='Validate Device network/service responses using pinned ONVIF schemas')
     args = parser.parse_args()
+    if args.contract_dir:
+        sys.path.insert(0, str(ROOT / 'experiments/rtsp_metadata'))
+        from contract import checked_imports, verify_repository, load_schema
+        from lxml import etree
+        from xmlschema import XMLSchema11
+        root = args.contract_dir.resolve()
+        verify_repository(root / 'specs')
+        path = root / 'specs/wsdl/ver10/device/wsdl/devicemgmt.wsdl'
+        wsdl = etree.parse(str(path), etree.XMLParser(no_network=True, resolve_entities=False))
+        global NETWORK_SCHEMA, FAULT_SCHEMA
+        NETWORK_SCHEMA = XMLSchema11(
+            etree.tostring(wsdl.find('.//{http://www.w3.org/2001/XMLSchema}schema')),
+            base_url=path.parent.as_uri() + '/', allow='local', use_fallback=False,
+            uri_mapper={url: str(file.resolve()) for url, file in checked_imports(root).items()}, validation='lax')
+        # Permit only the known schema-document annotation error in the pinned Device WSDL.
+        # Payloads are still validated strictly, as in system_reboot_smoke.py.
+        for error in NETWORK_SCHEMA.all_errors:
+            if (error.path != '/xs:schema/xs:simpleType[2]/xs:annotation' or
+                    error.message != 'character data between child elements not allowed'):
+                raise error
+        FAULT_SCHEMA = load_schema(root, resource_faults=True)
     binary = str(args.binary.resolve())
     for mode in ('both', 'prefer-https', 'prefer-https-pullpoint', 'https-only', 'https-pullpoint', 'http-only', 'custom-certificate', 'authentication', 'bind-conflict', 'disabled', 'same-port', 'missing-certificate', 'disabled-scheme'):
         with tempfile.TemporaryDirectory(prefix='https-smoke-') as directory:

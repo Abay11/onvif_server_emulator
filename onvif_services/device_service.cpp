@@ -221,9 +221,9 @@ struct GetRelayOutputsHandler : public OnvifRequestBase
 struct GetServicesHandler : public OnvifRequestBase
 {
 	GetServicesHandler(const std::map<std::string, std::string>& xs, const std::shared_ptr<pt::ptree>& configs,
-		const std::shared_ptr<IOnvifServer>& srv)
-		: OnvifRequestBase(GetServices, auth::SECURITY_LEVELS::PRE_AUTH, xs, configs)
-		, ipv4_address_(srv->ServerAddress()), server_config_(srv->GetServerConfigs())
+										 const std::shared_ptr<IOnvifServer>& srv)
+			: OnvifRequestBase(GetServices, auth::SECURITY_LEVELS::PRE_AUTH, xs, configs),
+				server_config_(srv->GetServerConfigs())
 	{
 	}
 
@@ -238,7 +238,9 @@ struct GetServicesHandler : public OnvifRequestBase
 
 		auto envelope_tree = utility::soap::getEnvelopeTree(ns_);
 
-		auto ipv4_bind = ipv4_address_;
+		// GetServices addresses follow the actual request transport, independently of discovery preference.
+		const auto address =
+				HttpServer::IsSecure(request) ? server_config_->HttpsAddress() : server_config_->PlainHttpAddress();
 
 		auto services_config = service_configs_->get_child(GetServices);
 		pt::ptree services_node;
@@ -252,7 +254,7 @@ struct GetServicesHandler : public OnvifRequestBase
 			pt::ptree xml_service_node;
 			const auto& ns = node.get<std::string>("namespace");
 			xml_service_node.put("tds:Namespace", ns);
-			xml_service_node.put("tds:XAddr", ipv4_address_ + node.get<std::string>("XAddr"));
+			xml_service_node.put("tds:XAddr", address + node.get<std::string>("XAddr"));
 
 			static const std::unordered_map<std::string, std::string> maps = {
 					{"http://www.onvif.org/ver20/analytics/wsdl", "tan"},
@@ -289,7 +291,6 @@ struct GetServicesHandler : public OnvifRequestBase
 	}
 
 private:
-	const std::string ipv4_address_;
 	std::shared_ptr<ServerConfigs> server_config_;
 };
 
@@ -351,8 +352,8 @@ struct GetSystemDateAndTimeHandler : public OnvifRequestBase
 namespace
 {
 // Resolve the three request elements with their in-scope namespace declarations.
-// SystemReboot has an empty complex type: parameters and attributes are invalid.
-bool IsSystemRebootRequest(const std::string& xml)
+// Empty Device operations accept no parameters or non-namespace attributes.
+bool IsEmptyDeviceRequest(const std::string& xml, const std::string& name)
 {
 	pt::ptree tree;
 	std::istringstream input(xml);
@@ -388,8 +389,7 @@ bool IsSystemRebootRequest(const std::string& xml)
 		{
 			if (operation.first == "<xmlattr>")
 				continue;
-			if (++operations != 1 || !matches(operation, "SystemReboot", SERVICE_URI::DEVICE) ||
-					!operation.second.data().empty())
+			if (++operations != 1 || !matches(operation, name, SERVICE_URI::DEVICE) || !operation.second.data().empty())
 				return false;
 			for (const auto& [key, value] : operation.second)
 			{
@@ -406,6 +406,60 @@ bool IsSystemRebootRequest(const std::string& xml)
 }
 } // namespace
 
+struct GetNetworkProtocolsHandler : public OnvifRequestBase
+{
+	GetNetworkProtocolsHandler(const std::map<std::string, std::string>& ns, const std::shared_ptr<pt::ptree>& configs,
+														 std::shared_ptr<ServerConfigs> server)
+			: OnvifRequestBase("GetNetworkProtocols", auth::SECURITY_LEVELS::READ_SYSTEM, ns, configs),
+				server_(std::move(server))
+	{
+	}
+
+	void operator()(std::shared_ptr<HttpServer::Response> response, std::shared_ptr<HttpServer::Request> request) override
+	{
+		bool valid = false;
+		try
+		{
+			valid = IsEmptyDeviceRequest(request->content.string(), name());
+		}
+		catch (const pt::xml_parser_error&)
+		{
+		}
+		auto envelope = utility::soap::getEnvelopeTree(ns_);
+		if (!valid)
+		{
+			envelope.put("s:Body.s:Fault.s:Code.s:Value", "s:Sender");
+			envelope.put("s:Body.s:Fault.s:Code.s:Subcode.s:Value", "ter:InvalidArgVal");
+			envelope.put("s:Body.s:Fault.s:Reason.s:Text", "Expected an empty Device GetNetworkProtocols request");
+			envelope.put("s:Body.s:Fault.s:Reason.s:Text.<xmlattr>.xml:lang", "en");
+		}
+		else
+		{
+			pt::ptree protocols;
+			auto add = [&](const std::string& protocol, bool enabled, const std::string& port) {
+				pt::ptree entry;
+				entry.put("tt:Name", protocol);
+				entry.put("tt:Enabled", enabled);
+				entry.put("tt:Port", std::stoi(port));
+				protocols.add_child("tds:NetworkProtocols", entry);
+			};
+			add("HTTP", server_->http_enabled_, server_->http_port_);
+			add("HTTPS", server_->https_enabled_, server_->https_port_);
+			add("RTSP", true, server_->rtsp_port_);
+			envelope.add_child("s:Body.tds:GetNetworkProtocolsResponse", protocols);
+		}
+		pt::ptree root;
+		root.add_child("s:Envelope", envelope);
+		std::ostringstream xml;
+		pt::write_xml(xml, root);
+		response->write(valid ? SimpleWeb::StatusCode::success_ok : SimpleWeb::StatusCode::client_error_bad_request,
+										xml.str(), {{"Content-Type", "application/soap+xml; charset=utf-8"}});
+	}
+
+private:
+	std::shared_ptr<ServerConfigs> server_;
+};
+
 struct SystemRebootHandler : public OnvifRequestBase
 {
 	SystemRebootHandler(const std::map<std::string, std::string>& ns, const std::shared_ptr<pt::ptree>& configs,
@@ -421,7 +475,7 @@ struct SystemRebootHandler : public OnvifRequestBase
 		bool valid = false;
 		try
 		{
-			valid = IsSystemRebootRequest(request->content.string());
+			valid = IsEmptyDeviceRequest(request->content.string(), "SystemReboot");
 		}
 		catch (const pt::xml_parser_error&)
 		{
@@ -466,6 +520,8 @@ DeviceService::DeviceService(const std::string& service_uri, const std::string& 
 	requestHandlers_.push_back(std::make_shared<GetCapabilitiesHandler>(xml_namespaces_, configs_ptree_,
 		*srv->GetServerConfigs(), srv->ServerAddress()));
 	requestHandlers_.push_back(std::make_shared<GetDeviceInformationHandler>(xml_namespaces_, configs_ptree_));
+	requestHandlers_.push_back(
+			std::make_shared<GetNetworkProtocolsHandler>(xml_namespaces_, configs_ptree_, srv->GetServerConfigs()));
 	requestHandlers_.push_back(std::make_shared<GetNetworkInterfacesHandler>(xml_namespaces_, configs_ptree_));
 	requestHandlers_.push_back(std::make_shared<GetRelayOutputsHandler>(xml_namespaces_, configs_ptree_));
 	requestHandlers_.push_back(
