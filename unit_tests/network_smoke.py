@@ -168,7 +168,9 @@ def main():
             assert values(soap(args.host, args.http_port, service, ns, action, request_body), "Uri") == [expected]
             print("PASS", service, action)
     assert values(soap(args.host, args.http_port, "replay", "http://www.onvif.org/ver10/replay/wsdl",
-                       "GetReplayUri", "<t:RecordingToken>RecordingToken0</t:RecordingToken>"), "Uri") == [rtsp_base + "Recording0"]
+                       "GetReplayUri", '<t:StreamSetup xmlns:tt="http://www.onvif.org/ver10/schema"><tt:Stream>RTP-Unicast</tt:Stream>'
+                       '<tt:Transport><tt:Protocol>RTSP</tt:Protocol></tt:Transport></t:StreamSetup>'
+                       "<t:RecordingToken>Recording_0</t:RecordingToken>"), "Uri") == [rtsp_base + "Recording0"]
     event = soap(args.host, args.http_port, "event", "http://www.onvif.org/ver10/events/wsdl",
                  "CreatePullPointSubscription")
     pullpoint_base = (f"http://{args.advertised_ip}:{args.advertised_pullpoint_port}/"

@@ -155,6 +155,10 @@ add_library(onvif_server STATIC
 	include/IOnvifServer.h
 	src/IOnvifServer.cpp
 	utility/TlsContext.h
+	utility/StreamTransport.h
+	utility/StreamTransport.cpp
+	utility/RtspHttpTunnel.h
+	utility/RtspHttpTunnel.cpp
 	utility/TlsContext.cpp
 	HttpServer.h
 	Server.cpp

@@ -6,6 +6,7 @@
 
 #include "HttpServerFwd.h"
 #include "Simple-Web-Server/server_http.hpp"
+#include "utility/RtspHttpTunnel.h"
 #include <boost/asio/ssl.hpp>
 
 namespace osrv
@@ -27,12 +28,25 @@ public:
 	{
 		return stream_.lowest_layer();
 	}
+	void Prefetch(std::string bytes)
+	{
+		prefetched_ = std::move(bytes);
+	}
 	bool Secure() const
 	{
 		return bool(context_);
 	}
 	template <class Buffers, class Handler> auto async_read_some(const Buffers& buffers, Handler&& handler)
 	{
+		if (!prefetched_.empty())
+		{
+			auto size = boost::asio::buffer_copy(buffers, boost::asio::buffer(prefetched_));
+			prefetched_.erase(0, size);
+			boost::asio::post(get_executor(), [handler = std::forward<Handler>(handler), size]() mutable {
+				handler(boost::system::error_code{}, size);
+			});
+			return;
+		}
 		if (context_)
 			return stream_.async_read_some(buffers, std::forward<Handler>(handler));
 		return stream_.next_layer().async_read_some(buffers, std::forward<Handler>(handler));
@@ -54,6 +68,7 @@ private:
 		static boost::asio::ssl::context context(boost::asio::ssl::context::tls_server);
 		return context;
 	}
+	std::string prefetched_;
 	std::shared_ptr<boost::asio::ssl::context> context_;
 	boost::asio::ssl::stream<boost::asio::ip::tcp::socket> stream_;
 };
@@ -73,8 +88,43 @@ public:
 		return connection && connection->socket->Secure();
 	}
 	std::shared_ptr<asio::ssl::context> tls_context;
+	asio::ip::tcp::endpoint rtsp_tunnel_endpoint;
 
 protected:
+	// Inspect the initial HTTP header before the generic server waits for a POST body.
+	// Tunnel POST bodies are open-ended base64 RTSP, not ordinary HTTP request content.
+	void read_initial(const std::shared_ptr<Session>& session)
+	{
+		if (!rtsp_tunnel_endpoint.port())
+		{
+			read(session);
+			return;
+		}
+		auto bytes = std::make_shared<asio::streambuf>(65536);
+		session->connection->set_timeout(config.timeout_request);
+		asio::async_read_until(*session->connection->socket, *bytes, "\r\n\r\n",
+			[this, session, bytes](const error_code& ec, size_t header_size) {
+				auto lock = session->connection->handler_runner->continue_lock();
+				if (!lock)
+					return;
+				session->connection->cancel_timeout();
+				if (ec)
+				{
+					if (on_error) on_error(session->request, ec);
+					return;
+				}
+				std::string initial(asio::buffers_begin(bytes->data()), asio::buffers_end(bytes->data()));
+				if (osrv::IsRtspHttpTunnel(initial.substr(0, header_size)))
+				{
+					// Keep the connection registered so stop() cancels active tunnels too.
+					osrv::StartRtspHttpTunnel(*session->connection->socket, session->connection,
+							rtsp_tunnel_endpoint, std::move(initial));
+					return;
+				}
+				session->connection->socket->Prefetch(std::move(initial));
+				read(session);
+			});
+	}
 	void accept() override
 	{
 		auto connection = create_connection(*io_service, tls_context);
@@ -95,7 +145,7 @@ protected:
 			connection->socket->lowest_layer().set_option(asio::ip::tcp::no_delay(true), option_error);
 			if (!connection->socket->Secure())
 			{
-				read(session);
+				read_initial(session);
 				return;
 			}
 			connection->set_timeout(config.timeout_request);
@@ -105,7 +155,7 @@ protected:
 				if (!lock)
 					return;
 				if (!error)
-					read(session);
+					read_initial(session);
 				else if (on_error)
 					on_error(session->request, error);
 			});

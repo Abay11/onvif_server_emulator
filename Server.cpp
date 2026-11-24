@@ -235,9 +235,13 @@ void Server::init(std::function<void()> reboot)
 	});
 
 	server_configs_->io_context_ = io_context_;
+	auto tunnel_address = server_configs_->ipv4_address_ == "0.0.0.0" ? "127.0.0.1" : server_configs_->ipv4_address_;
+	http_server_->rtsp_tunnel_endpoint = {boost::asio::ip::make_address(tunnel_address),
+			static_cast<unsigned short>(std::stoi(server_configs_->rtsp_port_))};
 	RegisterAdminUi(*this);
 	if (https_server_)
 	{
+		https_server_->rtsp_tunnel_endpoint = http_server_->rtsp_tunnel_endpoint;
 		https_server_->resource = http_server_->resource;
 		https_server_->default_resource = http_server_->default_resource;
 		https_server_->on_error = http_server_->on_error;

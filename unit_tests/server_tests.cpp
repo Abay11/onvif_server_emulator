@@ -1,3 +1,6 @@
+#include "../utility/StreamTransport.h"
+#include "../utility/RtspHttpTunnel.h"
+#include "../utility/MetadataConfiguration.h"
 #include <boost/test/unit_test.hpp>
 
 #include "../Server.h"
@@ -201,4 +204,56 @@ BOOST_AUTO_TEST_CASE(network_config_parsing_and_validation)
     BOOST_CHECK_THROW(osrv::read_server_configs(path), std::runtime_error);
     std::remove(path.c_str());
     std::remove("users.config");
+}
+
+BOOST_AUTO_TEST_CASE(stream_transport_uses_request_security_and_advertised_ports)
+{
+	osrv::ServerConfigs config;
+	config.advertised_ipv4_ = "192.0.2.8";
+	config.http_port_ = "8080";
+	config.rtsp_port_ = "8554";
+	config.advertised_http_port_ = 18080;
+	config.advertised_https_port_ = 18443;
+	config.advertised_web_scheme_ = "https";
+	pt::ptree operation;
+	operation.put("m:Protocol", "RtspOverHttp");
+	BOOST_TEST(osrv::StreamAddress(config, operation, true, false) == "http://192.0.2.8:18080/");
+	BOOST_TEST(osrv::StreamAddress(config, operation, true, true) == "https://192.0.2.8:18443/");
+	operation.put("m:Protocol", "RtspUnicast");
+	BOOST_TEST(osrv::StreamAddress(config, operation, true, true) == "rtsp://192.0.2.8:8554/");
+	operation.put("m:Protocol", "RtspsUnicast");
+	BOOST_CHECK_THROW(osrv::StreamAddress(config, operation, true, true), osrv::metadata::Fault);
+	operation.clear();
+	operation.put("m:StreamSetup.tt:Stream", "RTP-Unicast");
+	operation.put("m:StreamSetup.tt:Transport.tt:Protocol", "HTTP");
+	BOOST_TEST(osrv::StreamAddress(config, operation, false, true) == "https://192.0.2.8:18443/");
+	config.https_enabled_ = false;
+	BOOST_CHECK_THROW(osrv::StreamAddress(config, operation, false, true), osrv::metadata::Fault);
+	operation.put("m:StreamSetup.tt:Transport.tt:Protocol", "HTTPS");
+	BOOST_CHECK_THROW(osrv::StreamAddress(config, operation, false, false), osrv::metadata::Fault);
+	operation.put("m:StreamSetup.tt:Transport.tt:Protocol", "UDP");
+	operation.put("m:StreamSetup.tt:Stream", "RTP-Multicast");
+	BOOST_CHECK_THROW(osrv::StreamAddress(config, operation, false, false), osrv::metadata::Fault);
+}
+
+BOOST_AUTO_TEST_CASE(rtsp_http_tunnel_header_detection)
+{
+	BOOST_TEST(osrv::IsRtspHttpTunnel(
+			"GET /Live&HighStream HTTP/1.0\r\nx-sessioncookie: abc\r\nAccept: application/x-rtsp-tunnelled\r\n\r\n"));
+	BOOST_TEST(osrv::IsRtspHttpTunnel(
+			"POST /Live&HighStream HTTP/1.0\r\nX-SessionCookie: abc\r\nContent-Length: 32767\r\n\r\n"));
+	BOOST_TEST(!osrv::IsRtspHttpTunnel("GET /admin/ HTTP/1.1\r\n\r\n"));
+	BOOST_TEST(!osrv::IsRtspHttpTunnel("POST / HTTP/1.0\r\nx-sessioncookie: \r\n\r\n"));
+	BOOST_TEST(!osrv::IsRtspHttpTunnel("DELETE / HTTP/1.0\r\nx-sessioncookie: abc\r\n\r\n"));
+}
+
+BOOST_AUTO_TEST_CASE(rtsp_http_tunnel_does_not_redirect_clients_to_internal_endpoint)
+{
+	const std::string response =
+			"HTTP/1.0 200 OK\r\nContent-Type: application/x-rtsp-tunnelled\r\n"
+			"X-Server-IP-Address: 127.0.0.1\r\nCache-Control: no-cache\r\n\r\nRTSP/1.0 200 OK\r\n\r\n";
+	const std::string expected = "HTTP/1.0 200 OK\r\nContent-Type: application/x-rtsp-tunnelled\r\n"
+															 "Cache-Control: no-cache\r\n\r\nRTSP/1.0 200 OK\r\n\r\n";
+	BOOST_TEST(osrv::RtspHttpTunnelResponse(response) == expected);
+	BOOST_TEST(osrv::RtspHttpTunnelResponse(expected) == expected);
 }

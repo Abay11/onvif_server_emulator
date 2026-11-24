@@ -155,7 +155,7 @@ If using a source checkout instead, the script is at
 
 | Traffic | Default local server ports | Purpose |
 | --- | --- | --- |
-| TCP inbound | 8080, 8443, 8554 | ONVIF HTTP/HTTPS, snapshots, events; RTSP and interleaved RTP/RTCP |
+| TCP inbound | 8080, 8443, 8554 | ONVIF HTTP/HTTPS, snapshots, events, RTSP-over-HTTP/HTTPS tunnels; RTSP and interleaved RTP/RTCP |
 | UDP inbound/outbound | 3702 | Discovery multicast reception and unicast ProbeMatch replies |
 | UDP inbound/outbound | 50000–50199 | Server RTP/RTCP endpoints for UDP streaming |
 
@@ -283,7 +283,8 @@ Use these URLs, including the `&` in stream names:
 - Replay: `rtsp://192.168.1.10:8554/Recording0`
 
 In VLC test TCP first (`vlc --rtsp-tcp "rtsp://192.168.1.10:8554/Live&HighStream"`),
-then test UDP separately. In your ONVIF VMS, verify:
+then test UDP separately. Also test [RTSP-over-HTTP/HTTPS](RTSP_HTTP.md) on the
+existing web ports using a client that supports paired GET/POST tunnels. In your ONVIF VMS, verify:
 
 1. Automatic discovery, with manual device entries removed.
 2. GetCapabilities/GetServices XAddrs, Media and Media2 stream/snapshot URLs,

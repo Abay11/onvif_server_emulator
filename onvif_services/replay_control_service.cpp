@@ -1,5 +1,9 @@
-
 #include "replay_control_service.h"
+#include "../onvif/Recording.h"
+#include "../utility/MetadataConfiguration.h"
+#include "../utility/StreamTransport.h"
+#include "../utility/XmlParser.h"
+#include <set>
 
 #include "../onvif/OnvifRequest.h"
 
@@ -22,14 +26,23 @@ namespace osrv
 struct GetReplayHandler : public OnvifRequestBase
 {
 	GetReplayHandler(const std::map<std::string, std::string>& ns, const std::shared_ptr<osrv::ServerConfigs> srv_configs,
-									 const std::shared_ptr<pt::ptree>& configs)
+									 const std::shared_ptr<pt::ptree>& configs, const std::string& configs_path)
 			: OnvifRequestBase(GetReplayUri, auth::SECURITY_LEVELS::READ_MEDIA, ns, configs), srv_configs_(srv_configs)
 	{
+		for (const auto& recording : RecordingsReaderFromConfig(configs_path + "/recording_search.config").Recordings())
+			recordings_.insert(recording->Token());
 	}
 
 	void operator()(std::shared_ptr<HttpServer::Response> response, std::shared_ptr<HttpServer::Request> request) override
 	{
-		const auto uri = srv_configs_->RtspAddress() + "Recording0";
+		pt::ptree document;
+		std::istringstream input(request->content.string());
+		pt::read_xml(input, document);
+		const auto& operation = StreamOperation(document, "GetReplayUri");
+		auto recording = exns::find_hierarchy("Envelope.Body.GetReplayUri.RecordingToken", document);
+		if (!recordings_.contains(recording))
+			throw metadata::Fault("NoRecording", "The recording does not exist");
+		const auto uri = StreamAddress(*srv_configs_, operation, false, HttpServer::IsSecure(request)) + "Recording0";
 
 		auto envelope_tree = utility::soap::getEnvelopeTree(ns_);
 		envelope_tree.add("s:Body.trp:GetReplayUriResponse.trp:Uri", uri);
@@ -45,6 +58,7 @@ struct GetReplayHandler : public OnvifRequestBase
 
 private:
 	const std::shared_ptr<osrv::ServerConfigs> srv_configs_;
+	std::set<std::string> recordings_;
 };
 
 ReplayControlService::ReplayControlService(const std::string& service_uri, const std::string& service_name,
@@ -52,6 +66,7 @@ ReplayControlService::ReplayControlService(const std::string& service_uri, const
 		: IOnvifService(service_uri, service_name, srv)
 
 {
-	requestHandlers_.push_back(std::make_shared<GetReplayHandler>(xml_namespaces_, srv->GetServerConfigs(), configs_ptree_));
+	requestHandlers_.push_back(std::make_shared<GetReplayHandler>(
+			xml_namespaces_, srv->GetServerConfigs(), configs_ptree_, srv->ConfigsPath()));
 }
 } // namespace osrv

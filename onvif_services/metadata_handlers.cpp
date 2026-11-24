@@ -34,7 +34,7 @@ struct MetadataHandler : OnvifRequestBase
 		try
 		{
 			envelope.add_child(std::string("s:Body.") + (media2 ? "tr2:" : "trt:") + name() + "Response",
-												 control->Execute(name(), request->content.string(), media2));
+												 control->Execute(name(), request->content.string(), media2, HttpServer::IsSecure(request)));
 		}
 		catch (const metadata::Fault& error)
 		{

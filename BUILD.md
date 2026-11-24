@@ -349,3 +349,7 @@ command and subscription simulation limits.
 HTTPS is enabled by default on TCP 8443 alongside HTTP 8080. See
 [HTTPS](docs/HTTPS.md) for certificate settings and
 `python3 unit_tests/https_smoke.py --binary build/main` for the transport matrix.
+
+For RTSP/RTP over the HTTP/HTTPS listeners, run
+`python3 unit_tests/rtsp_http_smoke.py --binary build/main --network-smoke` in the
+dev container. See [RTSP tunnel validation](docs/RTSP_HTTP.md).

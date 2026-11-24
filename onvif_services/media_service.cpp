@@ -1,3 +1,4 @@
+#include "../utility/StreamTransport.h"
 #include "metadata_handlers.h"
 #include "../utility/MetadataConfiguration.h"
 #include "analytics_service.h"
@@ -666,6 +667,9 @@ struct GetStreamUriHandler : public OnvifRequestBase
 		std::istringstream is(request->content.string());
 		pt::xml_parser::read_xml(is, request_xml);
 
+		const auto& operation = StreamOperation(request_xml, "GetStreamUri");
+		auto base = StreamAddress(server_cfg_, operation, false, HttpServer::IsSecure(request));
+
 		std::string requested_token = exns::find_hierarchy("Envelope.Body.GetStreamUri.ProfileToken", request_xml);
 		// logger_->Debug("Requested token to get URI: " + requested_token);
 
@@ -697,7 +701,7 @@ struct GetStreamUriHandler : public OnvifRequestBase
 
 		pt::ptree response_node;
 
-		auto rtsp_url = util::generate_rtsp_url(server_cfg_, stream_config_it->second.get<std::string>("Uri"));
+		auto rtsp_url = base + stream_config_it->second.get<std::string>("Uri");
 		response_node.put("trt:MediaUri.tt:Uri", rtsp_url);
 		response_node.put("trt:MediaUri.tt:InvalidAfterConnect",
 											stream_config_it->second.get<std::string>("InvalidAfterConnect"));

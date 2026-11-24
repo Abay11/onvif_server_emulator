@@ -254,7 +254,8 @@ initialization. Hello/Bye/Resolve and IPv6 discovery are not implemented.
 
 Live video is encoded as H.264. `AudioSetupFactory` selects the audio setup from
 the first AudioEncoder configuration. Factories share a bounded UDP port pool;
-clients can use RTP/RTCP over UDP or interleaved RTSP/TCP. Many pipeline parameters
+clients can use RTP/RTCP over UDP, interleaved RTSP/TCP, or paired GET/POST
+RTSP tunnels on the main HTTP/HTTPS listeners. See [RTSP over HTTP/HTTPS](RTSP_HTTP.md). Many pipeline parameters
 are hardcoded, so changing codec or resolution settings through SOAP does not
 guarantee a change to the actual stream.
 

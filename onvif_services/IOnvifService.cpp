@@ -1,3 +1,4 @@
+#include "../utility/MetadataConfiguration.h"
 #include "../utility/RequestAuthentication.h"
 #include "IOnvifService.h"
 
@@ -82,6 +83,22 @@ public:
 				log_->Error(e.what());
 
 				utility::auth::Reject(*response, *srv_cfg, e);
+			}
+			catch (const metadata::Fault& error)
+			{
+				auto ns = xml_ns_;
+				ns["ter"] = "http://www.onvif.org/ver10/error";
+				auto envelope = utility::soap::getEnvelopeTree(ns);
+				envelope.put("s:Body.s:Fault.s:Code.s:Value", "s:Sender");
+				envelope.put("s:Body.s:Fault.s:Code.s:Subcode.s:Value", "ter:InvalidArgVal");
+				envelope.put("s:Body.s:Fault.s:Code.s:Subcode.s:Subcode.s:Value", "ter:" + error.detail);
+				envelope.put("s:Body.s:Fault.s:Reason.s:Text", error.what());
+				envelope.put("s:Body.s:Fault.s:Reason.s:Text.<xmlattr>.xml:lang", "en");
+				pt::ptree document;
+				document.add_child("s:Envelope", envelope);
+				std::ostringstream out;
+				pt::write_xml(out, document);
+				utility::http::fillResponseWithHeaders(*response, out.str(), utility::http::ClientErrorDefaultWriter);
 			}
 			catch (const osrv::well_formed& e) {
 				auto envelope_tree = utility::soap::getEnvelopeTree(xml_ns_);

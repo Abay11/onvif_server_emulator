@@ -49,7 +49,7 @@ public:
 					const std::string& configs_path = {});
 	void Bind(Configure configure, Synchronize synchronize, Retain retain = {});
 	void Refresh();
-	boost::property_tree::ptree Execute(const std::string& operation, const std::string& xml, bool media2);
+	boost::property_tree::ptree Execute(const std::string& operation, const std::string& xml, bool media2, bool secure = false);
 	std::string Uri(const std::string& profile);
 
 private:

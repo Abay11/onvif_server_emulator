@@ -67,7 +67,9 @@ analytics image and subscription URLs:
 Select **Advertised web protocol → HTTPS** in Network configuration to announce
 HTTPS endpoints through Discovery while keeping both listeners available.
 HTTPS URLs use `advertised.https_port` (zero selects `addresses.https_port`). Legacy HTTP port
-forwarding simulation applies only to HTTP URLs. RTSP URLs are unchanged.
+forwarding simulation applies only to HTTP URLs. Direct RTSP URLs are unchanged. For media over the web listeners, see
+[RTSP/RTP over HTTP and HTTPS](RTSP_HTTP.md); tunneled stream URLs follow the
+transport of the SOAP request.
 A separate PullPoint listener (`UseHttpServerPort=false`) uses the selected
 advertised web protocol, with TLS and the same certificate settings for HTTPS.
 

@@ -1,3 +1,4 @@
+#include "../utility/StreamTransport.h"
 #include "metadata_handlers.h"
 #include "../utility/MetadataConfiguration.h"
 #include "media2_service.h"
@@ -1057,6 +1058,9 @@ public:
 		std::istringstream is(request->content.string());
 		pt::xml_parser::read_xml(is, request_xml);
 
+		const auto& operation = StreamOperation(request_xml, "GetStreamUri");
+		auto base = StreamAddress(server_cfg_, operation, true, HttpServer::IsSecure(request));
+
 		std::string requested_token = exns::find_hierarchy("Envelope.Body.GetStreamUri.ProfileToken", request_xml);
 
 		if (server_cfg_.multichannel_enabled_)
@@ -1087,7 +1091,7 @@ public:
 			throw std::runtime_error("Could not find a stream for the requested Media Profile token=" + requested_token);
 
 		pt::ptree response_node;
-		auto rtsp_url = media::util::generate_rtsp_url(server_cfg_, stream_config_it->second.get<std::string>("Uri"));
+		auto rtsp_url = base + stream_config_it->second.get<std::string>("Uri");
 		response_node.put("tr2:Uri", rtsp_url);
 
 		auto envelope_tree = utility::soap::getEnvelopeTree(ns_);

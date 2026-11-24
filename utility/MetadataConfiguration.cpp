@@ -1,3 +1,4 @@
+#include "StreamTransport.h"
 #include "MetadataConfiguration.h"
 #include "../Server.h"
 #include "MediaProfilesManager.h"
@@ -507,7 +508,7 @@ std::string Control::Uri(const std::string& token)
 	return server_.RtspAddress() + path(token).substr(1);
 }
 
-pt::ptree Control::Execute(const std::string& operation, const std::string& xml, bool media2)
+pt::ptree Control::Execute(const std::string& operation, const std::string& xml, bool media2, bool secure)
 {
 	if (!server_.rtsp_metadata_enabled_)
 		throw Fault("ConfigModify", "RTSP metadata is disabled by server configuration");
@@ -577,27 +578,12 @@ pt::ptree Control::Execute(const std::string& operation, const std::string& xml,
 	}
 	if (operation == "GetStreamUri")
 	{
-		if (media2)
-		{
-			auto protocol = text(request, "Protocol");
-			if (protocol != "RTSP" && protocol != "RtspUnicast")
-				throw Fault("InvalidStreamSetup", "Only RTSP TCP and UDP unicast are supported");
-		}
-		else
-		{
-			auto setup = optional(request, "StreamSetup");
-			if (!setup)
-				throw Fault("InvalidStreamSetup", "Missing stream setup");
-			auto transport = optional(*setup, "Transport");
-			auto protocol = transport ? text(*transport, "Protocol") : "";
-			if (text(*setup, "Stream") != "RTP-Unicast" || (protocol != "UDP" && protocol != "TCP" && protocol != "RTSP") ||
-					(transport && optional(*transport, "Tunnel")))
-				throw Fault("InvalidStreamSetup", "Only RTSP TCP and UDP unicast are supported");
-		}
+		auto base = StreamAddress(server_, request, media2, secure);
 
 		if (profile.empty())
 			throw no_such_profile();
 		auto uri = Uri(profile);
+		uri = base + uri.substr(server_.RtspAddress().size());
 		if (media2)
 			result.put("tr2:Uri", uri);
 		else
