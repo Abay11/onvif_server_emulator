@@ -13,7 +13,7 @@ responses and interleaved RTP/RTCP. Both connections must use the same transport
 and endpoint. Use a unique cookie for each session. This is continuous streaming,
 so POST does not wait for its declared Content-Length before commands are handled.
 Live streams, profile-specific streams (including metadata tracks), and the
-synthetic `/Recording0` replay mount use the existing RTSP factories.
+recording-specific replay paths work over the same tunnel.
 
 ## ONVIF URI selection
 

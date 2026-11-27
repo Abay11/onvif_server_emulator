@@ -1,4 +1,6 @@
 #include "ptz_service.h"
+#include <set>
+#include "../utility/ChannelTopology.h"
 
 #include "../Logger.h"
 #include "../Server.h"
@@ -157,34 +159,19 @@ public:
 		std::string profileToken;
 		profileToken = exns::find_hierarchy("Envelope.Body.GetCompatibleConfigurations.ProfileToken", xml_tree);
 
-		const auto& profileConfig = m_profilesMgr.GetProfileByToken(profileToken);
-		auto vsToken = profileConfig.get<std::string>("VideoSource");
-
-		const auto& vsConfigJson =
-				m_profilesMgr.GetConfigByToken(vsToken, osrv::CONFIGURATION_ENUMERATION[osrv::VIDEOSOURCE]);
-
-		const auto& compatibleNodes = vsConfigJson.get_child("CompatiblePtzNodes");
-		std::vector<std::string> compatibleNodeTokens;
-		std::transform(compatibleNodes.begin(), compatibleNodes.end(),
-			std::back_inserter(compatibleNodeTokens),
-			[](auto t) { return t.second.template get_value<std::string>(); });
-
-		const auto& allPtzConfigs =
-				m_profilesMgr.ReaderWriter()->ConfigsTree().get_child(osrv::CONFIGURATION_ENUMERATION[osrv::PTZ]);
-
-		auto envelope_tree = utility::soap::getEnvelopeTree(ns_);
-		for (const auto& [key, node] : allPtzConfigs)
+		const auto& profile = m_profilesMgr.GetProfileByToken(profileToken);
+		const auto& allPtzConfigs = m_profilesMgr.ReaderWriter()->ConfigsTree().get_child("PTZ");
+		pt::ptree result;
+		for (const auto& [_, config] : allPtzConfigs)
 		{
-			if (std::ranges::find_if(compatibleNodeTokens, [&node](const auto& nodeToken) {
-						return node.get<std::string>("NodeToken") == nodeToken;
-					}) == compatibleNodeTokens.end())
-				continue; // current ptz configuration is not compatible with the requested media profile
-
-			pt::ptree xmlPtzConfig;
-			fillPtzConfig(node, xmlPtzConfig, m_profilesMgr);
-
-			envelope_tree.add_child("s:Body.tptz:GetCompatibleConfigurationsResponse.tptz:PTZConfiguration", xmlPtzConfig);
+			if (!m_profilesMgr.Compatible(profile, "PTZ", config.get<std::string>("token")))
+				continue;
+			pt::ptree xml;
+			fillPtzConfig(config, xml, m_profilesMgr);
+			result.add_child("tptz:PTZConfiguration", xml);
 		}
+		auto envelope_tree = utility::soap::getEnvelopeTree(ns_);
+		envelope_tree.put_child("s:Body.tptz:GetCompatibleConfigurationsResponse", result);
 
 		pt::ptree root_tree;
 		root_tree.put_child("s:Envelope", envelope_tree);
@@ -570,6 +557,29 @@ PTZService::PTZService(const std::string& service_uri, const std::string& servic
 											 std::shared_ptr<IOnvifServer> srv)
 		: IOnvifService(service_uri, service_name, srv)
 {
+	const auto& manager = *srv->MediaProfilesManager();
+	if (manager.Topology())
+	{
+		const auto configured = configs_ptree_->get_child("Nodes");
+		pt::ptree active;
+		std::set<std::string> tokens;
+		for (const auto& [_, ptz] : manager.ReaderWriter()->ConfigsTree().get_child("PTZ"))
+		{
+			const auto token = ptz.get<std::string>("NodeToken");
+			if (!tokens.insert(token).second)
+				continue;
+			const auto specific = std::ranges::find_if(configured, [&](const auto& item) {
+				return item.second.template get<std::string>("token") == token;
+			});
+			if (specific == configured.end() && configured.empty())
+				throw std::runtime_error("PTZ configurations require a node template");
+			auto node = specific == configured.end() ? configured.front().second : specific->second;
+			node.put("token", token);
+			active.push_back({"", node});
+		}
+		configs_ptree_->put_child("Nodes", active);
+	}
+
 	requestHandlers_.push_back(std::make_shared<ptz::ContinuousMoveHandler>(xml_namespaces_, configs_ptree_));
 	requestHandlers_.push_back(std::make_shared<ptz::GetCompatibleConfigurationsHandler>(xml_namespaces_, configs_ptree_,
 																																											 *srv->MediaProfilesManager()));

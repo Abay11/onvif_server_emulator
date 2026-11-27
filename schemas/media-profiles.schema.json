@@ -11,6 +11,9 @@
           "token": {
             "$ref": "types.schema.json#/$defs/token"
           },
+          "channel": {
+            "$ref": "types.schema.json#/$defs/token"
+          },
           "fixed": {
             "$ref": "types.schema.json#/$defs/boolean"
           },
@@ -702,6 +705,24 @@
           },
           "Name": {
             "type": "string"
+          },
+          "supportedRules": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {
+              "enum": ["tt:MotionRegionDetector", "tt:LineDetector", "tt:LineCounting", "tt:FieldDetector",
+                       "tt:LicensePlateRecognition", "tt:FaceRecognition"]
+            }
+          },
+          "supportedSceneModules": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": { "enum": ["ObjectTracker", "LicensePlateRecognition", "FaceRecognition"] }
+          },
+          "sceneModules": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": { "enum": ["ObjectTracker", "LicensePlateRecognition", "FaceRecognition"] }
           },
           "compatibleModuleAnalytics": {
             "oneOf": [

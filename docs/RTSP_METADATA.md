@@ -32,7 +32,7 @@ setting without configuration changes.
 ## Configure a profile through SOAP
 
 With the transport enabled, Media and Media2 expose metadata configuration APIs.
-The shipped `media_profiles.config` has two reusable configurations,
+The bundled channel in `channels.config` has two reusable configurations,
 `MetadataToken0` and `MetadataToken1`, initially enabling all events. Profiles are
 initially unattached: enabling the transport alone does not add a metadata track.
 Older configuration directories need the `Metadata` catalog from the example.
@@ -63,7 +63,7 @@ Metadata in ConfigurationsSupported only when the transport is enabled.
 
 The fixed `/Live&HighStream` and `/Live&LowStream` mounts remain available for
 legacy video/audio clients; metadata clients must use the profile URI returned
-by SOAP. Replay at `/Recording0` has no historical metadata track.
+by SOAP. Archived metadata tracks contain synthetic empty frames during replay.
 
 ### Supported settings and filters
 

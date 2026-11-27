@@ -1,3 +1,4 @@
+#include "../utility/ChannelTopology.h"
 #include "../utility/RequestAuthentication.h"
 #include "event_service.h"
 
@@ -289,12 +290,9 @@ struct GetEventPropertiesHandler : public utility::http::RequestHandlerBase
 
 			{
 				// Cell motion
-				StringPairsList_t source_props;
-				source_props.push_back(std::make_pair(
-						EVENT_CONFIGS_TREE.get<std::string>("CellMotion.VideoSourceConfigurationToken"), "tt:ReferenceToken"));
-				source_props.push_back(std::make_pair(
-						EVENT_CONFIGS_TREE.get<std::string>("CellMotion.VideoAnalyticsConfigurationToken"), "tt:ReferenceToken"));
-				source_props.push_back(std::make_pair(EVENT_CONFIGS_TREE.get<std::string>("CellMotion.Rule"), "xsd:string"));
+				StringPairsList_t source_props = {{"VideoSourceConfigurationToken", "tt:ReferenceToken"},
+																				 {"VideoAnalyticsConfigurationToken", "tt:ReferenceToken"},
+																				 {"Rule", "xsd:string"}};
 
 				StringPairsList_t data_props;
 				data_props.push_back(
@@ -303,18 +301,15 @@ struct GetEventPropertiesHandler : public utility::http::RequestHandlerBase
 				EventPropertiesSerializer serializer(EVENT_CONFIGS_TREE.get<std::string>("CellMotion.Topic"), source_props,
 																						 data_props);
 
-				response_tree.add_child("wstop:TopicSet." + serializer.Path(), serializer.Ptree());
+				response_tree.put_child("wstop:TopicSet." + serializer.Path() + "." + serializer.Name(),
+																serializer.Ptree().get_child(serializer.Name()));
 			}
 
 			{
 				// Audio detection
-				StringPairsList_t source_props;
-				source_props.push_back(std::make_pair(
-						EVENT_CONFIGS_TREE.get<std::string>("AudioDetection.SourceConfigurationToken"), "tt:ReferenceToken"));
-				source_props.push_back(std::make_pair(
-						EVENT_CONFIGS_TREE.get<std::string>("AudioDetection.AnalyticsConfigurationToken"), "tt:ReferenceToken"));
-				source_props.push_back(
-						std::make_pair(EVENT_CONFIGS_TREE.get<std::string>("AudioDetection.Rule"), "xsd:string"));
+				StringPairsList_t source_props = {{"AudioSourceConfigurationToken", "tt:ReferenceToken"},
+																				 {"AudioAnalyticsConfigurationToken", "tt:ReferenceToken"},
+																				 {"Rule", "xsd:string"}};
 
 				StringPairsList_t data_props;
 				data_props.push_back(
@@ -433,7 +428,8 @@ void do_handler_request(std::shared_ptr<HttpServer::Response> response, std::sha
 
 void init_service(HttpServer& srv, const osrv::ServerConfigs& server_configs_instance, const std::string& configs_path,
 									ILogger& logger, const std::shared_ptr<EventSource>& source,
-									const std::vector<EventGeneratorRegistration>& generators)
+									const std::vector<EventGeneratorRegistration>& generators,
+									const utility::media::ChannelTopology& topology)
 {
 	if (log_ != nullptr)
 		return log_->Error("EventService is already inited!");
@@ -470,53 +466,46 @@ void init_service(HttpServer& srv, const osrv::ServerConfigs& server_configs_ins
 	di_event_generator->SetDigitalInputsList(server_configs->digital_inputs_);
 	notifications_manager->AddGenerator(di_event_generator);
 
-	for (const auto& registration : generators)
+	const pt::ptree empty;
+	std::vector<std::string> videoSources;
+	auto& io = notifications_manager->GetIoContext();
+	for (const auto& [key, channel] : topology.Channels())
 	{
-		auto generator = registration.create(EVENT_CONFIGS_TREE, notifications_manager->GetIoContext(), *log_);
-		if (!generator)
-			throw std::invalid_argument("Event generator factory returned null for topic: " + registration.description.topic);
-		notifications_manager->AddGenerator(std::move(generator));
-		additional_event_topics.push_back(registration.description);
-	}
-
-	// add motion alarms generator
-
-	{
-		auto ma_event_generator = std::make_shared<osrv::event::MotionAlarmEventGenerator>(
-				EVENT_CONFIGS_TREE.get<std::string>("MotionAlarm.Source"),
+		const auto video = channel.get<std::string>("videoSource.token");
+		const auto& media = channel.get_child("media");
+		videoSources.push_back(video);
+		auto attach = [&](std::shared_ptr<IEventGenerator> generator) {
+			generator->SetVideoSource(video);
+			notifications_manager->AddGenerator(std::move(generator));
+		};
+		attach(std::make_shared<MotionAlarmEventGenerator>(video,
 				EVENT_CONFIGS_TREE.get<int>("MotionAlarm.EventGenerationTimeout", 30),
-				EVENT_CONFIGS_TREE.get<std::string>("MotionAlarm.Topic"), notifications_manager->GetIoContext(), *log_);
-
-		notifications_manager->AddGenerator(ma_event_generator);
+				EVENT_CONFIGS_TREE.get<std::string>("MotionAlarm.Topic"), io, *log_));
+		for (const auto& [name, sourceConfig] : media.get_child("VideoSource"))
+			for (const auto& [entry, analytics] : sourceConfig.get_child("CompatibleAnalyticsConfigurations", empty))
+				attach(std::make_shared<CellMotionEventGenerator>(sourceConfig.get<std::string>("token"), analytics.data(),
+						EVENT_CONFIGS_TREE.get<std::string>("CellMotion.Rule"),
+						EVENT_CONFIGS_TREE.get<std::string>("CellMotion.DataItemName"),
+						EVENT_CONFIGS_TREE.get<int>("CellMotion.EventGenerationTimeout", 30),
+						EVENT_CONFIGS_TREE.get<std::string>("CellMotion.Topic"), io, *log_));
+		for (const auto& [name, audio] : media.get_child("AudioSource"))
+			attach(std::make_shared<AudioDetectectionEventGenerator>(audio.get<std::string>("token"),
+					EVENT_CONFIGS_TREE.get<std::string>("AudioDetection.AnalyticsConfigurationToken"),
+					EVENT_CONFIGS_TREE.get<std::string>("AudioDetection.Rule"),
+					EVENT_CONFIGS_TREE.get<std::string>("AudioDetection.DataItemName"),
+					EVENT_CONFIGS_TREE.get<int>("AudioDetection.EventGenerationTimeout", 30),
+					EVENT_CONFIGS_TREE.get<std::string>("AudioDetection.Topic"), io, *log_));
+		if (!media.get_child("Analytics", empty).empty())
+			for (const auto& registration : generators)
+			{
+				auto generator = registration.create(EVENT_CONFIGS_TREE, io, *log_);
+				if (!generator)
+					throw std::invalid_argument("Event generator factory returned null for topic: " + registration.description.topic);
+				attach(std::move(generator));
+			}
 	}
-
-	// add cell motion alarms generator
-
-	{
-		auto cellmotion_generator = std::make_shared<osrv::event::CellMotionEventGenerator>(
-				EVENT_CONFIGS_TREE.get<std::string>("CellMotion.VideoSourceConfigurationToken"),
-				EVENT_CONFIGS_TREE.get<std::string>("CellMotion.VideoAnalyticsConfigurationToken"),
-				EVENT_CONFIGS_TREE.get<std::string>("CellMotion.Rule"),
-				EVENT_CONFIGS_TREE.get<std::string>("CellMotion.DataItemName"),
-				EVENT_CONFIGS_TREE.get<int>("CellMotion.EventGenerationTimeout", 30),
-				EVENT_CONFIGS_TREE.get<std::string>("CellMotion.Topic"), notifications_manager->GetIoContext(), *log_);
-
-		notifications_manager->AddGenerator(cellmotion_generator);
-	}
-
-	// add audio detection alarms generator
-
-	{
-		auto audio_generator = std::make_shared<osrv::event::AudioDetectectionEventGenerator>(
-				EVENT_CONFIGS_TREE.get<std::string>("AudioDetection.SourceConfigurationToken"),
-				EVENT_CONFIGS_TREE.get<std::string>("AudioDetection.AnalyticsConfigurationToken"),
-				EVENT_CONFIGS_TREE.get<std::string>("AudioDetection.Rule"),
-				EVENT_CONFIGS_TREE.get<std::string>("AudioDetection.DataItemName"),
-				EVENT_CONFIGS_TREE.get<int>("AudioDetection.EventGenerationTimeout", 30),
-				EVENT_CONFIGS_TREE.get<std::string>("AudioDetection.Topic"), notifications_manager->GetIoContext(), *log_);
-
-		notifications_manager->AddGenerator(audio_generator);
-	}
+	for (const auto& registration : generators)
+		additional_event_topics.push_back(registration.description);
 
 	for (const auto* id : {"DigitalInputsAlarm", "MotionAlarm", "CellMotion", "AudioDetection",
 		"tt:MotionRegionDetector", "tt:LineDetector", "tt:LineCounting", "tt:FieldDetector",
@@ -527,6 +516,18 @@ void init_service(HttpServer& srv, const osrv::ServerConfigs& server_configs_ins
 		source->ConfigureDetector(id, EVENT_CONFIGS_TREE.get<int>(section + ".EventGenerationTimeout", 30),
 			EVENT_CONFIGS_TREE.get<bool>(section + ".AutoGenerateEvents", true),
 			EVENT_CONFIGS_TREE.get<bool>(section + ".Enabled", true));
+		if (std::string_view(id) != "DigitalInputsAlarm")
+			for (const auto& video : videoSources)
+			{
+				const auto path = "ChannelDetectors." + video + "." + section;
+				const auto local = EVENT_CONFIGS_TREE.get_child_optional(path);
+				if (!local || !source->HasDetector(id, video))
+					continue;
+				source->ConfigureDetector(id,
+						local->get<int>("EventGenerationTimeout", EVENT_CONFIGS_TREE.get<int>(section + ".EventGenerationTimeout", 30)),
+						local->get<bool>("AutoGenerateEvents", EVENT_CONFIGS_TREE.get<bool>(section + ".AutoGenerateEvents", true)),
+						local->get<bool>("Enabled", EVENT_CONFIGS_TREE.get<bool>(section + ".Enabled", true)), video);
+			}
 	}
 
 	notifications_manager->Run();

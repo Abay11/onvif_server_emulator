@@ -1,4 +1,6 @@
 #include "device_service.h"
+#include "../utility/ChannelTopology.h"
+#include "../utility/MediaProfilesManager.h"
 
 #include "../onvif/OnvifRequest.h"
 
@@ -71,9 +73,10 @@ struct GetServiceCapabilitiesHandler : public OnvifRequestBase
 struct GetCapabilitiesHandler : public OnvifRequestBase
 {
 	GetCapabilitiesHandler(const std::map<std::string, std::string>& xs, const std::shared_ptr<pt::ptree>& configs,
-												 osrv::ServerConfigs& server_cfg, const std::string& server_address)
+												 osrv::ServerConfigs& server_cfg, const std::string& server_address,
+												 const utility::media::MediaProfilesManager& manager)
 			: OnvifRequestBase(GetCapabilities, auth::SECURITY_LEVELS::PRE_AUTH, xs, configs), srv_cfgs_(server_cfg),
-				srv_addr_(server_address)
+				srv_addr_(server_address), manager_(manager)
 	{
 	}
 
@@ -98,6 +101,26 @@ struct GetCapabilitiesHandler : public OnvifRequestBase
 		};
 
 		auto capabilities_config = service_configs_->get_child("GetCapabilities");
+		if (const auto* topology = manager_.Topology())
+		{
+			capabilities_config.put("Extension.DeviceIO.VideoSources", topology->Channels().size());
+			capabilities_config.put("Extension.DeviceIO.AudioSources",
+															manager_.ReaderWriter()->ConfigsTree().get_child("AudioSources").size());
+		}
+		if (srv_cfgs_.archive)
+		{
+			capabilities_config.erase("Search");
+			capabilities_config.put("Extension.Recording.XAddr", "onvif/recording_service");
+			capabilities_config.put("Extension.Recording.ReceiverSource", false);
+			capabilities_config.put("Extension.Recording.MediaProfileSource", true);
+			capabilities_config.put("Extension.Recording.DynamicRecordings", false);
+			capabilities_config.put("Extension.Recording.DynamicTracks", false);
+			capabilities_config.put("Extension.Recording.MaxStringLength", 256);
+			capabilities_config.put("Extension.Search.XAddr", "onvif/search_service");
+			capabilities_config.put("Extension.Search.MetadataSearch", false);
+			capabilities_config.put("Extension.Replay.XAddr", "onvif/replay_service");
+		}
+
 		pt::ptree capabilities_node;
 		utility::soap::jsonNodeToXml(capabilities_config, capabilities_node, "tt", XAddrProcessor(srv_addr_));
 
@@ -119,6 +142,7 @@ struct GetCapabilitiesHandler : public OnvifRequestBase
 private:
 	osrv::ServerConfigs& srv_cfgs_;
 	const std::string srv_addr_;
+	const utility::media::MediaProfilesManager& manager_;
 };
 
 struct GetDeviceInformationHandler : public OnvifRequestBase
@@ -518,7 +542,7 @@ DeviceService::DeviceService(const std::string& service_uri, const std::string& 
 	requestHandlers_.push_back(
 			std::make_shared<GetServiceCapabilitiesHandler>(xml_namespaces_, configs_ptree_, srv->GetServerConfigs()));
 	requestHandlers_.push_back(std::make_shared<GetCapabilitiesHandler>(xml_namespaces_, configs_ptree_,
-		*srv->GetServerConfigs(), srv->ServerAddress()));
+		*srv->GetServerConfigs(), srv->ServerAddress(), *srv->MediaProfilesManager()));
 	requestHandlers_.push_back(std::make_shared<GetDeviceInformationHandler>(xml_namespaces_, configs_ptree_));
 	requestHandlers_.push_back(
 			std::make_shared<GetNetworkProtocolsHandler>(xml_namespaces_, configs_ptree_, srv->GetServerConfigs()));

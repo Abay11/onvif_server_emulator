@@ -72,10 +72,10 @@ flowchart TD
     Main[main.cpp: configuration and logger] --> Server[osrv::Server]
     Server --> HTTP[Simple-Web-Server / HTTP]
     Server --> Context[IOnvifServer / service factory]
-    Context --> SOAP[Analytics, Device, DeviceIO, Imaging, Media, Media2, PTZ, Search, Replay]
+    Context --> SOAP[Analytics, Device, DeviceIO, Imaging, Media, Media2, PTZ, Recording, Search, Replay]
     SOAP --> HTTP
     Context --> Profiles[MediaProfilesManager]
-    Profiles --> JSON[media_profiles.config]
+    Profiles --> JSON[channels.config]
     Server --> Events[Event service / NotificationsManager / PullPoint]
     Server --> EventSource[Shared event source]
     EventSource --> Events
@@ -92,13 +92,14 @@ flowchart TD
    directory. `common.config` selects the logging level and output (`console` or
    `file`, with file output written to `OnvifServer.log`).
 2. `Server` is created through a `shared_ptr`. Its `IOnvifServer` base creates the
-   shared HTTP server and `MediaProfilesManager`, which reads `media_profiles.config`.
+   shared HTTP server and `MediaProfilesManager`. Server initialization loads the
+   active catalog from `channels.config`.
    The service factory uses `shared_from_this()`.
 3. `Server::init()` loads shared settings, sets the HTTP bind address and port,
    creates a digest session, and shares the manager's authoritative profile tree.
 4. Discovery is initialized and started before event generators: a bind or
    multicast interface join failure must abort startup at this stage.
-5. `Run()` is called on nine SOAP services. The Event service is then initialized
+5. `Run()` is called on ten SOAP services. The Event service is then initialized
    separately, the RTSP server is created, and the Asio context for response delays
    is started.
 6. `Server::run()` binds each enabled HTTP/HTTPS listener synchronously,
@@ -188,14 +189,16 @@ Linux `execv` after sending its response, rereading all configuration on startup
 see [Application Reboot](SYSTEM_REBOOT.md).
 
 - `common.config`: bind/advertised endpoints, RTP range, authentication,
-  logging, delay and channel simulation, and the RTSP input file.
+  logging, delay simulation, and the RTSP input file.
+- `channels.config`: active channel topology at startup and saved media catalogs.
+  See [NVR channel topology](NVR_CHANNELS.md).
 - `users.config`: plaintext accounts, roles, and enabled flags shared by both authentication mechanisms.
 - `device.config`: device description, service list and XAddrs, and emulated digital
   inputs. `Enabled` in `GetServices` controls service advertisement;
-  `Server::init()` still calls `Run()` on all nine services.
-- `media_profiles.config`: profiles and associated source/encoder configurations.
-  `ProfilesConfig()` shares the manager's authoritative tree; metadata factories
-  receive immutable copies of settings and compiled filters.
+  `Server::init()` still calls `Run()` on all ten SOAP services.
+- The media manager projects active channel catalogs into the shared
+  `ProfilesConfig()` tree. Metadata factories receive immutable settings and
+  compiled filters.
 - `event.config`: namespaces, event properties, generators, and PullPoint settings.
 - `discovery.config`: discovery enablement and local multicast interface selection.
 - Other service `.config` files: data for the corresponding SOAP operations.
@@ -246,13 +249,10 @@ initialization. Hello/Bye/Resolve and IPv6 discovery are not implemented.
 
 ## Media Streams and Recordings
 
-`RtspServer.cpp` registers three fixed RTSP mount points:
-
-| Path | Source |
-| --- | --- |
-| `/Live&HighStream` | Test video and audio; decodes the configured file when `fileStreaming.enabled` is set |
-| `/Live&LowStream` | Separate test video stream without audio |
-| `/Recording0` | Synthetic ONVIF replay using custom `ReplayBin` and `OnvifFactory` types |
+Live profile URIs use a stable path per profile. Matching synthetic streams
+share a video producer before RTP payloading. The fixed `/Live&HighStream`
+and `/Live&LowStream` mounts remain available for manual clients. Replay
+uses an archive-specific path resolved by ONVIF Replay Control.
 
 Live video is encoded as H.264. `AudioSetupFactory` selects the audio setup from
 the first AudioEncoder configuration. Factories share a bounded UDP port pool;
@@ -271,9 +271,10 @@ removes obsolete mounts. The bridge polls independent bounded source queues on
 the RTSP GLib context and requests fresh filtered property state for metadata
 PLAY and media synchronization points. See [RTSP Metadata](RTSP_METADATA.md).
 
-`onvif/Recording.*` models recording descriptions, time ranges, and search sessions
-for Recording Search. Replay Control returns an RTSP URI. This emulates an archive;
-it does not record live video to disk.
+`onvif/RecordingArchive.*` persists job modes, source descriptors, and
+recorded intervals. The Recording Control, Recording Search, and Replay
+services share it with the WebUI. For configuration and playback scope,
+see [NVR channels](NVR_CHANNELS.md#recording).
 
 ## Analytics Rules
 

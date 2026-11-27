@@ -4,6 +4,9 @@
 #include "../Server.h"
 
 #include "../onvif/OnvifRequest.h"
+#include "../utility/ChannelTopology.h"
+#include "../utility/MediaProfilesManager.h"
+#include "../utility/MetadataConfiguration.h"
 
 #include "../utility/HttpHelper.h"
 #include "../utility/SoapHelper.h"
@@ -32,15 +35,39 @@ const std::string CONFIGS_FILE = "imaging.config";
 
 void do_handle_request(std::shared_ptr<HttpServer::Response> response, std::shared_ptr<HttpServer::Request> request);
 
-struct GetImagingSettingsHandler : public OnvifRequestBase
+struct ImagingRequest : OnvifRequestBase
 {
-	GetImagingSettingsHandler(const std::map<std::string, std::string>& xs, const std::shared_ptr<pt::ptree>& configs)
-			: OnvifRequestBase(GetImagingSettings, auth::SECURITY_LEVELS::READ_MEDIA, xs, configs)
+	ImagingRequest(const std::string& operation, auth::SECURITY_LEVELS access,
+								 const std::map<std::string, std::string>& xs,
+								 const std::shared_ptr<pt::ptree>& configs, const utility::media::MediaProfilesManager& manager)
+		: OnvifRequestBase(operation, access, xs, configs), manager_(manager) {}
+
+	void ValidateSource(HttpServer::Request& request) const
+	{
+		if (const auto* topology = manager_.Topology())
+		{
+			pt::ptree xml;
+			pt::read_xml(request.content, xml);
+			const auto token = exns::find_hierarchy("Envelope.Body." + name() + ".VideoSourceToken", xml);
+			if (topology->Owner("VideoSources", token).empty())
+				throw metadata::Fault("NoSource", "The requested video source does not exist");
+		}
+	}
+
+	const utility::media::MediaProfilesManager& manager_;
+};
+
+struct GetImagingSettingsHandler : public ImagingRequest
+{
+	GetImagingSettingsHandler(const std::map<std::string, std::string>& xs, const std::shared_ptr<pt::ptree>& configs,
+										const utility::media::MediaProfilesManager& manager)
+			: ImagingRequest(GetImagingSettings, auth::SECURITY_LEVELS::READ_MEDIA, xs, configs, manager)
 	{
 	}
 
 	void operator()(std::shared_ptr<HttpServer::Response> response, std::shared_ptr<HttpServer::Request> request) override
 	{
+		ValidateSource(*request);
 		auto envelope_tree = utility::soap::getEnvelopeTree(ns_);
 
 		envelope_tree.add("s:Body.timg:GetImagingSettingsResponse.timg:ImagingSettings", "");
@@ -55,15 +82,17 @@ struct GetImagingSettingsHandler : public OnvifRequestBase
 	}
 };
 
-struct GetMoveOptionsHandler : public OnvifRequestBase
+struct GetMoveOptionsHandler : public ImagingRequest
 {
-	GetMoveOptionsHandler(const std::map<std::string, std::string>& xs, const std::shared_ptr<pt::ptree>& configs)
-			: OnvifRequestBase(GetMoveOptions, auth::SECURITY_LEVELS::READ_MEDIA, xs, configs)
+	GetMoveOptionsHandler(const std::map<std::string, std::string>& xs, const std::shared_ptr<pt::ptree>& configs,
+										const utility::media::MediaProfilesManager& manager)
+			: ImagingRequest(GetMoveOptions, auth::SECURITY_LEVELS::READ_MEDIA, xs, configs, manager)
 	{
 	}
 
 	void operator()(std::shared_ptr<HttpServer::Response> response, std::shared_ptr<HttpServer::Request> request) override
 	{
+		ValidateSource(*request);
 		auto envelope_tree = utility::soap::getEnvelopeTree(ns_);
 
 		envelope_tree.add("s:Body.timg:GetMoveOptionsResponse.timg:MoveOptions.tt:Continuous.tt:Speed.tt:Min", 1.00);
@@ -79,15 +108,17 @@ struct GetMoveOptionsHandler : public OnvifRequestBase
 	}
 };
 
-struct GetOptionsHandler : public OnvifRequestBase
+struct GetOptionsHandler : public ImagingRequest
 {
-	GetOptionsHandler(const std::map<std::string, std::string>& xs, const std::shared_ptr<pt::ptree>& configs)
-			: OnvifRequestBase(GetOptions, auth::SECURITY_LEVELS::READ_MEDIA, xs, configs)
+	GetOptionsHandler(const std::map<std::string, std::string>& xs, const std::shared_ptr<pt::ptree>& configs,
+										const utility::media::MediaProfilesManager& manager)
+			: ImagingRequest(GetOptions, auth::SECURITY_LEVELS::READ_MEDIA, xs, configs, manager)
 	{
 	}
 
 	void operator()(std::shared_ptr<HttpServer::Response> response, std::shared_ptr<HttpServer::Request> request) override
 	{
+		ValidateSource(*request);
 		auto envelope_tree = utility::soap::getEnvelopeTree(ns_);
 
 		envelope_tree.add("s:Body.timg:GetOptionsResponse.timg:ImagingOptions", "");
@@ -102,15 +133,17 @@ struct GetOptionsHandler : public OnvifRequestBase
 	}
 };
 
-struct MoveHandler : public OnvifRequestBase
+struct MoveHandler : public ImagingRequest
 {
-	MoveHandler(const std::map<std::string, std::string>& xs, const std::shared_ptr<pt::ptree>& configs)
-			: OnvifRequestBase(Move, auth::SECURITY_LEVELS::ACTUATE, xs, configs)
+	MoveHandler(const std::map<std::string, std::string>& xs, const std::shared_ptr<pt::ptree>& configs,
+										const utility::media::MediaProfilesManager& manager)
+			: ImagingRequest(Move, auth::SECURITY_LEVELS::ACTUATE, xs, configs, manager)
 	{
 	}
 
 	void operator()(std::shared_ptr<HttpServer::Response> response, std::shared_ptr<HttpServer::Request> request) override
 	{
+		ValidateSource(*request);
 		auto envelope_tree = utility::soap::getEnvelopeTree(ns_);
 
 		envelope_tree.add("s:Body.timg:MoveResponse", "");
@@ -125,15 +158,17 @@ struct MoveHandler : public OnvifRequestBase
 	}
 };
 
-struct SetImagingSettingsHandler : public OnvifRequestBase
+struct SetImagingSettingsHandler : public ImagingRequest
 {
-	SetImagingSettingsHandler(const std::map<std::string, std::string>& xs, const std::shared_ptr<pt::ptree>& configs)
-			: OnvifRequestBase(SetImagingSettings, auth::SECURITY_LEVELS::ACTUATE, xs, configs)
+	SetImagingSettingsHandler(const std::map<std::string, std::string>& xs, const std::shared_ptr<pt::ptree>& configs,
+										const utility::media::MediaProfilesManager& manager)
+			: ImagingRequest(SetImagingSettings, auth::SECURITY_LEVELS::ACTUATE, xs, configs, manager)
 	{
 	}
 
 	void operator()(std::shared_ptr<HttpServer::Response> response, std::shared_ptr<HttpServer::Request> request) override
 	{
+		ValidateSource(*request);
 		auto envelope_tree = utility::soap::getEnvelopeTree(ns_);
 
 		envelope_tree.add("s:Body.timg:SetImagingSettingsResponse", "");
@@ -148,15 +183,17 @@ struct SetImagingSettingsHandler : public OnvifRequestBase
 	}
 };
 
-struct StopHandler : public OnvifRequestBase
+struct StopHandler : public ImagingRequest
 {
-	StopHandler(const std::map<std::string, std::string>& xs, const std::shared_ptr<pt::ptree>& configs)
-			: OnvifRequestBase(Stop, auth::SECURITY_LEVELS::ACTUATE, xs, configs)
+	StopHandler(const std::map<std::string, std::string>& xs, const std::shared_ptr<pt::ptree>& configs,
+										const utility::media::MediaProfilesManager& manager)
+			: ImagingRequest(Stop, auth::SECURITY_LEVELS::ACTUATE, xs, configs, manager)
 	{
 	}
 
 	void operator()(std::shared_ptr<HttpServer::Response> response, std::shared_ptr<HttpServer::Request> request) override
 	{
+		ValidateSource(*request);
 		auto envelope_tree = utility::soap::getEnvelopeTree(ns_);
 
 		envelope_tree.add("s:Body.timg:StopResponse", "");
@@ -176,12 +213,12 @@ ImagingService::ImagingService(const std::string& service_uri, const std::string
 															 std::shared_ptr<IOnvifServer> srv)
 		: IOnvifService(service_uri, service_name, srv)
 {
-	requestHandlers_.push_back(std::make_shared<imaging::GetImagingSettingsHandler>(xml_namespaces_, configs_ptree_));
-	requestHandlers_.push_back(std::make_shared<imaging::GetMoveOptionsHandler>(xml_namespaces_, configs_ptree_));
-	requestHandlers_.push_back(std::make_shared<imaging::GetOptionsHandler>(xml_namespaces_, configs_ptree_));
-	requestHandlers_.push_back(std::make_shared<imaging::MoveHandler>(xml_namespaces_, configs_ptree_));
-	requestHandlers_.push_back(std::make_shared<imaging::SetImagingSettingsHandler>(xml_namespaces_, configs_ptree_));
-	requestHandlers_.push_back(std::make_shared<imaging::StopHandler>(xml_namespaces_, configs_ptree_));
+	requestHandlers_.push_back(std::make_shared<imaging::GetImagingSettingsHandler>(xml_namespaces_, configs_ptree_, *srv->MediaProfilesManager()));
+	requestHandlers_.push_back(std::make_shared<imaging::GetMoveOptionsHandler>(xml_namespaces_, configs_ptree_, *srv->MediaProfilesManager()));
+	requestHandlers_.push_back(std::make_shared<imaging::GetOptionsHandler>(xml_namespaces_, configs_ptree_, *srv->MediaProfilesManager()));
+	requestHandlers_.push_back(std::make_shared<imaging::MoveHandler>(xml_namespaces_, configs_ptree_, *srv->MediaProfilesManager()));
+	requestHandlers_.push_back(std::make_shared<imaging::SetImagingSettingsHandler>(xml_namespaces_, configs_ptree_, *srv->MediaProfilesManager()));
+	requestHandlers_.push_back(std::make_shared<imaging::StopHandler>(xml_namespaces_, configs_ptree_, *srv->MediaProfilesManager()));
 }
 
 } // namespace osrv

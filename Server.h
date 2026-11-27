@@ -34,6 +34,8 @@ enum class AUTH_SCHEME
 struct ServerConfigs
 {
 	std::weak_ptr<event::EventSource> event_source;
+	std::shared_ptr<RecordingArchive> archive;
+	std::function<void(const std::string&)> prepare_replay;
 	std::shared_ptr<DetectorControls> detectors = std::make_shared<DetectorControls>();
 	std::shared_ptr<SystemJournal> journal = std::make_shared<SystemJournal>();
 
@@ -83,8 +85,6 @@ struct ServerConfigs
 	// milliseconds
 	unsigned short network_delay_simulation_ = 0;
 
-	bool multichannel_enabled_ = false;
-	unsigned char channels_count_ = 0;
 
 	std::string rtsp_streaming_file_;
 	bool rtsp_metadata_enabled_ = true;

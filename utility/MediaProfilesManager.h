@@ -157,9 +157,12 @@ namespace utility::media
 {
 // Preserves empty array types in the PropertyTree-backed media catalogs.
 std::string MediaConfigJson(const boost::property_tree::ptree& tree);
+std::string ChannelConfigJson(const boost::property_tree::ptree& tree);
 
 // NOTE, before any operation you should load configuration with Read()
 // Otherwise correct work not guaranteed
+class ChannelTopology;
+
 class ConfigsReaderWriter
 {
 public:
@@ -172,6 +175,8 @@ public:
 	// Validate and persist exact JSON bytes, preserving empty arrays and objects.
 	void SaveJson(const std::string& candidate) const;
 	void BeforeSave(std::function<void(const std::string&)> validate) { before_save_ = std::move(validate); }
+	void UseSnapshot(const boost::property_tree::ptree& tree,
+									 std::function<void(const boost::property_tree::ptree&)> persist);
 	void OnSave(std::function<void()> callback) { on_save_ = std::move(callback); }
 	// reset all changes to the initial state how it was at the first Read() using backup instance.
 	// it also writes backup instance state into a file calling Save() automatically.
@@ -194,6 +199,7 @@ public:
 private:
 	std::function<void(const std::string&)> before_save_;
 	std::function<void()> on_save_;
+	std::function<void(const boost::property_tree::ptree&)> persist_;
 	const std::string filePath_;
 	std::shared_ptr<boost::property_tree::ptree> configsTree_;
 	std::unique_ptr<boost::property_tree::ptree> configsTreeBackup_; // used for reset operation
@@ -204,6 +210,9 @@ class MediaProfilesManager
 {
 public:
 	explicit MediaProfilesManager(const std::string& filePath);
+	void ActivateTopology(const std::string& path);
+	const ChannelTopology* Topology() const { return topology_.get(); }
+	bool Compatible(const boost::property_tree::ptree& profile, std::string_view type, std::string_view token) const;
 
 	void Create(const std::string& profileName,
 							const std::vector<std::pair<std::string, std::string>>& configurations = {}) const;
@@ -262,6 +271,7 @@ private:
 	std::string newProfileToken(size_t n) const;
 	boost::property_tree::ptree::iterator getProfileNode(std::string_view profileToken) const;
 
+	std::shared_ptr<const ChannelTopology> topology_;
 	bool metadata_available_ = true;
 	std::unique_ptr<ConfigsReaderWriter> readerWriter_;
 };

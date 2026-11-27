@@ -236,28 +236,6 @@
       "additionalProperties": false,
       "description": "Simulated Event service response delay in milliseconds."
     },
-    "multichannelSimulation": {
-      "type": "object",
-      "properties": {
-        "description": {
-          "type": "string"
-        },
-        "enabled": {
-          "$ref": "types.schema.json#/$defs/boolean"
-        },
-        "channelCount": {
-          "type": "integer",
-          "minimum": 1,
-          "maximum": 255
-        }
-      },
-      "required": [
-        "enabled",
-        "channelCount"
-      ],
-      "additionalProperties": false,
-      "description": "Reuses first-channel configurations for simulated channels; does not define independent pipelines."
-    },
     "fileStreaming": {
       "type": "object",
       "properties": {
@@ -338,7 +316,6 @@
     "addresses",
     "authentication",
     "networkDelaySimulation",
-    "multichannelSimulation",
     "fileStreaming"
   ],
   "additionalProperties": false,

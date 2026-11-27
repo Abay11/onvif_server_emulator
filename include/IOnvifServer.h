@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../HttpServerFwd.h"
+#include "../onvif/RecordingArchive.h"
 
 #include <boost/property_tree/ptree_fwd.hpp>
 
@@ -38,6 +39,7 @@ const std::string MEDIA = "http://www.onvif.org/ver10/media/wsdl";
 const std::string MEDIA2 = "http://www.onvif.org/ver20/media/wsdl";
 const std::string PTZ = "http://www.onvif.org/ver20/ptz/wsdl";
 const std::string REPLAY = "http://www.onvif.org/ver10/replay/wsdl";
+const std::string RECORDING = "http://www.onvif.org/ver10/recording/wsdl";
 const std::string SEARCH = "http://www.onvif.org/ver10/search/wsdl";
 }; // namespace SERVICE_URI
 
@@ -61,7 +63,10 @@ public:
 	std::shared_ptr<IOnvifService> MediaService();
 	std::shared_ptr<IOnvifService> Media2Service();
 	std::shared_ptr<IOnvifService> PTZService();
+	std::shared_ptr<IOnvifService> RecordingControlService();
 	std::shared_ptr<IOnvifService> RecordingSearchService();
+	std::optional<RecordingArchive::Source> RecordingSource(const std::string& channel, const std::string& profile) const;
+	bool RecordingProfileAvailable(const std::string& channel, const std::string& profile) const;
 	std::shared_ptr<IOnvifService> ReplayControlService();
 
 	const std::shared_ptr<ILogger> Logger() const;
@@ -100,6 +105,7 @@ private:
 	std::shared_ptr<IOnvifService> media_service_;
 	std::shared_ptr<IOnvifService> media2_service_;
 	std::shared_ptr<IOnvifService> ptz_service_;
+	std::shared_ptr<IOnvifService> recording_control_service_;
 	std::shared_ptr<IOnvifService> recording_search_service_;
 	std::shared_ptr<IOnvifService> replay_control_service_;
 

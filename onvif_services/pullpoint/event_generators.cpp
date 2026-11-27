@@ -25,7 +25,8 @@ namespace osrv
 	void FaceRecognitionEventGenerator::generate_event()
 	{
 		utility::face::Sample sample{step_++ % 3};
-		for (const auto& source : detector_->VideoSources())
+		const auto sources = VideoSource().empty() ? detector_->VideoSources() : std::vector<std::string>{VideoSource()};
+		for (const auto& source : sources)
 			for (const auto& event : detector_->SampleFace(source, sample))
 				event_signal_(event);
 	}
@@ -44,7 +45,8 @@ namespace osrv
 	void LicensePlateEventGenerator::generate_event()
 	{
 		auto sample = utility::lpr::SyntheticSample(step_++);
-		for (const auto& source : detector_->VideoSources())
+		const auto sources = VideoSource().empty() ? detector_->VideoSources() : std::vector<std::string>{VideoSource()};
+		for (const auto& source : sources)
 			for (const auto& event : detector_->SamplePlate(source, sample))
 				event_signal_(event);
 	}
@@ -65,7 +67,10 @@ namespace osrv
 	{
 		// A reproducible synthetic point traverses the default source in pixel coordinates.
 		++step_;
-		auto events = detector_->Sample((step_ % 8) * 160.0 + 80.0, 360.0, step_ % 2 ? 0.75 : 0.0);
+		const auto x = ((step_ % 8) + 0.5) / 8.0;
+		const auto strength = step_ % 2 ? 0.75 : 0.0;
+		auto events = VideoSource().empty() ? detector_->Sample(x * 1280.0, 360.0, strength) :
+				detector_->Sample(x, 0.5, strength, VideoSource());
 		for (auto& event : events)
 			event_signal_(event);
 	}
@@ -88,7 +93,8 @@ namespace osrv
 		// A persistent synthetic object moves back and forth; reversal never teleports it.
 		constexpr double positions[] = {-0.75, -0.25, 0.25, 0.75, 0.75, 0.25, -0.25, -0.75};
 		auto x = positions[step_++ % 8];
-		for (const auto& source : detector_->VideoSources())
+		const auto sources = VideoSource().empty() ? detector_->VideoSources() : std::vector<std::string>{VideoSource()};
+		for (const auto& source : sources)
 			for (const auto& event : detector_->SampleObject(source, "1", x, 0.0, "Human"))
 				event_signal_(event);
 	}
@@ -106,7 +112,7 @@ namespace osrv
 
 	void LineCountingEventGenerator::generate_event()
 	{
-		for (const auto& event : detector_->TickCounting())
+		for (const auto& event : detector_->TickCounting(VideoSource()))
 			event_signal_(event);
 	}
 	FieldDetectorEventGenerator::FieldDetectorEventGenerator(std::shared_ptr<utility::AnalyticsRules> detector,
@@ -122,7 +128,7 @@ namespace osrv
 
 	void FieldDetectorEventGenerator::generate_event()
 	{
-		for (const auto& event : detector_->TickFields())
+		for (const auto& event : detector_->TickFields(VideoSource()))
 			event_signal_(event);
 	}
 
@@ -205,7 +211,7 @@ namespace osrv
 			nm.property_operation = "Initialized";
 			nm.source_item_descriptions.push_back({"Source", source_token_});
 			nm.data_name = "State";
-			nm.data_value = "false";
+			nm.data_value = state_ ? "true" : "false";
 
 			return { nm };
 		}
@@ -250,7 +256,7 @@ namespace osrv
 			nm.source_item_descriptions.push_back({"VideoAnalyticsConfigurationToken", video_analytics_configuration_token_});
 			nm.source_item_descriptions.push_back({"Rule", rule_});
 			nm.data_name = data_item_name_;
-			nm.data_value = "false";
+			nm.data_value = state_ ? "true" : "false";
 
 			return { nm };
 		}
@@ -298,7 +304,7 @@ namespace osrv
 				analytics_configuration_token_});
 			nm.source_item_descriptions.push_back({"Rule", rule_});
 			nm.data_name = data_item_name_;
-			nm.data_value = "false";
+			nm.data_value = state_ ? "true" : "false";
 
 			return { nm };
 		}

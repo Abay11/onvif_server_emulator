@@ -1,248 +1,250 @@
 #include "recording_search_service.h"
-
-#include "../Logger.h"
-
 #include "../Server.h"
-
 #include "../onvif/OnvifRequest.h"
-#include "../utility/AuthHelper.h"
-
-#include "../utility/DateTime.hpp"
+#include "../onvif/RecordingArchive.h"
 #include "../utility/HttpHelper.h"
+#include "../utility/MetadataConfiguration.h"
+#include "../utility/MediaProfilesManager.h"
 #include "../utility/SoapHelper.h"
+#include "../utility/StreamTransport.h"
 #include "../utility/XmlParser.h"
 
-#include "onvif_services/service_configs.h"
-
-#include "../onvif/Recording.h"
-
 #include <boost/property_tree/xml_parser.hpp>
+#include <boost/uuid/random_generator.hpp>
+#include <boost/uuid/uuid_io.hpp>
+
+#include <algorithm>
+#include <regex>
+#include <set>
 
 namespace osrv
 {
-namespace pt = boost::property_tree;
-
-// the list of implemented methods
-const std::string FindEvents{"FindEvents"};
-const std::string FindRecordings{"FindRecordings"};
-const std::string GetEventSearchResults{"GetEventSearchResults"};
-const std::string GetRecordingSearchResults{"GetRecordingSearchResults"};
-const std::string GetServiceCapabilities{"GetServiceCapabilities"};
-
-struct FindRecordingsHandler : public OnvifRequestBase
+namespace
 {
-	FindRecordingsHandler(const std::map<std::string, std::string>& xs, const std::shared_ptr<pt::ptree>& configs)
-			: OnvifRequestBase(FindRecordings, auth::SECURITY_LEVELS::READ_MEDIA, xs, configs)
+using Tree = RecordingArchive::Tree;
+using Entry = RecordingArchive::Entry;
+using Time = RecordingArchive::Time;
+using Steady = std::chrono::steady_clock;
+
+Tree Information(const Entry& entry, Time now)
+{
+	Tree result;
+	result.put("tt:RecordingToken", entry.token);
+	result.put_child("tt:Source", RecordingSourceXml(entry.source));
+	const auto begin = RecordingUtc(entry.intervals.front().start);
+	const auto end = RecordingUtc(entry.intervals.back().end.value_or(now));
+	result.put("tt:EarliestRecording", begin);
+	result.put("tt:LatestRecording", end);
+	result.put("tt:Content", "Synthetic recording");
+	for (const auto& type : RecordingTracks(entry.source))
 	{
+		Tree track;
+		track.put("tt:TrackToken", type);
+		track.put("tt:TrackType", type);
+		track.put("tt:Description", "Synthetic " + type);
+		track.put("tt:DataFrom", begin);
+		track.put("tt:DataTo", end);
+		result.add_child("tt:Track", track);
 	}
+	result.put("tt:RecordingStatus", entry.active ? "Recording" : "Stopped");
+	return result;
+}
 
-	void operator()(std::shared_ptr<HttpServer::Response> response, std::shared_ptr<HttpServer::Request> request) override
-	{
-		// TODO: more correct implementation should process requests parameters
-		// Scope (IncludedSources, IncludedRecordings, RecordingInformationFilter, MaxMatches, KeepAliveTime
-
-		auto envelope_tree = utility::soap::getEnvelopeTree(ns_);
-		envelope_tree.add("s:Body.tse:FindRecordingsResponse.tse:SearchToken", std::to_string(searchToken_++));
-
-		pt::ptree root_tree;
-		root_tree.put_child("s:Envelope", envelope_tree);
-
-		std::ostringstream os;
-		pt::write_xml(os, root_tree);
-
-		utility::http::fillResponseWithHeaders(*response, os.str());
-	}
-
-private:
-	unsigned int searchToken_ = 0;
+struct Session
+{
+	std::vector<Tree> results;
+	std::size_t index = 0;
+	Time at;
+	Steady::time_point expires;
+	Steady::duration lifetime;
 };
 
-struct FindEventsHandler : public OnvifRequestBase
+class Search
 {
-	FindEventsHandler(std::shared_ptr<RecordingsMgr> rec_mgr, const std::map<std::string, std::string>& xs,
-										const std::shared_ptr<pt::ptree>& configs)
-			: OnvifRequestBase(FindEvents, auth::SECURITY_LEVELS::READ_MEDIA, xs, configs), rec_mgr_(rec_mgr)
+public:
+	explicit Search(RecordingArchive& archive) : archive_(archive) {}
+
+	Tree Execute(const std::string& operation, const Tree& request)
 	{
-	}
-
-	void operator()(std::shared_ptr<HttpServer::Response> response, std::shared_ptr<HttpServer::Request> request) override
-	{
-		// TODO: more correct implementation should process requests parameters
-		// Scope (IncludedSources, IncludedRecordings, RecordingInformationFilter, MaxMatches, KeepAliveTime
-
-		// TODO: select required recording
-		auto rec = rec_mgr_->Recordings().front();
-		auto re = rec->GetRecordingEvents();
-
-		auto ss = re->NewSearchSession(EventsSearchSessionFactory("SimpleEventsSearchSession"));
-
-		auto envelope_tree = utility::soap::getEnvelopeTree(ns_);
-		envelope_tree.add("s:Body.tse:FindEventsResponse.tse:SearchToken", ss->SearchToken());
-
-		pt::ptree root_tree;
-		root_tree.put_child("s:Envelope", envelope_tree);
-
-		std::ostringstream os;
-		pt::write_xml(os, root_tree);
-
-		utility::http::fillResponseWithHeaders(*response, os.str());
-	}
-
-private:
-	std::shared_ptr<RecordingsMgr> rec_mgr_;
-};
-
-struct GetEventSearchResultsHandler : public OnvifRequestBase
-{
-	GetEventSearchResultsHandler(std::shared_ptr<osrv::RecordingsMgr> rec_mgr, std::map<std::string, std::string>& xs,
-															 const std::shared_ptr<pt::ptree>& configs)
-			: OnvifRequestBase(GetEventSearchResults, auth::SECURITY_LEVELS::READ_MEDIA, xs, configs), rec_mgr_(rec_mgr)
-	{
-	}
-
-	void operator()(std::shared_ptr<HttpServer::Response> response, std::shared_ptr<HttpServer::Request> request) override
-	{
-		// TODO: more correct implementation should process requests parameters
-		// MinResults, MaxResults, WaitTime
-
-		pt::ptree request_xml;
-		auto s = request->content.string();
-		std::istringstream is(request->content.string());
-		pt::xml_parser::read_xml(is, request_xml);
-		auto searchToken = exns::find_hierarchy("Envelope.Body.GetEventSearchResults.SearchToken", request_xml);
-		auto searchSession = rec_mgr_->Recordings().front()->GetRecordingEvents()->SearchSession(searchToken);
-
-		pt::ptree results_tree;
-
-		for (const auto& e : searchSession->Events())
+		const auto now = Steady::now();
+		std::erase_if(sessions_, [&](const auto& item) { return item.second.expires <= now; });
+		auto arg = [&](const char* key) {
+			const auto value = exns::find(key, request);
+			return value == request.not_found() ? std::string{} : value->second.data();
+		};
+		Tree result;
+		if (operation == "GetServiceCapabilities")
 		{
-			pt::ptree ev_info;
-			ev_info.add("tt:RecordingToken", e.recordingToken);
-			ev_info.add("tt:TrackToken", e.trackToken);
-			ev_info.add("tt:Time", utility::datetime::posix_datetime_to_utc(e.utcTime));
-			ev_info.add("tt:Event.wsnt:Topic.<xmlattr>.Dialect",
-									"http://www.onvif.org/ver10/tev/topicExpression/ConcreteSet");
-			ev_info.put("tt:Event.wsnt:Topic", "tns1:RecordingHistory/Track/State");
-			ev_info.add("tt:Event.wsnt:Message.tt:Message.<xmlattr>.UtcTime",
-									utility::datetime::posix_datetime_to_utc(e.utcTime));
-			ev_info.add("tt:Event.wsnt:Message.tt:Message.<xmlattr>.PropertyOperation", "Changed");
+			result.put("tse:Capabilities.<xmlattr>.MetadataSearch", false);
+			result.put("tse:Capabilities.<xmlattr>.GeneralStartEvents", false);
+		}
+		else if (operation == "GetRecordingSummary")
+		{
+			const auto entries = archive_.Snapshot();
+			Time first{}, last{};
+			for (const auto& entry : entries)
+			{
+				auto begin = entry.intervals.front().start;
+				auto end = entry.intervals.back().end.value_or(archive_.Now());
+				if (first == Time{} || begin < first)
+					first = begin;
+				last = std::max(last, end);
+			}
+			result.put("tse:Summary.tt:DataFrom", RecordingUtc(first));
+			result.put("tse:Summary.tt:DataUntil", RecordingUtc(last));
+			result.put("tse:Summary.tt:NumberRecordings", entries.size());
+		}
+		else if (operation == "GetRecordingInformation")
+		{
+			const auto entry = archive_.Recording(arg("RecordingToken"));
+			if (!entry)
+				throw metadata::Fault("InvalidToken", "The recording does not exist");
+			result.put_child("tse:RecordingInformation", Information(*entry, archive_.Now()));
+		}
+		else if (operation == "FindRecordings")
+		{
+			const auto scope = exns::find("Scope", request);
+			if (scope == request.not_found())
+				throw well_formed();
+			result.put("tse:SearchToken", Find(scope->second, arg("MaxMatches"), arg("KeepAliveTime"), now));
+		}
+		else
+		{
+			const auto found = sessions_.find(arg("SearchToken"));
+			if (found == sessions_.end())
+				throw metadata::Fault("InvalidToken", "The search session does not exist or has expired");
+			auto& session = found->second;
+			session.expires = now + session.lifetime;
+			if (operation == "EndSearch")
+			{
+				result.put("tse:Endpoint", RecordingUtc(session.at));
+				sessions_.erase(found);
+			}
+			else if (operation == "GetSearchState")
+				result.put("tse:State", "Completed");
+			else
+			{
+				const auto limit = Limit(arg("MaxResults"), session.results.size());
+				const auto end = session.index + std::min(limit, session.results.size() - session.index);
+				Tree list;
+				list.put("tt:SearchState", "Completed");
+				while (session.index < end)
+					list.add_child("tt:RecordingInformation", session.results[session.index++]);
+				result.put_child("tse:ResultList", list);
+			}
+		}
+		return result;
+	}
 
-			pt::ptree recordingItemDescr;
-			recordingItemDescr.add("<xmlattr>.Name", "RecordingToken");
-			recordingItemDescr.add("<xmlattr>.Value", e.recordingToken);
-			ev_info.add_child("tt:Event.wsnt:Message.tt:Message.tt:Source.tt:SimpleItem", recordingItemDescr);
+private:
+	static std::size_t Limit(const std::string& text, std::size_t fallback)
+	{
+		if (text.empty())
+			return fallback;
+		try
+		{
+			std::size_t parsed = 0;
+			auto limit = std::stoll(text, &parsed);
+			if (limit < 0 || parsed != text.size())
+				throw std::invalid_argument("limit");
+			return static_cast<std::size_t>(limit);
+		}
+		catch (const std::logic_error&)
+		{
+			throw well_formed();
+		}
+	}
 
-			pt::ptree trackItemDescr;
-			trackItemDescr.add("<xmlattr>.Name", "Track");
-			trackItemDescr.add("<xmlattr>.Value", e.trackToken);
-			ev_info.add_child("tt:Event.wsnt:Message.tt:Message.tt:Source.tt:SimpleItem", trackItemDescr);
+	std::string Find(const Tree& scope, const std::string& maxMatches, const std::string& keepAlive, Steady::time_point now)
+	{
+		static const std::regex duration(R"(^PT(?:(\d{1,9})H)?(?:(\d{1,9})M)?(?:(\d{1,9}(?:\.\d+)?)S)?$)");
+		std::smatch parts;
+		if (!std::regex_match(keepAlive, parts, duration) || keepAlive == "PT")
+			throw well_formed();
+		auto seconds = [&](int index) { return parts[index].matched ? std::stod(parts[index].str()) : 0.; };
+		const double value = std::clamp(seconds(1) * 3600 + seconds(2) * 60 + seconds(3), 0.1, 3600.);
+		Session session;
+		session.at = archive_.Now();
+		session.lifetime = std::chrono::duration_cast<Steady::duration>(std::chrono::duration<double>(value));
+		session.expires = now + session.lifetime;
 
-			ev_info.add("tt:Event.wsnt:Message.tt:Message.tt:Data.tt:SimpleItem.<xmlattr>.Name", "IsDataPresent");
-			ev_info.add("tt:Event.wsnt:Message.tt:Message.tt:Data.tt:SimpleItem.<xmlattr>.Value", e.isDataPresent);
-			ev_info.add("tt:StartStateEvent", false);
-
-			results_tree.add_child("tt:Result", ev_info);
+		std::set<std::string> recordings, sources;
+		for (const auto& [field, item] : scope)
+		{
+			const auto name = exns::get_element_without_ns(field);
+			if (name == "IncludedRecordings")
+				recordings.insert(item.data());
+			else if (name == "IncludedSources")
+			{
+				const auto token = exns::find("Token", item);
+				if (token == item.not_found())
+					throw metadata::Fault("InvalidSource", "The search source must have a token");
+				sources.insert(token->second.data());
+			}
+			else if (name == "RecordingInformationFilter" && !item.data().empty())
+				throw metadata::Fault("InvalidFilterFault", "Recording information XPath filters are unavailable");
 		}
 
-		results_tree.add("tt:SearchState", "Completed");
-
-		auto envelope_tree = utility::soap::getEnvelopeTree(ns_);
-		envelope_tree.add_child("s:Body.tse:GetEventSearchResultsResponse.tse:ResultList", results_tree);
-
-		pt::ptree root;
-		root.add_child("s:Envelope", envelope_tree);
-		std::ostringstream os;
-		pt::write_xml(os, root);
-
-		utility::http::fillResponseWithHeaders(*response, os.str());
-	}
-
-private:
-	std::shared_ptr<RecordingsMgr> rec_mgr_;
-};
-
-struct GetRecordingSearchResultsHandler : public OnvifRequestBase
-{
-	GetRecordingSearchResultsHandler(std::shared_ptr<osrv::RecordingsMgr> rec_mgr, std::map<std::string, std::string>& xs,
-																	 const std::shared_ptr<pt::ptree>& configs)
-			: OnvifRequestBase(GetRecordingSearchResults, auth::SECURITY_LEVELS::READ_MEDIA, xs, configs), rec_mgr_(rec_mgr)
-	{
-	}
-
-	void operator()(std::shared_ptr<HttpServer::Response> response, std::shared_ptr<HttpServer::Request> request) override
-	{
-		// TODO: more correct implementation should process requests parameters
-		// MinResults, MaxResults, WaitTime
-
-		pt::ptree results_tree;
-
-		for (const auto& r : rec_mgr_->Recordings())
+		const auto snapshot = archive_.Snapshot();
+		const auto limit = Limit(maxMatches, snapshot.size());
+		for (const auto& token : recordings)
+			if (std::ranges::none_of(snapshot, [&](const auto& entry) { return entry.token == token; }))
+				throw metadata::Fault("InvalidToken", "The recording does not exist");
+		for (const auto& entry : snapshot)
 		{
-			pt::ptree rec_info;
-			rec_info.add("tt:RecordingToken", r->Token());
-			rec_info.add("tt:Source.tt:SourceId", "http://localhost/sourceID");
-			rec_info.add("tt:Source.tt:Name", "DeviceName");
-			rec_info.add("tt:Source.tt:Location", "Location description");
-			rec_info.add("tt:Source.tt:Description", "Source description");
-			rec_info.add("tt:Source.tt:Address", "http://localhost/address");
-
-			rec_info.add("tt:EarliestRecording", utility::datetime::posix_datetime_to_utc(r->DateFrom()));
-			rec_info.add("tt:LatestRecording", utility::datetime::posix_datetime_to_utc(r->DateUntil()));
-			rec_info.add("tt:ContentRecording", "Content description");
-
-			rec_info.add("tt:Track.tt:TrackToken", "VideoTrack_0");
-			rec_info.add("tt:Track.tt:TrackType", "Video");
-			rec_info.add("tt:Track.tt:Description", "Video track");
-			rec_info.add("tt:Track.tt:DataFrom", utility::datetime::posix_datetime_to_utc(r->DateFrom()));
-			rec_info.add("tt:Track.tt:DataTo", utility::datetime::posix_datetime_to_utc(r->DateUntil()));
-			rec_info.add("tt:Track.tt:RecordingStatus", "Initiated");
-
-			results_tree.add_child("tt:RecordingInformation", rec_info);
+			if (session.results.size() == limit)
+				break;
+			if (!recordings.empty() && !recordings.contains(entry.token))
+				continue;
+			if (!sources.empty() && !sources.contains(entry.source.profile) && !sources.contains(entry.source.videoSource))
+				continue;
+			session.results.push_back(Information(entry, session.at));
 		}
-
-		results_tree.add("tt:SearchState", "Completed");
-
-		auto envelope_tree = utility::soap::getEnvelopeTree(ns_);
-		envelope_tree.add_child("s:Body.tse:GetRecordingSearchResultsResponse.tse:ResultList", results_tree);
-
-		pt::ptree root_tree;
-		root_tree.put_child("s:Envelope", envelope_tree);
-
-		std::ostringstream os;
-		pt::write_xml(os, root_tree);
-
-		utility::http::fillResponseWithHeaders(*response, os.str());
+		if (sessions_.size() >= 256)
+			throw std::runtime_error("Too many recording search sessions");
+		const auto token = boost::uuids::to_string(boost::uuids::random_generator()());
+		sessions_.emplace(token, std::move(session));
+		return token;
 	}
 
-private:
-	std::shared_ptr<RecordingsMgr> rec_mgr_;
+	RecordingArchive& archive_;
+	std::map<std::string, Session> sessions_;
 };
 
-struct GetServiceCapabilitiesHandler : public OnvifRequestBase
+struct Handler : OnvifRequestBase
 {
-	GetServiceCapabilitiesHandler(const std::map<std::string, std::string>& ns, const std::shared_ptr<pt::ptree>& configs)
-			: OnvifRequestBase(GetServiceCapabilities, auth::SECURITY_LEVELS::PRE_AUTH, ns, configs)
+	Handler(const std::string& operation, const std::map<std::string, std::string>& ns,
+					const std::shared_ptr<Tree>& config, const std::shared_ptr<Search>& search)
+		: OnvifRequestBase(operation, operation == "GetServiceCapabilities" ? auth::SECURITY_LEVELS::PRE_AUTH :
+																																	auth::SECURITY_LEVELS::READ_MEDIA, ns, config),
+			search_(search)
 	{
+	}
+	void operator()(std::shared_ptr<HttpServer::Response> response,
+									std::shared_ptr<HttpServer::Request> request) override
+	{
+		Tree input;
+		pt::read_xml(request->content, input);
+		auto envelope = utility::soap::getEnvelopeTree(ns_);
+		envelope.add_child("s:Body.tse:" + name() + "Response", search_->Execute(name(), StreamOperation(input, name())));
+		Tree root;
+		root.put_child("s:Envelope", envelope);
+		std::ostringstream out;
+		pt::write_xml(out, root);
+		utility::http::fillResponseWithHeaders(*response, out.str());
 	}
 
-	void operator()(std::shared_ptr<HttpServer::Response> response, std::shared_ptr<HttpServer::Request> request) override
-	{
-		throw std::runtime_error("GetServiceCapabilities is still implementing");
-	}
+	std::shared_ptr<Search> search_;
 };
+} // namespace
 
-RecordingSearchService::RecordingSearchService(const std::string& service_uri, const std::string& service_name,
-																							 std::shared_ptr<IOnvifServer> srv)
-		: IOnvifService(service_uri, service_name, srv)
-
+RecordingSearchService::RecordingSearchService(const std::string& uri, const std::string& name,
+																							 std::shared_ptr<IOnvifServer> server)
+	: IOnvifService(uri, name, server)
 {
-	rec_mgr_ = std::make_shared<RecordingsMgr>(ConfigPath(srv->ConfigsPath(), ConfigName(service_name)));
-
-	requestHandlers_.push_back(std::make_shared<FindEventsHandler>(rec_mgr_, xml_namespaces_, configs_ptree_));
-	requestHandlers_.push_back(std::make_shared<FindRecordingsHandler>(xml_namespaces_, configs_ptree_));
-	requestHandlers_.push_back(std::make_shared<GetEventSearchResultsHandler>(rec_mgr_, xml_namespaces_, configs_ptree_));
-	requestHandlers_.push_back(
-			std::make_shared<GetRecordingSearchResultsHandler>(rec_mgr_, xml_namespaces_, configs_ptree_));
-	requestHandlers_.push_back(std::make_shared<GetServiceCapabilitiesHandler>(xml_namespaces_, configs_ptree_));
+	auto search = std::make_shared<Search>(*server->GetServerConfigs()->archive);
+	for (const auto* operation : {"GetServiceCapabilities", "GetRecordingSummary", "GetRecordingInformation",
+																 "FindRecordings", "GetRecordingSearchResults", "GetSearchState", "EndSearch"})
+		requestHandlers_.push_back(std::make_shared<Handler>(operation, xml_namespaces_, configs_ptree_, search));
 }
 } // namespace osrv

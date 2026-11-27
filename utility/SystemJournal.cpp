@@ -76,6 +76,8 @@ void SystemJournal::Detector(const event::NotificationMessage& event)
 	// arbitrary ElementItems, credentials, face labels or licence plate images.
 	std::string summary = event.property_operation.empty() ? "Detection" : Clip(event.property_operation, 32);
 	unsigned count = 0;
+	if (!event.video_source.empty())
+		summary += " · VideoSource=" + Clip(event.video_source, 96);
 	for (const auto& [name, value] : event.source_item_descriptions)
 		if ((name == "Rule" || name == "RuleName" || name == "InputToken" || name == "VideoSource" ||
 				 name == "VideoSourceConfigurationToken") &&

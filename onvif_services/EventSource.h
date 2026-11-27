@@ -92,9 +92,11 @@ public:
 	EventSource(const EventSource&) = delete;
 	EventSource& operator=(const EventSource&) = delete;
 	void AddGenerator(std::shared_ptr<IEventGenerator> generator);
-	void ConfigureDetector(const std::string& id, int interval, bool automatic, bool enabled);
-	bool HasDetector(const std::string& id);
-	void GenerateOnce(const std::string& id, const std::string& configuration = "", const std::string& rule = "");
+	void ConfigureDetector(const std::string& id, int interval, bool automatic, bool enabled,
+											 const std::string& videoSource = {});
+	bool HasDetector(const std::string& id, const std::string& videoSource = {});
+	void GenerateOnce(const std::string& id, const std::string& configuration = "", const std::string& rule = "",
+									 const std::string& videoSource = {});
 	void Run();
 	void SetNamespaces(std::map<std::string, std::string> namespaces);
 	std::map<std::string, std::string> Namespaces() override;

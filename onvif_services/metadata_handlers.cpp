@@ -4,6 +4,7 @@
 #include "../onvif/OnvifRequest.h"
 #include "../utility/HttpHelper.h"
 #include "../utility/MetadataConfiguration.h"
+#include "../utility/MediaProfilesManager.h"
 #include "../utility/SoapHelper.h"
 #include <boost/property_tree/xml_parser.hpp>
 
@@ -60,13 +61,18 @@ void AddMetadataHandlers(std::vector<std::shared_ptr<OnvifRequestBase>>& handler
 												 const std::map<std::string, std::string>& namespaces, const std::shared_ptr<pt::ptree>& config,
 												 std::shared_ptr<IOnvifServer> server, bool media2)
 {
-	if (!server->GetServerConfigs()->rtsp_metadata_enabled_)
-		return;
 	auto add = [&](const std::string& operation) {
 		handlers.push_back(std::make_shared<MetadataHandler>(operation, namespaces, config, server->Metadata(), media2));
 	};
+	if (server->MediaProfilesManager()->Topology() || server->GetServerConfigs()->rtsp_metadata_enabled_)
+	{
+		add("GetStreamUri");
+		add("SetSynchronizationPoint");
+	}
+	if (!server->GetServerConfigs()->rtsp_metadata_enabled_)
+		return;
 	for (const auto& operation : {"GetMetadataConfigurations", "GetMetadataConfigurationOptions",
-																"SetMetadataConfiguration", "SetSynchronizationPoint", "GetStreamUri"})
+																"SetMetadataConfiguration"})
 		add(operation);
 	if (!media2)
 		for (const auto& operation : {"GetMetadataConfiguration", "GetCompatibleMetadataConfigurations",

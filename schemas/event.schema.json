@@ -3,6 +3,26 @@
   "title": "Event service settings",
   "type": "object",
   "properties": {
+    "ChannelDetectors": {
+      "type": "object",
+      "propertyNames": { "pattern": "^[A-Za-z0-9_-]{1,64}$" },
+      "additionalProperties": {
+        "type": "object",
+        "propertyNames": {
+          "enum": ["MotionRegion", "LineDetector", "LineCounting", "FieldDetector",
+                   "LicensePlateRecognition", "FaceRecognition", "MotionAlarm", "CellMotion", "AudioDetection"]
+        },
+        "additionalProperties": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "Enabled": { "$ref": "types.schema.json#/$defs/boolean" },
+            "AutoGenerateEvents": { "$ref": "types.schema.json#/$defs/boolean" },
+            "EventGenerationTimeout": { "$ref": "types.schema.json#/$defs/positiveInteger" }
+          }
+        }
+      }
+    },
     "Namespaces": {
       "$ref": "types.schema.json#/$defs/namespaces"
     },

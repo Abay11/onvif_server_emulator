@@ -29,8 +29,9 @@ struct GetReplayHandler : public OnvifRequestBase
 									 const std::shared_ptr<pt::ptree>& configs, const std::string& configs_path)
 			: OnvifRequestBase(GetReplayUri, auth::SECURITY_LEVELS::READ_MEDIA, ns, configs), srv_configs_(srv_configs)
 	{
-		for (const auto& recording : RecordingsReaderFromConfig(configs_path + "/recording_search.config").Recordings())
-			recordings_.insert(recording->Token());
+		if (!srv_configs_->archive)
+			for (const auto& recording : RecordingsReaderFromConfig(configs_path + "/recording_search.config").Recordings())
+				recordings_.insert(recording->Token());
 	}
 
 	void operator()(std::shared_ptr<HttpServer::Response> response, std::shared_ptr<HttpServer::Request> request) override
@@ -40,9 +41,21 @@ struct GetReplayHandler : public OnvifRequestBase
 		pt::read_xml(input, document);
 		const auto& operation = StreamOperation(document, "GetReplayUri");
 		auto recording = exns::find_hierarchy("Envelope.Body.GetReplayUri.RecordingToken", document);
-		if (!recordings_.contains(recording))
-			throw metadata::Fault("NoRecording", "The recording does not exist");
-		const auto uri = StreamAddress(*srv_configs_, operation, false, HttpServer::IsSecure(request)) + "Recording0";
+		const auto base = StreamAddress(*srv_configs_, operation, false, HttpServer::IsSecure(request));
+		std::string uri;
+		if (srv_configs_->archive)
+		{
+			if (!srv_configs_->archive->Recording(recording))
+				throw metadata::Fault("NoRecording", "The recording does not exist");
+			srv_configs_->prepare_replay(recording);
+			uri = base + "onvif/replay/" + recording;
+		}
+		else
+		{
+			if (!recordings_.contains(recording))
+				throw metadata::Fault("NoRecording", "The recording does not exist");
+			uri = base + "Recording0";
+		}
 
 		auto envelope_tree = utility::soap::getEnvelopeTree(ns_);
 		envelope_tree.add("s:Body.trp:GetReplayUriResponse.trp:Uri", uri);

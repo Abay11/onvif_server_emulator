@@ -47,7 +47,8 @@ const pt::ptree& AnalyticsModulesReaderByConfigToken::Modules() const
 	if (cfgIt == analytics.end())
 		throw osrv::no_config{};
 
-	return cfgIt->second.get_child("analyticsModules");
+	static const pt::ptree empty;
+	return cfgIt->second.get_child("analyticsModules", empty);
 }
 
 AnalyticsModulesReaderByName::AnalyticsModulesReaderByName(std::string_view name, const pt::ptree& configs)

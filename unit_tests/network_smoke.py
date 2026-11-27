@@ -78,7 +78,8 @@ def check_rtsp(args, transport):
     client = Rtsp(args.host, args.rtsp_port)
     receivers = []
     try:
-        url = f"rtsp://{args.host}:{args.rtsp_port}/Live&HighStream"
+        mount = "onvif/profile/" + hashlib.sha256(b"ProfileToken0").hexdigest() if args.profile_uris else "Live&HighStream"
+        url = f"rtsp://{args.host}:{args.rtsp_port}/{mount}"
         _, sdp = client.request("DESCRIBE", url, "Accept: application/sdp\r\n")
         assert b"m=video" in sdp and b"m=audio" in sdp, sdp
         controls = re.findall(rb"^a=control:(.+)\r?$", sdp, re.M)
@@ -149,34 +150,41 @@ def main():
         addresses = values(soap(args.host, args.http_port, "device", device_ns, action, body), "XAddr")
         assert addresses and all(addr.startswith(http_base) for addr in addresses), addresses
         print("PASS", action, "advertised XAddrs")
-    if args.profile_uris is None:
-        capabilities = ET.fromstring(soap(args.host, args.http_port, "media2",
-                                         "http://www.onvif.org/ver20/media/wsdl", "GetServiceCapabilities"))
-        args.profile_uris = any("Metadata" in node.get("ConfigurationsSupported", "").split()
-                                for node in capabilities.iter())
     for service, ns in [("media", "http://www.onvif.org/ver10/media/wsdl"),
                         ("media2", "http://www.onvif.org/ver20/media/wsdl")]:
         body = "<t:ProfileToken>ProfileToken0</t:ProfileToken>"
-        for action, expected in [("GetStreamUri", rtsp_base + ("onvif/profile/" + hashlib.sha256(b"ProfileToken0").hexdigest() if args.profile_uris else "Live&HighStream")),
-                                 ("GetSnapshotUri", http_base + "snapshot.jpeg")]:
+        for action in ("GetStreamUri", "GetSnapshotUri"):
             request_body = body
             if action == "GetStreamUri":
                 setup = '<t:Protocol>RTSP</t:Protocol>' if service == "media2" else (
                     '<t:StreamSetup xmlns:tt="http://www.onvif.org/ver10/schema"><tt:Stream>RTP-Unicast</tt:Stream>'
                     '<tt:Transport><tt:Protocol>RTSP</tt:Protocol></tt:Transport></t:StreamSetup>')
                 request_body = setup + body
-            assert values(soap(args.host, args.http_port, service, ns, action, request_body), "Uri") == [expected]
+            actual = values(soap(args.host, args.http_port, service, ns, action, request_body), "Uri")
+            if action == "GetStreamUri":
+                stable = "onvif/profile/" + hashlib.sha256(b"ProfileToken0").hexdigest()
+                if args.profile_uris is None:
+                    args.profile_uris = actual == [rtsp_base + stable]
+                expected = rtsp_base + (stable if args.profile_uris else "Live&HighStream")
+            else:
+                expected = http_base + "snapshot.jpeg"
+            assert actual == [expected], (service, action, actual, expected)
             print("PASS", service, action)
-    assert values(soap(args.host, args.http_port, "replay", "http://www.onvif.org/ver10/replay/wsdl",
-                       "GetReplayUri", '<t:StreamSetup xmlns:tt="http://www.onvif.org/ver10/schema"><tt:Stream>RTP-Unicast</tt:Stream>'
-                       '<tt:Transport><tt:Protocol>RTSP</tt:Protocol></tt:Transport></t:StreamSetup>'
-                       "<t:RecordingToken>Recording_0</t:RecordingToken>"), "Uri") == [rtsp_base + "Recording0"]
+    try:
+        soap(args.host, args.http_port, "replay", "http://www.onvif.org/ver10/replay/wsdl",
+             "GetReplayUri", '<t:StreamSetup xmlns:tt="http://www.onvif.org/ver10/schema"><tt:Stream>RTP-Unicast</tt:Stream>'
+             '<tt:Transport><tt:Protocol>RTSP</tt:Protocol></tt:Transport></t:StreamSetup>'
+             "<t:RecordingToken>unknown-recording</t:RecordingToken>")
+    except AssertionError as fault:
+        assert "NoRecording" in str(fault), fault
+    else:
+        raise AssertionError("Unknown recording should return a NoRecording fault")
     event = soap(args.host, args.http_port, "event", "http://www.onvif.org/ver10/events/wsdl",
                  "CreatePullPointSubscription")
     pullpoint_base = (f"http://{args.advertised_ip}:{args.advertised_pullpoint_port}/"
                       if args.advertised_pullpoint_port else http_base)
     assert any(addr.startswith(pullpoint_base) for addr in values(event, "Address")), event
-    print("PASS replay and PullPoint advertised URLs")
+    print("PASS replay token fault and PullPoint advertised URL")
     connection = http.client.HTTPConnection(args.host, args.http_port, timeout=5)
     connection.request("GET", "/snapshot.jpeg")
     response = connection.getresponse()

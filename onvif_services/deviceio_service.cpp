@@ -3,6 +3,8 @@
 #include "IOnvifServer.h"
 
 #include "../onvif/OnvifRequest.h"
+#include "../utility/ChannelTopology.h"
+#include "../utility/MediaProfilesManager.h"
 #include "../utility/HttpHelper.h"
 #include "../utility/SoapHelper.h"
 
@@ -12,20 +14,21 @@
 
 // List of implemented methods
 const std::string GetVideoSources{"GetVideoSources"};
+const std::string GetAudioSources{"GetAudioSources"};
 
 namespace pt = boost::property_tree;
 
 namespace osrv
 {
-struct GetVideoSourcesHandler : public OnvifRequestBase
+struct GetInputsHandler : public OnvifRequestBase
 {
 private:
 	const std::shared_ptr<IOnvifServer> onvif_srv_;
 
 public:
-	GetVideoSourcesHandler(const std::map<std::string, std::string>& xs, const std::shared_ptr<pt::ptree>& serviceConfigs,
-												 const std::shared_ptr<IOnvifServer>& srv)
-			: OnvifRequestBase(GetVideoSources, auth::SECURITY_LEVELS::READ_MEDIA, xs, serviceConfigs), onvif_srv_(srv)
+	GetInputsHandler(const std::map<std::string, std::string>& xs, const std::shared_ptr<pt::ptree>& serviceConfigs,
+												 const std::shared_ptr<IOnvifServer>& srv, const std::string& operation)
+			: OnvifRequestBase(operation, auth::SECURITY_LEVELS::READ_MEDIA, xs, serviceConfigs), onvif_srv_(srv)
 	{
 	}
 
@@ -34,15 +37,24 @@ public:
 		auto envelope_tree = utility::soap::getEnvelopeTree(ns_);
 		pt::ptree response_node;
 
-		// currently all videosources described in the Media service's config file
-		auto media_service_configs = onvif_srv_->MediaService()->Configs();
-		const auto& videoSources = media_service_configs->get_child("GetVideoSources");
-		for (const auto& [name, config_tree] : videoSources)
+		const auto& manager = *onvif_srv_->MediaProfilesManager();
+		if (name() == GetAudioSources)
 		{
-			response_node.add("tmd:GetVideoSourcesResponse.tmd:Token", config_tree.get<std::string>("token"));
+			for (const auto& [_, audio] : manager.ReaderWriter()->ConfigsTree().get_child("AudioSources"))
+				response_node.add("tmd:Token", audio.get<std::string>("Token"));
 		}
-
-		envelope_tree.add_child("s:Body", response_node);
+		else if (const auto* topology = manager.Topology())
+		{
+			for (const auto& [_, channel] : topology->Channels())
+				response_node.add("tmd:Token", channel.get<std::string>("videoSource.token"));
+		}
+		else
+		{
+			auto media_config = onvif_srv_->MediaService()->Configs();
+			for (const auto& [_, video] : media_config->get_child("GetVideoSources"))
+				response_node.add("tmd:Token", video.get<std::string>("token"));
+		}
+		envelope_tree.put_child("s:Body.tmd:" + name() + "Response", response_node);
 
 		pt::ptree root_tree;
 		root_tree.put_child("s:Envelope", envelope_tree);
@@ -58,7 +70,8 @@ DeviceIOService::DeviceIOService(const std::string& service_uri, const std::stri
 																 std::shared_ptr<IOnvifServer> srv)
 		: IOnvifService(service_uri, service_name, srv)
 {
-	requestHandlers_.push_back(std::make_shared<GetVideoSourcesHandler>(xml_namespaces_, configs_ptree_, srv));
+	requestHandlers_.push_back(std::make_shared<GetInputsHandler>(xml_namespaces_, configs_ptree_, srv, GetVideoSources));
+	requestHandlers_.push_back(std::make_shared<GetInputsHandler>(xml_namespaces_, configs_ptree_, srv, GetAudioSources));
 }
 
 } // namespace osrv

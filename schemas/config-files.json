@@ -1,5 +1,6 @@
 {
   "common.config": "common.schema.json",
+  "channels.config": "channels.schema.json",
   "device.config": "device.schema.json",
   "device_io.config": "deviceio.schema.json",
   "imaging.config": "imaging.schema.json",
@@ -7,6 +8,7 @@
   "media2.config": "media2.schema.json",
   "ptz.config": "ptz.schema.json",
   "recording_search.config": "recording-search.schema.json",
+  "recording_control.config": "recording-control.schema.json",
   "replay_control.config": "replay-control.schema.json",
   "discovery.config": "discovery.schema.json",
   "event.config": "event.schema.json",

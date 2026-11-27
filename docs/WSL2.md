@@ -280,7 +280,8 @@ Use these URLs, including the `&` in stream names:
 - HTTPS device service: `https://192.168.1.10:8443/onvif/device_service` (see [certificate trust](HTTPS.md))
 - Snapshot: `http://192.168.1.10:8080/snapshot.jpeg`
 - RTSP main/substream: `rtsp://192.168.1.10:8554/Live&HighStream` and `/Live&LowStream`
-- Replay: `rtsp://192.168.1.10:8554/Recording0`
+- Replay: obtain the recording URI through ONVIF `GetReplayUri` after
+  starting a job in the [Recordings panel](NVR_CHANNELS.md#recording).
 
 In VLC test TCP first (`vlc --rtsp-tcp "rtsp://192.168.1.10:8554/Live&HighStream"`),
 then test UDP separately. Also test [RTSP-over-HTTP/HTTPS](RTSP_HTTP.md) on the

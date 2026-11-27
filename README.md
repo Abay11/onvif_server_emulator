@@ -128,7 +128,7 @@ Sign in with any enabled `administrator` account from `users.config`, using the
 same login and password as ONVIF. WebUI sign-in is mandatory even when SOAP
 `authentication` is `none`. Sessions expire after eight hours and on application
 restart; Sign out revokes the current session. Account passwords are excluded
-from the status API. Rule edits persist to media_profiles.config;
+from the status API. Rule edits persist to `channels.config`;
 detector enable, auto generation and interval settings persist to event.config
 and apply live. Rule engine and individual rule enable switches are runtime controls. See
 [configuration administration](docs/CONFIGURATION_UI.md),
@@ -158,7 +158,7 @@ including `responses` and `rs`. After editing configuration, invoke ONVIF
 files without restarting the container.
 The environment variables in the examples override the corresponding IPv4 settings.
 
-The application must be able to write `media_profiles.config` to persist SOAP
+The application must be able to write `channels.config` to persist SOAP
 profile changes. A read-only mount is suitable only when those operations are not
 needed. Without a mount, changes inside the container are lost when it is removed.
 See [the file streaming example](docs/WSL2.md#5-addresses-configuration-and-files)
@@ -229,7 +229,7 @@ stored in files such as `device.config` and `event.config`.
 
 Existing configuration directories must use the same names: `device.config`,
 `device_io.config`, `imaging.config`, `media.config`, `media2.config`, `ptz.config`,
-`recording_search.config`, and `replay_control.config`. Rename older capitalized
+`recording_control.config`, `recording_search.config`, and `replay_control.config`. Rename older capitalized
 filenames and replace spaces with underscores before running this version.
 
 The server runs [JSON Schema validation](schemas/README.md) before persisting
@@ -243,6 +243,13 @@ Configuration support varies by operation. Some settings are hardcoded or only
 partially implemented, so verify the relevant handler before relying on a
 parameter to change server behavior. In particular, media settings returned by
 SOAP operations do not necessarily change the RTSP pipelines.
+
+### NVR channels (`channels.config`)
+
+The explicit topology defines one to 32 channels, their source identities,
+component inventory and media profiles. The bundled topology has one channel.
+Use **NVR Channels** in the administration UI to stage
+changes for restart. See [NVR channel topology](docs/NVR_CHANNELS.md).
 
 ### Common Settings (`common.config`)
 
@@ -367,20 +374,13 @@ At startup, the server fills the `XAddrs` field in
 `server_configs/responses/ProbeMatch.response` with the advertised HTTP endpoint.
 Hello, Bye, Resolve, and IPv6 discovery are not implemented.
 
-### Recording Search (`recording_search.config`)
+### Recording, search, and replay
 
-The `Recordings` array describes emulated recordings. Each entry requires a
-`Token`, a `VideoTrack` token, and the following time fields:
-
-- `DateFrom`: the earliest recording time. An empty string uses the current UTC
-  time minus 24 hours.
-- `DateUntil`: the latest recording time. An empty string uses the current UTC
-  time.
-
-Both date keys must be present, even when their values are empty. Nonempty values
-use the basic ISO date-time format, for example, `20210523T000000`, and represent
-UTC times. These settings describe a simulated archive; the emulator does not
-record live video to disk.
+The server starts with an empty simulated archive. Use **Recording Storage** in the
+administration UI to configure a job for a selected channel and stream.
+Recording Control, Search, and Replay use the same persisted archive. The
+service files configure SOAP namespaces. See [recording operations and
+simulation limits](docs/NVR_CHANNELS.md#recording).
 
 ## Analytics Rules
 

@@ -30,9 +30,11 @@ void DetectorControls::Set(const std::string& id, bool enabled)
 		throw std::invalid_argument("Unknown detector");
 	it->second = enabled;
 }
-bool DetectorControls::Enabled(const std::string& id) const
+bool DetectorControls::Enabled(const std::string& id, std::string_view source) const
 {
 	std::lock_guard lock(mutex_);
+	if (auto scoped = scoped_.find({id, std::string(source)}); scoped != scoped_.end())
+		return scoped->second.first;
 	auto it = enabled_.find(id);
 	return it == enabled_.end() || it->second;
 }
@@ -51,11 +53,18 @@ void DetectorControls::SetAutomatic(const std::string& id, bool automatic)
 	std::lock_guard lock(mutex_);
 	automatic_[id] = automatic;
 }
-bool DetectorControls::Automatic(const std::string& id) const
+bool DetectorControls::Automatic(const std::string& id, std::string_view source) const
 {
 	std::lock_guard lock(mutex_);
+	if (auto scoped = scoped_.find({id, std::string(source)}); scoped != scoped_.end())
+		return scoped->second.second;
 	auto it = automatic_.find(id);
 	return it == automatic_.end() || it->second;
+}
+void DetectorControls::ConfigureSource(const std::string& id, const std::string& source, bool enabled, bool automatic)
+{
+	std::lock_guard lock(mutex_);
+	scoped_[{id, source}] = {enabled, automatic};
 }
 void DetectorControls::SetRule(const std::string& configuration, const std::string& name, bool enabled)
 {
@@ -80,8 +89,13 @@ bool DetectorControls::Allows(const event::NotificationMessage& message) const
 	auto type = topics_.find(message.topic);
 	if (type != topics_.end())
 	{
-		auto enabled = enabled_.find(type->second);
-		if (enabled != enabled_.end() && !enabled->second)
+		const auto instance = scoped_.find({type->second, std::string(message.VideoSource())});
+		if (instance != scoped_.end())
+		{
+			if (!instance->second.first)
+				return false;
+		}
+		else if (auto enabled = enabled_.find(type->second); enabled != enabled_.end() && !enabled->second)
 			return false;
 	}
 	if (!message.analytics_configuration.empty())

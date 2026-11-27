@@ -8,8 +8,14 @@
 
 class ILogger;
 
+namespace utility::media { class MediaProfilesManager; }
+
 namespace osrv
 {
+namespace ptz
+{
+void fillPtzConfig(const pt::ptree& config, pt::ptree& response, const utility::media::MediaProfilesManager& manager);
+}
 class PTZService : public IOnvifService
 {
 public:

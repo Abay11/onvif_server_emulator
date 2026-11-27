@@ -70,6 +70,9 @@ namespace osrv
 				return notifications_topic_;
 			}
 
+			const std::string& VideoSource() const { return video_source_; }
+			void SetVideoSource(std::string source) { video_source_ = std::move(source); }
+
 			// This will be connected
 			boost::signals2::connection Connect(std::function<void(NotificationMessage)> f)
 			{
@@ -111,6 +114,7 @@ namespace osrv
 			bool automatic_ = true;
 			std::uint64_t generation_ = 0;
 			const std::string notifications_topic_;
+			std::string video_source_;
 
 			boost::asio::io_context& io_context_;
 			boost::asio::steady_timer alarm_timer_;

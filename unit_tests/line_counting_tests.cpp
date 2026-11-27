@@ -153,6 +153,33 @@ BOOST_AUTO_TEST_CASE(report_interval_flushes_without_more_objects_and_sync_is_cu
 	now += 5s;
 	BOOST_TEST(detector.TickCounting().empty()); // no duplicate unchanged property events
 }
+BOOST_AUTO_TEST_CASE(shared_detector_type_keeps_independent_channel_counts_and_report_intervals)
+{
+	create(simple("ReportTimeInterval", "PT5S"));
+	auto otherConfig = profiles.get_child("Analytics").front().second;
+	otherConfig.put("token", "other-count");
+	profiles.get_child("Analytics").push_back({"", otherConfig});
+	auto otherSource = profiles.get_child("VideoSource").front().second;
+	otherSource.put("token", "other-source-config");
+	otherSource.put("SourceToken", "other-source");
+	otherSource.get_child("CompatibleAnalyticsConfigurations").front().second.put_value("other-count");
+	profiles.get_child("VideoSource").push_back({"", otherSource});
+	Detector isolated(profiles, [](const auto&, const auto&) {}, [this] { return now; });
+
+	isolated.SampleObject("VideoSource0", "1", -0.5, 0);
+	isolated.SampleObject("other-source", "1", 0.5, 0);
+	now += 1s;
+	BOOST_TEST(isolated.SampleObject("VideoSource0", "1", 0.5, 0).empty());
+	now += 4s;
+	BOOST_TEST(isolated.TickCounting("other-source").empty());
+	const auto first = isolated.TickCounting("VideoSource0");
+	BOOST_REQUIRE_EQUAL(first.size(), 1u);
+	BOOST_TEST(first.front().data_value == "1");
+	const auto second = isolated.SampleObject("other-source", "1", -0.5, 0);
+	BOOST_REQUIRE_EQUAL(second.size(), 1u);
+	BOOST_TEST(second.front().source_item_descriptions.front().second == "other-source");
+	BOOST_TEST(second.front().data_value == "1");
+}
 BOOST_AUTO_TEST_CASE(reset_times_clear_counts_and_incomplete_passages)
 {
 	create(simple("PassAllPolylines", "true") + simple("ReportTimeInterval", "PT30S") + simple("ResetTime", "12:00:05Z") +

@@ -431,6 +431,8 @@ Control::Control(utility::media::MediaProfilesManager& manager, const ServerConf
 								 const std::string& configs_path)
 		: manager_(manager), server_(server)
 {
+	if (manager_.Topology())
+		return;
 	if (configs_path.empty())
 		encoders_ = {{"VideoEncoderToken0", "VideoEncoderToken0"}, {"VideoEncoderToken1", "VideoEncoderToken1"}};
 	else
@@ -451,26 +453,32 @@ Control::Control(utility::media::MediaProfilesManager& manager, const ServerConf
 			}
 		}
 }
-void Control::Bind(Configure configure, Synchronize synchronize, Retain retain)
+void Control::Bind(Configure configure, Synchronize synchronize, Retain retain, ConfigureChannel channel)
 {
 	configure_ = std::move(configure);
+	channel_ = std::move(channel);
 	synchronize_ = std::move(synchronize);
 	retain_ = std::move(retain);
 }
 void Control::Refresh()
 {
-	if (!configure_)
+	if (!configure_ && !channel_)
 		return;
 	std::vector<std::string> routes;
 	for (const auto& [_, profile] : manager_.ReaderWriter()->ConfigsTree().get_child("MediaProfiles"))
 	{
-		if (profile.get<std::string>("VideoEncoder", "").empty() && profile.get<std::string>("Metadata", "").empty())
+		if (profile.get<std::string>("VideoEncoder", "").empty() && profile.get<std::string>("Metadata", "").empty() &&
+				(!channel_ || profile.get<std::string>("AudioEncoder", "").empty()))
 			continue;
 		auto token = profile.get<std::string>("token");
-		if (auto encoder = profile.get<std::string>("VideoEncoder", ""); !encoder.empty() && !encoders_.contains(encoder))
-			continue;
-		Uri(token);
-		routes.push_back(path(token));
+		try
+		{
+			Uri(token);
+			routes.push_back(path(token));
+		}
+		catch (const incomplete_configuration&)
+		{
+		}
 	}
 	if (retain_)
 		retain_(routes);
@@ -480,10 +488,10 @@ std::string Control::Uri(const std::string& token)
 {
 	const auto& profile = manager_.GetProfileByToken(token);
 	auto encoder = profile.get<std::string>("VideoEncoder", "");
-	if (!encoder.empty() && !encoders_.contains(encoder))
+	if (!channel_ && !encoder.empty() && !encoders_.contains(encoder))
 		throw incomplete_configuration();
 	auto metadata = profile.get<std::string>("Metadata", "");
-	if (encoder.empty() && metadata.empty())
+	if (encoder.empty() && metadata.empty() && (!channel_ || profile.get<std::string>("AudioEncoder", "").empty()))
 		throw incomplete_configuration();
 	std::shared_ptr<const Settings> settings;
 	if (!metadata.empty())
@@ -497,20 +505,55 @@ std::string Control::Uri(const std::string& token)
 			manager_.GetConfigByToken(scoped->analytics_configuration, "Analytics");
 		scoped->identity += "\n" + std::to_string(scoped->video_source.size()) + ":" + scoped->video_source +
 												scoped->analytics_configuration;
+		if (channel_)
+		{
+			const auto filter = scoped->accepts;
+			const auto audioSourceConfig = profile.get<std::string>("AudioSource", "");
+			const auto sourceToken = scoped->video_source;
+			const auto analytics = scoped->analytics_configuration;
+			scoped->analytics = scoped->analytics && !sourceToken.empty() && !analytics.empty();
+			scoped->accepts = [filter, source, sourceToken, analytics, audioSourceConfig](const auto& message, const auto& ns) {
+				if (!message.VideoSource().empty() && message.VideoSource() != sourceToken)
+					return false;
+				if (!message.analytics_configuration.empty() && message.analytics_configuration != analytics)
+					return false;
+				for (const auto& [name, value] : message.source_item_descriptions)
+				{
+					if ((name == "VideoSourceConfigurationToken" && value != source) ||
+							(name == "AudioSourceConfigurationToken" && value != audioSourceConfig) ||
+							(name == "Source" && message.topic.find("VideoSource") != std::string::npos && value != sourceToken))
+						return false;
+				}
+				return filter(message, ns);
+			};
+			scoped->identity += "\n" + source + "\n" + audioSourceConfig;
+		}
 		settings = std::move(scoped);
 	}
-	if (!configure_)
-		throw std::runtime_error("RTSP profile control is unavailable");
-	configure_(path(token), encoder.empty() ? "" : encoders_.at(encoder),
-						 !profile.get<std::string>("AudioSource", "").empty() &&
-								 !profile.get<std::string>("AudioEncoder", "").empty(),
-						 settings);
+	if (channel_)
+	{
+		const bool videoAttached = !profile.get<std::string>("VideoSource", "").empty();
+		const auto audio = profile.get<std::string>("AudioEncoder", "");
+		const bool audioAttached = !profile.get<std::string>("AudioSource", "").empty();
+		if (videoAttached == encoder.empty() || audioAttached == audio.empty())
+			throw incomplete_configuration();
+		channel_(path(token), encoder.empty() ? nullptr : &manager_.GetConfigByToken(encoder, "VideoEncoder"),
+						 audio.empty() ? nullptr : &manager_.GetConfigByToken(audio, "AudioEncoder"), settings);
+	}
+	else
+	{
+		if (!configure_)
+			throw std::runtime_error("RTSP profile control is unavailable");
+		configure_(path(token), encoder.empty() ? "" : encoders_.at(encoder),
+							 !profile.get<std::string>("AudioSource", "").empty() &&
+									 !profile.get<std::string>("AudioEncoder", "").empty(), settings);
+	}
 	return server_.RtspAddress() + path(token).substr(1);
 }
 
 pt::ptree Control::Execute(const std::string& operation, const std::string& xml, bool media2, bool secure)
 {
-	if (!server_.rtsp_metadata_enabled_)
+	if (!server_.rtsp_metadata_enabled_ && operation != "GetStreamUri" && operation != "SetSynchronizationPoint")
 		throw Fault("ConfigModify", "RTSP metadata is disabled by server configuration");
 	pt::ptree document;
 	std::istringstream input(xml);
@@ -772,11 +815,19 @@ pt::ptree Control::Execute(const std::string& operation, const std::string& xml,
 			result.add_child(std::string(prefix) + "Options", options);
 		}
 		else
+		{
+			const auto* selected = profile.empty() ? nullptr : &manager_.GetProfileByToken(profile);
 			for (const auto& [_, item] : manager_.ReaderWriter()->ConfigsTree().get_child("Metadata", Empty))
-				if (compatible && (token.empty() || item.get<std::string>("token") == token))
-					result.add_child(std::string(prefix) +
-															 (operation == "GetMetadataConfiguration" ? "Configuration" : "Configurations"),
-													 ConfigurationXml(item, manager_.ReaderWriter()->ConfigsTree()));
+			{
+				const auto candidate = item.get<std::string>("token");
+				if (!compatible || (!token.empty() && candidate != token) ||
+						(selected && !manager_.Compatible(*selected, "Metadata", candidate)))
+					continue;
+				result.add_child(std::string(prefix) +
+														(operation == "GetMetadataConfiguration" ? "Configuration" : "Configurations"),
+													ConfigurationXml(item, manager_.ReaderWriter()->ConfigsTree()));
+			}
+		}
 	}
 	return result;
 }

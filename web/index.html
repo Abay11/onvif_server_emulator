@@ -20,8 +20,10 @@
     <nav>
       <a class="nav-link" href="#overview"><span aria-hidden="true">▦</span> Overview</a>
       <a class="nav-link" href="#configuration"><span aria-hidden="true">≡</span> Configuration</a>
+      <a class="nav-link" href="#channels"><span aria-hidden="true">⊞</span> NVR Channels</a>
       <a class="nav-link" href="#network"><span aria-hidden="true">⌘</span> Network configuration</a>
       <a class="nav-link" href="#users"><span aria-hidden="true">♙</span> Users &amp; authentication</a>
+      <a class="nav-link" href="#recordings"><span aria-hidden="true">▣</span> Recording Storage</a>
       <a class="nav-link" href="#detectors"><span aria-hidden="true">◇</span> Detectors</a>
       <a class="nav-link" href="#journal"><span aria-hidden="true">☷</span> Event journal</a>
       <a class="nav-link" href="#system"><span aria-hidden="true">⏻</span> System</a>
@@ -53,6 +55,12 @@
         <div class="panel config-panel" id="settings"><p class="loading">Loading application settings…</p></div>
         <article class="panel table-panel"><div class="panel-heading"><h2>Media profiles</h2><span class="tag">Current associations</span></div><div class="table-scroll"><table><caption class="sr-only">Current media profile configuration associations</caption><thead><tr><th>Profile</th><th>Video encoder</th><th>Audio encoder</th><th>Metadata</th></tr></thead><tbody id="profiles-body"><tr><td colspan="4">Loading profiles…</td></tr></tbody></table></div><p class="table-note">Profile associations describe configuration; some streaming parameters are fixed by the emulator.</p></article>
         <article class="panel table-panel"><div class="panel-heading"><h2>ONVIF services</h2><span class="tag">Configured endpoints</span></div><div class="table-scroll"><table><caption class="sr-only">Configured ONVIF services and advertisement settings</caption><thead><tr><th>Service</th><th>Endpoint</th><th>Discovery listing</th></tr></thead><tbody id="services-body"><tr><td colspan="3">Loading services…</td></tr></tbody></table></div></article>
+      </section>
+      <section id="channels" aria-labelledby="channels-title">
+        <div class="section-heading"><div><h2 id="channels-title">NVR Channels</h2><p>Configure the emulated channels, components, and streams. Restart the application to activate changes.</p></div><button id="channels-refresh" class="button secondary" type="button">Reload channels</button></div>
+        <p id="channels-message" class="notice" role="status" aria-live="polite" hidden></p>
+        <p id="channels-restart" class="notice" role="status" hidden></p>
+        <article id="channels-workspace" class="panel"><div id="channels-editor" class="detector-settings"><p>Loading channels…</p></div></article>
       </section>
       <section id="network" aria-labelledby="network-title">
         <div class="section-heading"><div><h2 id="network-title">Network configuration</h2><p>Configure listeners, advertised endpoints and discovery. Saved changes apply after an application restart.</p></div><button id="network-refresh" class="button secondary" type="button">Reload network settings</button></div>
@@ -128,6 +136,14 @@
             <button class="button secondary" type="submit">Create account</button>
           </form></article>
         </div>
+      </section>
+      <section id="recordings" aria-labelledby="recordings-title">
+        <div class="section-heading"><div><h2 id="recordings-title">Recording Storage</h2><p>Start or stop simulated recording for a channel.</p></div><button id="recordings-refresh" class="button secondary" type="button">Refresh</button></div>
+        <p id="recordings-message" class="notice" role="status" aria-live="polite" hidden></p>
+        <article class="panel table-panel"><div class="table-scroll"><table>
+          <thead><tr><th>Channel</th><th>Stream</th><th>Job state</th><th>Action</th></tr></thead>
+          <tbody id="recordings-jobs"></tbody>
+        </table></div></article>
       </section>
       <section id="detectors" aria-labelledby="detector-title">
         <div class="section-heading"><div><h2 id="detector-title">Detectors</h2><p>Inspect and control built-in detectors and rule-based analytics.</p></div><button id="detector-refresh" class="button secondary" type="button">Refresh detectors</button></div>

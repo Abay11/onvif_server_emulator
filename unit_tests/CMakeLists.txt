@@ -12,6 +12,7 @@ find_package(Boost REQUIRED
 add_executable(test_executable
 	system_journal_tests.cpp
 	admin_ui_tests.cpp
+	channel_topology_tests.cpp
 	analytics_configuration_reader_test.cpp
 	audio_source_tests.cpp
 	auth_tests.cpp	
@@ -32,6 +33,7 @@ add_executable(test_executable
 	mediaprofiles_manager_tests.cpp
 	pull_point_tests.cpp
 	recording_tests.cpp
+	recording_archive_tests.cpp
 	rtsp_metadata_tests.cpp
 	scene_description_tests.cpp
 	server_tests.cpp	

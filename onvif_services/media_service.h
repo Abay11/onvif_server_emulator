@@ -34,22 +34,6 @@ void fill_analytics_configuration(/*const pt::ptree& config_node,*/ pt::ptree& /
 
 void fillAEConfig(const pt::ptree& /*in*/, pt::ptree& /*out*/);
 
-class MultichannelProfilesNamesConverter
-{
-public:
-	MultichannelProfilesNamesConverter(const std::string& name) : name_(name)
-	{
-	}
-
-	std::string CleanedName()
-	{
-		auto start_pos = name_.find('_') + 1;
-		return name_.substr(start_pos);
-	}
-
-private:
-	const std::string& name_;
-};
 } // namespace util
 } // namespace media
 } // namespace osrv

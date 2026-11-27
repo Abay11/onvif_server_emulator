@@ -19,8 +19,8 @@
     enabled: "Enabled", interface_ipv4: "Multicast interface", multicast_endpoint: "Multicast endpoint",
     pullpoint_endpoint: "PullPoint base URL", pullpoint_timeout_seconds: "PullPoint timeout (seconds)",
     metadata_enabled: "Metadata transport", file_streaming_enabled: "File streaming",
-    network_delay_ms: "Network delay (milliseconds)", multichannel_enabled: "Multichannel simulation",
-    channel_count: "Configured channels", Manufacturer: "Manufacturer", Model: "Model",
+    network_delay_ms: "Network delay (milliseconds)",
+    Manufacturer: "Manufacturer", Model: "Model",
     FirmwareVersion: "Firmware version", SerialNumber: "Serial number", HardwareId: "Hardware ID"
   };
   let current = null;
@@ -113,12 +113,25 @@
     }
     const profileBody = byId("profiles-body");
     profileBody.replaceChildren();
+    const profileGroups = new Map();
     for (const profile of profiles) {
-      const row = node("tr");
-      const name = node("td", profile.Name || profile.token);
-      name.append(node("span", profile.token, "subline mono"));
-      row.append(name, node("td", profile.VideoEncoder || "—", "mono"), node("td", profile.AudioEncoder || "—", "mono"), node("td", profile.Metadata || "Not attached", profile.Metadata ? "mono" : "muted"));
-      profileBody.append(row);
+      const channel = profile.channel || "";
+      if (!profileGroups.has(channel)) profileGroups.set(channel, []);
+      profileGroups.get(channel).push(profile);
+    }
+    for (const [channel, group] of profileGroups) {
+      if (channel || profileGroups.size > 1) {
+        const row = node("tr", undefined, "profile-channel");
+        const title = node("th", group[0].channel_name || channel || "Unassigned profiles");
+        title.colSpan = 4; row.append(title); profileBody.append(row);
+      }
+      for (const profile of group) {
+        const row = node("tr");
+        const name = node("td", profile.Name || profile.token);
+        name.append(node("span", profile.token, "subline mono"));
+        row.append(name, node("td", profile.VideoEncoder || "—", "mono"), node("td", profile.AudioEncoder || "—", "mono"), node("td", profile.Metadata || "Not attached", profile.Metadata ? "mono" : "muted"));
+        profileBody.append(row);
+      }
     }
     if (!profiles.length) {
       const cell = node("td", "No media profiles configured.");

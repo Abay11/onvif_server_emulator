@@ -7,6 +7,7 @@
 #include "../utility/AnalyticsRules.h"
 #include "../utility/ApplicationReboot.h"
 #include "../utility/MediaProfilesManager.h"
+#include "../utility/ChannelTopology.h"
 #include "AdminAssets.h"
 #include "DetectorUi.h"
 #include "ConfigurationUi.h"
@@ -19,6 +20,7 @@
 #include <charconv>
 #include <chrono>
 #include <cstdlib>
+#include <map>
 #include <sstream>
 #include <unistd.h>
 
@@ -128,8 +130,6 @@ Tree Settings(IOnvifServer& server)
 	settings.put("media.metadata_enabled", cfg->rtsp_metadata_enabled_);
 	settings.put("media.file_streaming_enabled", !cfg->rtsp_streaming_file_.empty());
 	settings.put("simulation.network_delay_ms", cfg->network_delay_simulation_);
-	settings.put("simulation.multichannel_enabled", cfg->multichannel_enabled_);
-	settings.put("simulation.channel_count", static_cast<unsigned>(cfg->channels_count_));
 	const auto device = server.DeviceService()->Configs();
 	for (const auto* key : {"Manufacturer", "Model", "FirmwareVersion", "SerialNumber", "HardwareId"})
 		settings.put(std::string("device.") + key,
@@ -147,16 +147,22 @@ Tree Settings(IOnvifServer& server)
 	return settings;
 }
 
-Tree Profiles(const Tree& profiles)
+Tree Profiles(const Tree& profiles, const utility::media::ChannelTopology* topology)
 {
 	Tree result;
+	std::map<std::string, std::string> channelNames;
+	if (topology)
+		for (const auto& [_, channel] : topology->Channels())
+			channelNames.emplace(channel.get<std::string>("token"), channel.get<std::string>("name"));
 	if (auto list = profiles.get_child_optional("MediaProfiles"))
 		for (const auto& [_, profile] : *list)
 		{
 			Tree item;
 			for (const auto* key : {"token", "Name", "fixed", "VideoSource", "VideoEncoder", "AudioSource", "AudioEncoder",
-															"Metadata", "Analytics", "PTZ"})
+															"Metadata", "Analytics", "PTZ", "channel"})
 				item.put(key, profile.get<std::string>(key, ""));
+			if (auto channel = channelNames.find(item.get<std::string>("channel")); channel != channelNames.end())
+				item.put("channel_name", channel->second);
 			result.push_back({"", item});
 		}
 	return result;
@@ -276,13 +282,13 @@ void RegisterAdminUi(IOnvifServer& server)
 	const auto logger = server.Logger();
 	const auto settings = Settings(server);
 	const auto authentication = std::make_shared<WebAuthentication>(cfg->system_users_);
-	const auto profiles = server.MediaProfilesManager()->SharedConfigs();
+	const auto manager = server.MediaProfilesManager();
 	const auto started = std::chrono::steady_clock::now();
 	const auto instance = boost::uuids::to_string(boost::uuids::random_generator()());
-	const auto status_body = [settings, profiles, cfg, started, instance] {
+	const auto status_body = [settings, manager, cfg, started, instance] {
 		const auto& snapshot = settings;
 		// Profile mutations and this handler execute on the same HTTP event loop.
-		const auto profile_list = Profiles(*profiles);
+		const auto profile_list = Profiles(*manager->SharedConfigs(), manager->Topology());
 		const auto uptime =
 				std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - started).count();
 		return "{\"status\":\"running\",\"instance_id\":\"" + instance + "\",\"pid\":" + std::to_string(getpid()) +
@@ -365,6 +371,86 @@ void RegisterAdminUi(IOnvifServer& server)
 		authentication->Logout(SessionToken(request));
 		SessionResponse(response, request, "");
 	};
+	http->resource["^/admin/api/recordings$"]["GET"] = [&server, cfg](Response response, Request) {
+		Tree result, channels, jobs;
+		if (const auto* topology = server.MediaProfilesManager()->Topology())
+			for (const auto& [_, channel] : topology->Channels())
+			{
+				Tree item, streams;
+				const auto token = channel.get<std::string>("token");
+				item.put("token", token);
+				item.put("name", channel.get<std::string>("name"));
+				for (const auto& [key, profile] : server.ProfilesConfig()->get_child("MediaProfiles"))
+				{
+					const auto profileToken = profile.get<std::string>("token");
+					if (!server.RecordingProfileAvailable(token, profileToken))
+						continue;
+					Tree stream;
+					stream.put("token", profileToken);
+					stream.put("name", profile.get<std::string>("Name"));
+					streams.push_back({"", stream});
+				}
+				item.put_child("profiles", streams);
+				channels.push_back({"", item});
+			}
+		if (cfg->archive)
+			for (const auto& entry : cfg->archive->Snapshot())
+			{
+				Tree job;
+				job.put("channel", entry.source.channel);
+				job.put("name", entry.source.name);
+				job.put("profile", entry.source.profile);
+				job.put("recording", entry.token);
+				job.put("job", entry.jobToken);
+				job.put("mode", entry.active ? "Active" : "Idle");
+				jobs.push_back({"", job});
+			}
+		result.put_child("channels", channels);
+		result.put_child("jobs", jobs);
+		Json(response, Status::success_ok, Encode(result));
+	};
+	http->resource["^/admin/api/recordings$"]["POST"] = [&server, cfg](Response response, Request request) {
+		if (!SameOrigin(request, "recordings"))
+		{
+			Json(response, Status::client_error_forbidden, R"({"error":"Same-origin admin request required"})");
+			return;
+		}
+		if (!cfg->archive)
+		{
+			Json(response, Status::server_error_service_unavailable, R"({"error":"Recording archive is unavailable"})");
+			return;
+		}
+		try
+		{
+			Tree command;
+			boost::property_tree::read_json(request->content, command);
+			const auto channel = command.get<std::string>("channel");
+			const auto action = command.get<std::string>("action");
+			if (action == "start")
+			{
+				auto source = server.RecordingSource(channel, command.get<std::string>("profile"));
+				if (!source)
+					throw std::invalid_argument("Select an available media profile for this channel");
+				cfg->archive->Start(std::move(*source));
+			}
+			else if (action == "stop")
+				cfg->archive->Stop(channel);
+			else
+				throw std::invalid_argument("Unknown recording action");
+			Json(response, Status::success_ok, R"({"status":"saved"})");
+		}
+		catch (const std::system_error&)
+		{
+			Json(response, Status::server_error_insufficient_storage, R"({"error":"Could not save the recording archive"})");
+		}
+		catch (const std::exception& error)
+		{
+			Tree result;
+			result.put("error", error.what());
+			Json(response, Status::client_error_bad_request, Encode(result));
+		}
+	};
+
 	auto configuration_ui = std::make_shared<ConfigurationUi>(server);
 	http->resource["^/admin/api/configuration$"]["GET"] = [configuration_ui](Response response, Request) {
 		try

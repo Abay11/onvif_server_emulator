@@ -92,8 +92,9 @@ Tree& config(Tree& profiles, const std::string& token)
 
 const Tree& source(const Tree& profiles, const std::string& token)
 {
+	const Tree empty;
 	for (const auto& [_, node] : profiles.get_child("VideoSource"))
-		for (const auto& [__, compatible] : node.get_child("CompatibleAnalyticsConfigurations"))
+		for (const auto& [key, compatible] : node.get_child("CompatibleAnalyticsConfigurations", empty))
 			if (compatible.data() == token)
 				return node;
 	throw RuleFault("ConfigurationConflict", true);
@@ -210,6 +211,51 @@ Tree readRule(const Tree& xml, const Tree& src, const Tree* previous)
 }
 } // namespace
 
+bool AnalyticsRules::SupportsRule(const Tree& cfg, std::string_view type)
+{
+	const auto supported = cfg.get_child_optional("supportedRules");
+	return !supported || std::ranges::any_of(*supported, [&](const auto& item) { return item.second.data() == type; });
+}
+
+bool AnalyticsRules::SupportsModule(const Tree& cfg, std::string_view name, bool installed)
+{
+	const auto supported = cfg.get_child_optional("supportedSceneModules");
+	if (supported && std::ranges::none_of(*supported, [&](const auto& item) { return item.second.data() == name; }))
+		return false;
+	const auto modules = cfg.get_child_optional("sceneModules");
+	return !installed || !modules || std::ranges::any_of(*modules, [&](const auto& item) {
+		return item.second.data() == name;
+	});
+}
+
+namespace
+{
+std::deque<AnalyticsRules::Message> TakePending(std::deque<AnalyticsRules::Message>& queue, std::string_view source)
+{
+	if (source.empty())
+		return std::exchange(queue, {});
+	std::deque<AnalyticsRules::Message> result;
+	std::erase_if(queue, [&](auto& message) {
+		if (message.VideoSource() != source)
+			return false;
+		result.push_back(std::move(message));
+		return true;
+	});
+	return result;
+}
+
+bool DependenciesAvailable(const Tree& cfg, std::string_view type)
+{
+	if (type == lpr::Type)
+		return AnalyticsRules::SupportsModule(cfg, osrv::scene::LprModule, true);
+	if (type == face::Type)
+		return AnalyticsRules::SupportsModule(cfg, osrv::scene::FaceModule, true);
+	if (type == line::Type || type == counting::Type || type == field::Type)
+		return AnalyticsRules::SupportsModule(cfg, osrv::scene::ModuleName, true);
+	return true;
+}
+} // namespace
+
 AnalyticsRules::AnalyticsRules(const Tree& profiles, SaveRules save, Clock clock, lpr::Images images,
 															 face::Images faces)
 		: profiles_(profiles), save_(std::move(save)), clock_(std::move(clock)), images_(std::move(images)),
@@ -219,14 +265,24 @@ AnalyticsRules::AnalyticsRules(const Tree& profiles, SaveRules save, Clock clock
 		scene_images_.push_back(std::make_shared<const osrv::scene::Image>(pair.sceneUri, pair.scene.base64));
 	for (const auto& image : faces_)
 		face_scene_images_.push_back(std::make_shared<const osrv::scene::Image>(image.previewUri, image.preview.base64));
-	size_t count = 0;
 	for (auto& [_, cfg] : profiles_.get_child("Analytics"))
 	{
 		if (!cfg.get_child_optional("rules"))
 			cfg.add_child("rules", Tree{});
+		if (cfg.get_child("rules").size() > 4)
+			throw RuleFault("TooManyRules", true);
+		const Tree empty;
+		for (const auto& [key, module] : cfg.get_child("sceneModules", empty))
+			if (!SupportsModule(cfg, module.data()))
+				throw RuleFault("ConfigurationConflict", true);
 		std::set<std::string> names;
 		for (auto& [__, rule] : cfg.get_child("rules"))
 		{
+			const auto type = rule.get<std::string>("Type");
+			if (!SupportsRule(cfg, type))
+				throw RuleFault("InvalidRule");
+			if (!DependenciesAvailable(cfg, type))
+				throw RuleFault("ConfigurationConflict", true);
 			if (!names.insert(rule.get<std::string>("Name")).second)
 				throw RuleFault("RuleAlreadyExistent");
 			rule = readRule(RuleXml(rule), source(profiles_, cfg.get<std::string>("token")), nullptr);
@@ -237,11 +293,8 @@ AnalyticsRules::AnalyticsRules(const Tree& profiles, SaveRules save, Clock clock
 				throw RuleFault("ConfigurationConflict", true);
 			if (rule.get<std::string>("Type") == counting::Type)
 				counters_.try_emplace({cfg.get<std::string>("token"), rule.get<std::string>("Name")}, clock_());
-			++count;
 		}
 	}
-	if (count > 4)
-		throw RuleFault("TooManyRules", true);
 }
 
 AnalyticsRules::Tree AnalyticsRules::Snapshot() const
@@ -359,12 +412,10 @@ AnalyticsRules::Tree AnalyticsRules::Execute(const std::string& operation, const
 			desc.put("tt:Messages.tt:Data.tt:SimpleItemDescription.<xmlattr>.Type", "xs:boolean");
 			desc.put("tt:Messages.tt:ParentTopic", Topic);
 			response.put("tan:SupportedRules.tt:RuleContentSchemaLocation", "http://www.onvif.org/ver20/analytics/rules.xsd");
-			response.add_child("tan:SupportedRules.tt:RuleDescription", desc);
-			response.add_child("tan:SupportedRules.tt:RuleDescription", line::Description());
-			response.add_child("tan:SupportedRules.tt:RuleDescription", counting::Description());
-			response.add_child("tan:SupportedRules.tt:RuleDescription", lpr::Description());
-			response.add_child("tan:SupportedRules.tt:RuleDescription", face::Description());
-			response.add_child("tan:SupportedRules.tt:RuleDescription", field::Description());
+			for (const auto& item : {desc, line::Description(), counting::Description(), lpr::Description(),
+															face::Description(), field::Description()})
+				if (SupportsRule(cfg, item.get<std::string>("<xmlattr>.Name")))
+					response.add_child("tan:SupportedRules.tt:RuleDescription", item);
 			return response;
 		}
 		if (operation == "GetRuleOptions")
@@ -372,6 +423,8 @@ AnalyticsRules::Tree AnalyticsRules::Execute(const std::string& operation, const
 			auto type = request.get<std::string>("tan:RuleType", "");
 			if (!type.empty() && type != "tt:MotionRegionDetector" && type != line::Type && type != counting::Type &&
 					type != field::Type && type != lpr::Type && type != face::Type)
+				throw RuleFault("RuleNotExistent");
+			if (!type.empty() && !SupportsRule(cfg, type))
 				throw RuleFault("RuleNotExistent");
 			if (type == line::Type)
 				return line::Options();
@@ -395,20 +448,13 @@ AnalyticsRules::Tree AnalyticsRules::Execute(const std::string& operation, const
 			options.put(path + "axt:PolygonLimits.tt:Max", 8);
 			options.put(path + "axt:SingleSensitivitySupport", false);
 			options.put(path + "axt:RuleNotification", true);
-			response.add_child("tan:RuleOptions", options);
+			if (SupportsRule(cfg, "tt:MotionRegionDetector"))
+				response.add_child("tan:RuleOptions", options);
 			if (type.empty())
-			{
-				for (const auto& option : line::Options())
-					response.push_back(option);
-				for (const auto& option : face::Options())
-					response.push_back(option);
-				for (const auto& option : lpr::Options())
-					response.push_back(option);
-				for (const auto& option : field::Options())
-					response.push_back(option);
-				for (const auto& option : counting::Options())
-					response.push_back(option);
-			}
+				for (const auto& list : {line::Options(), face::Options(), lpr::Options(), field::Options(), counting::Options()})
+					for (const auto& option : list)
+						if (SupportsRule(cfg, option.second.get<std::string>("<xmlattr>.RuleType")))
+							response.push_back(option);
 			return response;
 		}
 		auto candidate = current;
@@ -451,6 +497,11 @@ AnalyticsRules::Tree AnalyticsRules::Execute(const std::string& operation, const
 			{
 				if (exists && it->second.get<std::string>("Type") != item.get<std::string>("<xmlattr>.Type"))
 					throw RuleFault("TypeChangeProhibited", true);
+				const auto type = item.get<std::string>("<xmlattr>.Type");
+				if (!SupportsRule(cfg, type))
+					throw RuleFault("InvalidRule");
+				if (!DependenciesAvailable(cfg, type))
+					throw RuleFault("ConfigurationConflict", true);
 				auto rule = readRule(item, source(profiles_, token), exists ? &it->second : nullptr);
 				if (rule.get<std::string>("Type") == face::Type && !face::ImagesReady(faces_))
 					throw RuleFault("ConfigurationConflict", true);
@@ -472,11 +523,7 @@ AnalyticsRules::Tree AnalyticsRules::Execute(const std::string& operation, const
 		}
 		if (names.empty())
 			throw RuleFault("InvalidRule");
-		size_t count = candidate.size();
-		for (const auto& [_, other] : profiles_.get_child("Analytics"))
-			if (other.get<std::string>("token") != token)
-				count += other.get_child("rules").size();
-		if (count > 4)
+		if (candidate.size() > 4)
 			throw RuleFault("TooManyRules", true);
 		// Commit only after validation of the complete batch and successful persistence.
 		try
@@ -554,20 +601,26 @@ std::deque<AnalyticsRules::Message> AnalyticsRules::Synchronize() const
 	return result;
 }
 
-std::deque<AnalyticsRules::Message> AnalyticsRules::Sample(double x, double y, double strength)
+std::deque<AnalyticsRules::Message> AnalyticsRules::Sample(double x, double y, double strength, const std::string& videoSource)
 {
 	std::lock_guard lock(mutex_);
-	std::deque<Message> result;
-	result.swap(pending_);
+	auto result = TakePending(pending_, videoSource);
 	for (const auto& [_, cfg] : profiles_.get_child("Analytics"))
 		for (const auto& [__, rule] : cfg.get_child("rules"))
 		{
 			if (rule.get<std::string>("Type") != "tt:MotionRegionDetector")
 				continue;
 			auto token = cfg.get<std::string>("token");
+			const auto& configuration = source(profiles_, token);
+			if (!videoSource.empty() && configuration.get<std::string>("SourceToken") != videoSource)
+				continue;
 			const auto& region = rule.get_child("MotionRegion");
+			const auto sampleX = videoSource.empty() ? x :
+					configuration.get<double>("Bounds.x") + x * configuration.get<double>("Bounds.width");
+			const auto sampleY = videoSource.empty() ? y :
+					configuration.get<double>("Bounds.y") + y * configuration.get<double>("Bounds.height");
 			bool next = region.get<bool>("Armed") && strength > 0 && strength >= 1 - region.get<double>("Sensitivity") &&
-									bg::covered_by(Point(x, y), polygon(region.get_child("Polygon")));
+									bg::covered_by(Point(sampleX, sampleY), polygon(region.get_child("Polygon")));
 			auto& state = states_[{token, rule.get<std::string>("Name")}];
 			if (state != next)
 				result.push_back(Notification(token, rule, "Changed", next));
@@ -591,7 +644,8 @@ std::deque<AnalyticsRules::Message> AnalyticsRules::SampleObject(const std::stri
 																						 boost::posix_time::microseconds(micros));
 	std::vector<std::string> configurations;
 	for (const auto& [_, cfg] : profiles_.get_child("Analytics"))
-		if (source(profiles_, cfg.get<std::string>("token")).get<std::string>("SourceToken") == videoSource)
+		if (source(profiles_, cfg.get<std::string>("token")).get<std::string>("SourceToken") == videoSource &&
+				SupportsModule(cfg, osrv::scene::ModuleName, true))
 			configurations.push_back(cfg.get<std::string>("token"));
 	auto sceneId =
 			configurations.empty()
@@ -599,9 +653,9 @@ std::deque<AnalyticsRules::Message> AnalyticsRules::SampleObject(const std::stri
 					: scenes_->Sample(videoSource, configurations, objectId, x, y, utc, classification, {}, {},
 														osrv::scene::ModuleName, {}, {}, {},
 														classification == "Human" ? std::optional{osrv::scene::SampleHumanBody()} : std::nullopt);
-	result.swap(pending_counts_);
-	result.insert(result.end(), pending_fields_.begin(), pending_fields_.end());
-	pending_fields_.clear();
+	result = TakePending(pending_counts_, videoSource);
+	auto fields = TakePending(pending_fields_, videoSource);
+	result.insert(result.end(), std::make_move_iterator(fields.begin()), std::make_move_iterator(fields.end()));
 	const auto sampleEvents = result.size();
 	for (const auto& [_, cfg] : profiles_.get_child("Analytics"))
 	{
@@ -721,17 +775,18 @@ std::deque<AnalyticsRules::Message> AnalyticsRules::SynchronizeCounts() const
 	return result;
 }
 
-std::deque<AnalyticsRules::Message> AnalyticsRules::TickCounting()
+std::deque<AnalyticsRules::Message> AnalyticsRules::TickCounting(const std::string& videoSource)
 {
 	std::lock_guard lock(mutex_);
-	std::deque<Message> result;
-	result.swap(pending_counts_);
+	auto result = TakePending(pending_counts_, videoSource);
 	auto now = clock_();
 	for (const auto& [_, cfg] : profiles_.get_child("Analytics"))
 		for (const auto& [__, rule] : cfg.get_child("rules"))
 			if (rule.get<std::string>("Type") == counting::Type)
 			{
 				auto token = cfg.get<std::string>("token");
+				if (!videoSource.empty() && source(profiles_, token).get<std::string>("SourceToken") != videoSource)
+					continue;
 				auto& counter = counters_.at({token, rule.get<std::string>("Name")});
 				if (counter.Advance(rule, now))
 					result.push_back(CountNotification(token, rule, "Changed", counter.count));
@@ -770,12 +825,10 @@ std::deque<AnalyticsRules::Message> AnalyticsRules::SynchronizeFields() const
 	return result;
 }
 
-std::deque<AnalyticsRules::Message> AnalyticsRules::TickFields()
+std::deque<AnalyticsRules::Message> AnalyticsRules::TickFields(const std::string& videoSource)
 {
 	std::lock_guard lock(mutex_);
-	std::deque<Message> result;
-	result.swap(pending_fields_);
-	return result;
+	return TakePending(pending_fields_, videoSource);
 }
 
 osrv::scene::Frame AnalyticsRules::SupportedScene(const std::string& module) const
@@ -834,7 +887,8 @@ std::deque<AnalyticsRules::Message> AnalyticsRules::SamplePlate(const std::strin
 																						 boost::posix_time::microseconds(micros));
 	std::vector<std::string> configurations;
 	for (const auto& [_, cfg] : profiles_.get_child("Analytics"))
-		if (source(profiles_, cfg.get<std::string>("token")).get<std::string>("SourceToken") == videoSource)
+		if (source(profiles_, cfg.get<std::string>("token")).get<std::string>("SourceToken") == videoSource &&
+				SupportsModule(cfg, osrv::scene::LprModule, true))
 			configurations.push_back(cfg.get<std::string>("token"));
 	// Scene observations precede rule filtering and event throttling. Length-prefix the country to keep IDs unambiguous.
 	if (!configurations.empty())
@@ -957,7 +1011,8 @@ std::deque<AnalyticsRules::Message> AnalyticsRules::SampleFace(const std::string
 																						 boost::posix_time::microseconds(micros));
 	std::vector<std::string> configurations;
 	for (const auto& [_, cfg] : profiles_.get_child("Analytics"))
-		if (source(profiles_, cfg.get<std::string>("token")).get<std::string>("SourceToken") == videoSource)
+		if (source(profiles_, cfg.get<std::string>("token")).get<std::string>("SourceToken") == videoSource &&
+				SupportsModule(cfg, osrv::scene::FaceModule, true))
 			configurations.push_back(cfg.get<std::string>("token"));
 	std::string objectId;
 	if (!configurations.empty())

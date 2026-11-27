@@ -1,4 +1,5 @@
 #include "MediaProfilesManager.h"
+#include "ChannelTopology.h"
 
 #include <boost/property_tree/json_parser.hpp>
 
@@ -25,14 +26,14 @@ std::string Quote(const std::string& value)
 	const auto json = output.str();
 	return json.substr(json.find(':') + 1, json.rfind('}') - json.find(':') - 1);
 }
-std::string MediaJson(const pt::ptree& tree, const std::string& key, int depth)
+std::string MediaJson(const pt::ptree& tree, const std::string& key, bool mediaDocument, bool catalogEntry = false)
 {
-	static const std::set<std::string> arrays{"Filters", "rules", "AnalyticsModules", "analyticsModules",
+	static const std::set<std::string> arrays{"Filters", "rules", "supportedRules", "supportedSceneModules", "sceneModules", "AnalyticsModules", "analyticsModules",
 		"compatibleModuleAnalytics", "CompatiblePtzNodes", "CompatibleAnalyticsConfigurations",
 		"BitrateList", "SampleRateList", "FrameRatesSupported", "ProfilesSupported", "ResetTime"};
 	if (tree.empty())
 	{
-		if (depth == 1 || arrays.contains(key)) return "[]";
+		if (catalogEntry || arrays.contains(key) || key == "unassignedProfiles") return "[]";
 		if (key == "Namespaces") return "{}";
 		return Quote(tree.data());
 	}
@@ -44,12 +45,14 @@ std::string MediaJson(const pt::ptree& tree, const std::string& key, int depth)
 		if (!first) result += ',';
 		first = false;
 		if (!array) result += Quote(name) + ':';
-		result += MediaJson(child, name, depth + 1);
+		result += MediaJson(child, name, false, mediaDocument || key == "media");
 	}
 	return result + (array ? "]" : "}");
 }
 } // namespace
-std::string MediaConfigJson(const pt::ptree& tree) { return MediaJson(tree, "", 0); }
+std::string MediaConfigJson(const pt::ptree& tree) { return MediaJson(tree, "", true); }
+
+std::string ChannelConfigJson(const pt::ptree& tree) { return MediaJson(tree, "", false); }
 
 ConfigsReaderWriter::ConfigsReaderWriter(const std::string& filePath) : filePath_(filePath)
 {
@@ -72,6 +75,13 @@ void ConfigsReaderWriter::Read()
 	}
 }
 
+void ConfigsReaderWriter::UseSnapshot(const pt::ptree& tree, std::function<void(const pt::ptree&)> persist)
+{
+	*configsTree_ = tree;
+	configsTreeBackup_ = std::make_unique<pt::ptree>(tree);
+	persist_ = std::move(persist);
+}
+
 void ConfigsReaderWriter::Save() const
 {
 	if (!configsTree_)
@@ -80,6 +90,13 @@ void ConfigsReaderWriter::Save() const
 		return;
 	}
 
+	if (persist_)
+	{
+		persist_(*configsTree_);
+		if (on_save_)
+			on_save_();
+		return;
+	}
 	std::ostringstream candidate;
 	if (std::filesystem::path(filePath_).filename() == "media_profiles.config") candidate << MediaConfigJson(*configsTree_);
 	else pt::write_json(candidate, *configsTree_);
@@ -102,7 +119,9 @@ void ConfigsReaderWriter::SaveJson(const std::string& json) const
 		os.exceptions(std::ios::failbit | std::ios::badbit);
 		os << json;
 		os.close();
-		std::filesystem::permissions(temporary, std::filesystem::status(filePath_).permissions());
+		const auto current = std::filesystem::status(filePath_);
+		if (std::filesystem::exists(current))
+			std::filesystem::permissions(temporary, current.permissions());
 		std::filesystem::rename(temporary, filePath_);
 		if (on_save_)
 			on_save_();
@@ -131,6 +150,41 @@ MediaProfilesManager::MediaProfilesManager(const std::string& filePath)
 {
 	readerWriter_ = std::make_unique<ConfigsReaderWriter>(filePath);
 	readerWriter_->Read();
+}
+
+void MediaProfilesManager::ActivateTopology(const std::string& path)
+{
+	topology_ = std::make_shared<ChannelTopology>(ChannelTopology::Load(path));
+	readerWriter_->UseSnapshot(topology_->Media(), [topology = topology_, path, previous = topology_->Media()](
+																									const pt::ptree& candidate) mutable {
+		topology->SaveMedia(path, previous, candidate);
+		previous = candidate;
+	});
+}
+
+bool MediaProfilesManager::Compatible(const pt::ptree& profile, std::string_view type, std::string_view token) const
+{
+	if (!topology_)
+		return true;
+	const auto owner = topology_->Owner(type, token);
+	const auto channel = profile.get<std::string>("channel", "");
+	if (owner.empty() || (!channel.empty() && channel != owner))
+		return false;
+
+	const auto source = type == "VideoSource" ? std::string(token) : profile.get<std::string>("VideoSource", "");
+	if (source.empty())
+		return true;
+	const auto ptz = type == "PTZ" ? std::string(token) : profile.get<std::string>("PTZ", "");
+	const auto analytics = type == "Analytics" ? std::string(token) : profile.get<std::string>("Analytics", "");
+	const auto& video = GetConfigByToken(source, "VideoSource");
+	const pt::ptree empty;
+	auto contains = [&](const char* list, const std::string& value) {
+		return std::ranges::any_of(video.get_child(list, empty), [&](const auto& item) {
+			return item.second.data() == value;
+		});
+	};
+	return (ptz.empty() || contains("CompatiblePtzNodes", GetConfigByToken(ptz, "PTZ").get<std::string>("NodeToken"))) &&
+				 (analytics.empty() || contains("CompatibleAnalyticsConfigurations", analytics));
 }
 
 void MediaProfilesManager::Create(const std::string& profileName,
@@ -200,8 +254,13 @@ void MediaProfilesManager::ApplyConfigurations(
 			throw osrv::invalid_token();
 		if (type == "Metadata" && !metadata_available_)
 			throw osrv::no_config();
+		if (topology_ && !profile.get_child_optional("channel"))
+			profile.put("channel", std::string(topology_->Owner(type, token)));
 		profile.put(type, token);
 	}
+	for (const auto& type : osrv::CONFIGURATION_ENUMERATION)
+		if (const auto token = profile.get<std::string>(type, ""); !token.empty() && !Compatible(profile, type, token))
+			throw osrv::configuration_conflict();
 	if (!profile.get<std::string>("Metadata", "").empty() && profile.get<std::string>("VideoSource", "").empty() &&
 			profile.get<std::string>("AudioSource", "").empty())
 		throw osrv::configuration_conflict();

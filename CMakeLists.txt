@@ -89,6 +89,8 @@ FILE(GLOB SERVICES_SRC
 	"onvif_services/pullpoint/event_generators.h"
 	"onvif_services/pullpoint/pull_point.cpp"
 	"onvif_services/pullpoint/pull_point.h"
+	"onvif_services/recording_control_service.cpp"
+	"onvif_services/recording_control_service.h"
 	"onvif_services/recording_search_service.cpp"
 	"onvif_services/recording_search_service.h"
 	"onvif_services/replay_control_service.cpp"
@@ -102,6 +104,8 @@ FILE(GLOB SERVICES_SRC
 	"onvif/SceneDescription.h"
 	"onvif/Notification.h"
 	"onvif/Recording.cpp"
+	onvif/RecordingArchive.cpp
+	onvif/RecordingArchive.h
 	"onvif/OnvifRequest.h"	
 )
 
@@ -168,6 +172,8 @@ add_library(onvif_server STATIC
 	web/WebAuthentication.cpp
 	web/WebAuthentication.h
 	utility/ConfigValidation.cpp
+	utility/ChannelTopology.cpp
+	utility/ChannelTopology.h
 	utility/ConfigValidation.h
 	utility/DetectorControls.cpp
 	utility/DetectorControls.h
@@ -181,8 +187,12 @@ add_library(onvif_server STATIC
 	utility/ApplicationReboot.h
 	RtspServer.cpp
 	RtspServer.h
+	rtsp/ArchiveReplay.cpp
+	rtsp/ArchiveReplay.h
 	rtsp/MetadataStream.cpp
 	rtsp/MetadataStream.h
+	rtsp/VideoProducerPool.cpp
+	rtsp/VideoProducerPool.h
 	include/onvif_services/service_configs.h
     src/onvif_services/service_configs.cpp
 	"${SERVICES_SRC}"

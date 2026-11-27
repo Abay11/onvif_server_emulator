@@ -109,7 +109,7 @@ BOOST_AUTO_TEST_CASE(rtsp_listener_and_active_metadata_prepare_stop_and_restart)
 		auto source = std::make_shared<osrv::event::EventSource>(logger);
 		boost::asio::ip::tcp::iostream client;
 		{
-			osrv::rtsp::Server server(&logger, configs, {"PCMU", 64000, 8000}, source);
+			osrv::rtsp::Server server(&logger, configs, osrv::rtsp::AudioInfo{"PCMU", 64000, 8000}, source);
 			if (enabled)
 			{
 				boost::property_tree::ptree config; config.put("Events", true);
@@ -127,7 +127,7 @@ BOOST_AUTO_TEST_CASE(rtsp_listener_and_active_metadata_prepare_stop_and_restart)
 		}
 		client.close();
 		// Start/stop immediately to cover a stop racing the loop's startup.
-		osrv::rtsp::Server restarted(&logger, configs, {"PCMU", 64000, 8000}, source);
+		osrv::rtsp::Server restarted(&logger, configs, osrv::rtsp::AudioInfo{"PCMU", 64000, 8000}, source);
 		restarted.run();
 	}
 }

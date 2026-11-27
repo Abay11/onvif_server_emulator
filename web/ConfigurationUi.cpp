@@ -1,6 +1,7 @@
 #include "ConfigurationUi.h"
 #include "../Server.h"
 #include "../utility/AnalyticsRules.h"
+#include "../utility/ChannelTopology.h"
 #include "../utility/ConfigValidation.h"
 #include "../utility/MediaProfilesManager.h"
 #include "../utility/MetadataConfiguration.h"
@@ -18,8 +19,8 @@ namespace
 using Tree = boost::property_tree::ptree;
 const Tree Empty;
 const std::vector<std::string> Files{
-		"common.config", "users.config", "device.config", "device_io.config", "imaging.config", "media.config",
-		"media2.config", "ptz.config", "recording_search.config", "replay_control.config", "discovery.config",
+		"common.config", "channels.config", "users.config", "device.config", "device_io.config", "imaging.config", "media.config",
+		"media2.config", "ptz.config", "recording_search.config", "recording_control.config", "replay_control.config", "discovery.config",
 		"event.config", "io_sources.config", "media_profiles.config", "analytics.config"};
 constexpr const char* Secret = "__UNCHANGED_SECRET__";
 std::string Json(const Tree& tree)
@@ -41,6 +42,13 @@ std::string ReadFile(const std::string& path)
 	if (!input)
 		throw std::runtime_error("Configuration file unavailable");
 	return std::string(std::istreambuf_iterator<char>(input), {});
+}
+std::string ReadDocument(IOnvifServer& server, const std::string& file)
+{
+	auto& media = *server.MediaProfilesManager();
+	if (file == "media_profiles.config" && media.Topology())
+		return utility::media::MediaConfigJson(media.ReaderWriter()->ConfigsTree());
+	return ReadFile(server.ConfigsPath() + "/" + file);
 }
 std::string Revision()
 {
@@ -198,7 +206,7 @@ std::string ConfigurationUi::Read()
 	bool first = true;
 	for (const auto& file : Files)
 	{
-		const auto bytes = ReadFile(server_.ConfigsPath() + "/" + file);
+		const auto bytes = ReadDocument(server_, file);
 		auto& snapshot = snapshots_[file];
 		if (snapshot.bytes != bytes || snapshot.revision.empty())
 			snapshot = {bytes, Revision()};
@@ -216,6 +224,30 @@ std::string ConfigurationUi::Read()
 		first = false;
 		result += Json(entry);
 	}
+	result += "],\"active_channels\":[";
+	first = true;
+	if (const auto* topology = server_.MediaProfilesManager()->Topology())
+		for (const auto& [_, channel] : topology->Channels())
+		{
+			Tree summary;
+			summary.put("token", channel.get<std::string>("token"));
+			summary.put("name", channel.get<std::string>("name"));
+			Tree configurations;
+			for (const auto& [type, entries] : channel.get_child("media"))
+			{
+				Tree tokens;
+				for (const auto& [unused, entry] : entries)
+					if (auto token = entry.get_optional<std::string>("token"))
+						tokens.push_back({"", Tree(*token)});
+				if (!tokens.empty())
+					configurations.put_child(type, tokens);
+			}
+			summary.put_child("configurations", configurations);
+			if (!first)
+				result += ',';
+			first = false;
+			result += Json(summary);
+		}
 	return result + "],\"metadata_enabled\":" + (server_.GetServerConfigs()->rtsp_metadata_enabled_ ? "true" : "false") +
 				 ",\"restart_required\":" + (restart_required_ ? "true" : "false") + "}";
 }
@@ -227,12 +259,19 @@ std::string ConfigurationUi::Change(const Tree& command)
 		throw std::invalid_argument("Unknown configuration file");
 	auto found = snapshots_.find(file);
 	if (found == snapshots_.end() || command.get<std::string>("revision") != found->second.revision ||
-			ReadFile(server_.ConfigsPath() + "/" + file) != found->second.bytes)
+			ReadDocument(server_, file) != found->second.bytes)
 		throw utility::RuleFault("SettingsChanged", true);
 	auto bytes = command.get<std::string>("document");
 	// Validate exact JSON bytes first, including duplicate keys and JSON types.
 	utility::ValidateConfig(file, bytes);
 	auto candidate = Parse(bytes);
+	if (file == "channels.config")
+	{
+		const utility::media::ChannelTopology topology(candidate);
+		const auto& media = topology.Media();
+		ValidateMedia(media, media, server_.GetServerConfigs()->rtsp_metadata_enabled_, server_.ConfigsPath(),
+									server_.GetServerConfigs()->HttpAddress());
+	}
 	if (file == "common.config")
 	{
 		const auto low = candidate.get<unsigned>("rtp.port_min", 50000);
@@ -260,6 +299,18 @@ std::string ConfigurationUi::Change(const Tree& command)
 	{
 		if (Parse(found->second.bytes) != media->ReaderWriter()->ConfigsTree())
 			throw utility::RuleFault("SettingsChanged", true);
+		if (media->Topology())
+			for (auto& [_, profile] : candidate.get_child("MediaProfiles"))
+			{
+				if (profile.get_child_optional("channel"))
+					continue;
+				for (const auto& type : CONFIGURATION_ENUMERATION)
+					if (const auto token = profile.get<std::string>(type, ""); !token.empty())
+					{
+						profile.put("channel", std::string(media->Topology()->Owner(type, token)));
+						break;
+					}
+			}
 		ValidateMedia(candidate, media->ReaderWriter()->ConfigsTree(), server_.GetServerConfigs()->rtsp_metadata_enabled_,
 									server_.ConfigsPath(), server_.GetServerConfigs()->HttpAddress());
 		restart = !OnlyLiveMedia(candidate, media->ReaderWriter()->ConfigsTree());
@@ -277,21 +328,38 @@ std::string ConfigurationUi::Change(const Tree& command)
 		bytes = utility::media::MediaConfigJson(candidate);
 		utility::ValidateConfig(file, bytes);
 	}
-	utility::media::ConfigsReaderWriter writer(server_.ConfigsPath() + "/" + file);
-	writer.Read();
-	writer.BeforeSave([&](const std::string& json) { utility::ValidateConfig(file, json); });
-	// File saves preserve empty arrays/objects and numeric types exactly as entered.
-	writer.SaveJson(bytes);
-	if (isMedia)
+	if (isMedia && media->Topology())
 	{
-		media->ReaderWriter()->ConfigsTree() = std::move(candidate);
+		auto& live = media->ReaderWriter()->ConfigsTree();
+		live.swap(candidate);
 		try
 		{
-			server_.Metadata()->Refresh();
+			media->ReaderWriter()->Save();
 		}
-		catch (const std::exception&)
+		catch (...)
 		{
-			restart = true;
+			live.swap(candidate);
+			throw;
+		}
+	}
+	else
+	{
+		utility::media::ConfigsReaderWriter writer(server_.ConfigsPath() + "/" + file);
+		writer.Read();
+		writer.BeforeSave([&](const std::string& json) { utility::ValidateConfig(file, json); });
+		// File saves preserve empty arrays/objects and numeric types exactly as entered.
+		writer.SaveJson(bytes);
+		if (isMedia)
+		{
+			media->ReaderWriter()->ConfigsTree() = std::move(candidate);
+			try
+			{
+				server_.Metadata()->Refresh();
+			}
+			catch (const std::exception&)
+			{
+				restart = true;
+			}
 		}
 	}
 	found->second = {bytes, Revision()};

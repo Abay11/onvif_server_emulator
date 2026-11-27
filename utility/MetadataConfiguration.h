@@ -43,11 +43,13 @@ class Control
 {
 public:
 	using Configure = std::function<void(const std::string&, const std::string&, bool, std::shared_ptr<const Settings>)>;
+	using ConfigureChannel = std::function<void(const std::string&, const boost::property_tree::ptree*,
+																							 const boost::property_tree::ptree*, std::shared_ptr<const Settings>)>;
 	using Retain = std::function<void(const std::vector<std::string>&)>;
 	using Synchronize = std::function<void(const std::string&)>;
 	Control(utility::media::MediaProfilesManager& manager, const ServerConfigs& server,
 					const std::string& configs_path = {});
-	void Bind(Configure configure, Synchronize synchronize, Retain retain = {});
+	void Bind(Configure configure, Synchronize synchronize, Retain retain = {}, ConfigureChannel channel = {});
 	void Refresh();
 	boost::property_tree::ptree Execute(const std::string& operation, const std::string& xml, bool media2, bool secure = false);
 	std::string Uri(const std::string& profile);
@@ -57,6 +59,7 @@ private:
 	const ServerConfigs& server_;
 	std::map<std::string, std::string> encoders_;
 	Configure configure_;
+	ConfigureChannel channel_;
 	Synchronize synchronize_;
 	Retain retain_;
 };

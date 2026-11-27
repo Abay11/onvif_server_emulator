@@ -916,9 +916,17 @@ dialog p {
 .button.detector-disabled:hover { background: #a33b48; }
 
 #configuration-workspace { margin-bottom: 24px; }
+.channel-catalog > summary, .channel-editor-list > details > summary { font-weight: 650; }
+.channel-catalog .button { width: 100%; justify-content: flex-start; white-space: normal; overflow-wrap: anywhere; text-align: left; }
+.channel-catalog .button + .button { margin-top: 4px; }
+.profile-channel > th { background: #edf2f7; color: #233347; text-transform: none; letter-spacing: normal; }
+.channel-editor-list { display: grid; gap: 10px; }
+.channel-editor-list > details { padding: 12px 16px; border: 1px solid var(--border); border-radius: 6px; }
+.channel-editor-list > details > summary { cursor: pointer; }
+.channel-editor-list > details > :not(summary) { margin-top: 12px; }
 .configuration-bindings { display: grid; gap: 16px; }
 .configuration-json { font-family: ui-monospace, monospace !important; min-height: 420px; resize: vertical; }
-#configuration-restart { border-left: 4px solid #be861a; background: #fff6d9; color: #65450b; }
+#configuration-restart, #channels-restart { border-left: 4px solid #be861a; background: #fff6d9; color: #65450b; }
 
 .login-page { min-height: 100vh; display: grid; place-items: center; padding: 1.5rem; background: #111f31; }
 .login-card { width: min(100%, 440px); background: #fff; border-radius: 16px; padding: 2.5rem; box-shadow: 0 24px 80px #0003; }

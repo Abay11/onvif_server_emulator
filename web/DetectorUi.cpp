@@ -3,6 +3,7 @@
 #include "../include/onvif_services/service_configs.h"
 #include "../onvif_services/EventSource.h"
 #include "../utility/AnalyticsRules.h"
+#include "../utility/ChannelTopology.h"
 #include "../utility/ConfigValidation.h"
 #include "../utility/MediaProfilesManager.h"
 #include <algorithm>
@@ -18,13 +19,16 @@ using Tree = boost::property_tree::ptree;
 const std::vector<std::string> Types{
 		"tt:MotionRegionDetector",		"tt:LineDetector",	 "tt:LineCounting", "tt:FieldDetector",
 		"tt:LicensePlateRecognition", "tt:FaceRecognition"};
-Tree Settings(const Tree& events, const std::string& id, const std::shared_ptr<DetectorControls>& controls)
+Tree Settings(const Tree& events, const std::string& id, const std::shared_ptr<DetectorControls>& controls, const std::string& source = {})
 {
 	const auto section = DetectorControls::Section(id);
 	Tree settings = events.get_child(section, Tree{});
-	settings.put("Enabled", controls->Enabled(id));
-	settings.put("AutoGenerateEvents", events.get<bool>(section + ".AutoGenerateEvents", true));
-	settings.put("EventGenerationTimeout", events.get<int>(section + ".EventGenerationTimeout", 30));
+	const auto path = "ChannelDetectors." + source + "." + section + ".";
+	settings.put("Enabled", controls->Enabled(id, source));
+	settings.put("AutoGenerateEvents", events.get<bool>(path + "AutoGenerateEvents",
+															events.get<bool>(section + ".AutoGenerateEvents", true)));
+	settings.put("EventGenerationTimeout", events.get<int>(path + "EventGenerationTimeout",
+															events.get<int>(section + ".EventGenerationTimeout", 30)));
 	return settings;
 }
 std::string Json(const Tree& value)
@@ -49,6 +53,10 @@ DetectorUi::DetectorUi(IOnvifServer& server)
 		: events_path_(server.ConfigsPath() + "/event.config"), rules_(server.Rules()), configs_(server.GetServerConfigs()),
 			events_(*static_cast<std::shared_ptr<Tree>>(ServiceConfigs("event", server.ConfigsPath())))
 {
+	if (const auto* topology = server.MediaProfilesManager()->Topology())
+		for (const auto& [_, channel] : topology->Channels())
+			channel_sources_.push_back(channel.get<std::string>("videoSource.token"));
+
 	for (const auto* id : {"DigitalInputsAlarm", "MotionAlarm", "CellMotion", "AudioDetection"})
 		configs_->detectors->Register(id, events_.get<std::string>(std::string(id) + ".Topic"),
 																	events_.get<bool>(std::string(id) + ".Enabled", true));
@@ -77,7 +85,40 @@ std::string DetectorUi::Read() const
 		item.put("manual_available", !configs_->event_source.expired());
 		families.push_back(item);
 	}
-	std::string out = "{\"families\":" + Array(families) +
+	std::vector<Tree> scoped;
+	const auto eventSource = configs_->event_source.lock();
+	for (const auto& video : rules_->VideoSources())
+		for (const auto& family : families)
+		{
+			const auto id = family.get<std::string>("id");
+			Tree item = family;
+			item.put("source", video);
+			item.put_child("settings", Settings(events_, id, configs_->detectors, video));
+			item.put("interval_seconds", item.get<int>("settings.EventGenerationTimeout"));
+			item.put("enabled", configs_->detectors->Enabled(id, video));
+			item.put("manual_available", eventSource && eventSource->HasDetector(id, video));
+			scoped.push_back(std::move(item));
+		}
+	std::vector<Tree> scopedSimple, channelSources;
+	for (const auto& video : channel_sources_)
+	{
+		Tree source;
+		source.put("token", video);
+		channelSources.push_back(std::move(source));
+		for (const auto& base : simple)
+		{
+			const auto id = base.get<std::string>("id");
+			if (id == "DigitalInputsAlarm" || !eventSource || !eventSource->HasDetector(id, video))
+				continue;
+			auto item = base;
+			item.put("source", video);
+			item.put("enabled", configs_->detectors->Enabled(id, video));
+			item.put_child("settings", Settings(events_, id, configs_->detectors, video));
+			scopedSimple.push_back(std::move(item));
+		}
+	}
+	std::string out = "{\"families\":" + Array(families) + ",\"scoped_families\":" + Array(scoped) +
+										",\"channel_sources\":" + Array(channelSources) + ",\"scoped_simple\":" + Array(scopedSimple) +
 										",\"rules_enabled\":" + std::string(configs_->detectors->Enabled("rules") ? "true" : "false") +
 										",\"max_rules\":4,\"simple\":" + Array(simple) + ",\"configurations\":[";
 	bool first = true;
@@ -92,7 +133,7 @@ std::string DetectorUi::Read() const
 		header.put("token", token);
 		header.put("name", cfg.get<std::string>("Name", token));
 		for (const auto& [__, src] : snapshot.get_child("VideoSource"))
-			for (const auto& [___, compatible] : src.get_child("CompatibleAnalyticsConfigurations"))
+			for (const auto& [key, compatible] : src.get_child("CompatibleAnalyticsConfigurations", Tree{}))
 				if (compatible.data() == token && !header.get_child_optional("bounds"))
 				{
 					header.put_child("bounds", src.get_child("Bounds"));
@@ -117,6 +158,8 @@ std::string DetectorUi::Read() const
 		{
 			if (!header.get_child_optional("bounds"))
 				break;
+			if (!utility::AnalyticsRules::SupportsRule(cfg, type))
+				continue;
 			if (!firstType)
 				out += ',';
 			firstType = false;
@@ -136,8 +179,12 @@ void DetectorUi::Change(const Tree& command)
 		if (id != "DigitalInputsAlarm" && id != "MotionAlarm" && id != "CellMotion" && id != "AudioDetection" &&
 				std::find(Types.begin(), Types.end(), id) == Types.end())
 			throw std::invalid_argument("Unknown detector");
+		const auto video = command.get<std::string>("source", "");
+		if (!video.empty() && (video.size() > 64 ||
+				video.find_first_not_of("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_") != std::string::npos))
+			throw std::invalid_argument("Unknown video source");
 		auto source = configs_->event_source.lock();
-		if (!source || !source->HasDetector(id))
+		if (!source || !source->HasDetector(id, video))
 			throw utility::RuleFault("DetectorUnavailable", true);
 		if (action == "manual")
 		{
@@ -147,23 +194,29 @@ void DetectorUi::Change(const Tree& command)
 			{
 				bool found = false;
 				const auto snapshot = rules_->Snapshot();
+				bool compatible = video.empty();
+				for (const auto& [_, config] : snapshot.get_child("VideoSource"))
+					if (config.get<std::string>("SourceToken") == video)
+						for (const auto& [__, candidate] : config.get_child("CompatibleAnalyticsConfigurations", Tree{}))
+							compatible |= candidate.data() == token;
 				for (const auto& [_, cfg] : snapshot.get_child("Analytics"))
 					if (cfg.get<std::string>("token") == token)
 						for (const auto& [__, rule] : cfg.get_child("rules"))
 							if (rule.get<std::string>("Name") == name && rule.get<std::string>("Type") == id)
 								found = true;
-				if (!found)
+				if (!compatible || !found)
 					throw utility::RuleFault("RuleNotExistent");
 			}
 			try
 			{
-				source->GenerateOnce(id, token, name);
+				source->GenerateOnce(id, token, name, video);
 			}
 			catch (const std::runtime_error&)
 			{
 				throw utility::RuleFault("DetectorDisabled", true);
 			}
-			configs_->journal->Add("info", "system", "detectors", "Manual detector step: " + id);
+			configs_->journal->Add("info", "system", "detectors",
+														 "Manual detector step: " + id + (video.empty() ? "" : " on " + video));
 			return;
 		}
 		const auto& settings = command.get_child("settings");
@@ -175,7 +228,8 @@ void DetectorUi::Change(const Tree& command)
 		auto current = file.ConfigsTree();
 		if (current != events_)
 			throw utility::RuleFault("ConfigFileChanged", true);
-		const auto section = DetectorControls::Section(id);
+		const auto base = DetectorControls::Section(id);
+		const auto section = video.empty() ? base : "ChannelDetectors." + video + "." + base;
 		for (const auto& [key, value] : settings)
 			current.put_child(section + "." + key, value);
 		int interval = 0;
@@ -183,14 +237,14 @@ void DetectorUi::Change(const Tree& command)
 		file.ConfigsTree() = current;
 		file.BeforeSave([&](const std::string& json) {
 			utility::ValidateConfig("event.config", json);
-			interval = current.get<int>(section + ".EventGenerationTimeout", 30);
-			automatic = current.get<bool>(section + ".AutoGenerateEvents", true);
-			enabled = current.get<bool>(section + ".Enabled", true);
+			interval = current.get<int>(section + ".EventGenerationTimeout", current.get<int>(base + ".EventGenerationTimeout", 30));
+			automatic = current.get<bool>(section + ".AutoGenerateEvents", current.get<bool>(base + ".AutoGenerateEvents", true));
+			enabled = current.get<bool>(section + ".Enabled", current.get<bool>(base + ".Enabled", true));
 			if (interval < 1)
 				throw std::invalid_argument("Invalid event interval");
 		});
 		file.Save();
-		source->ConfigureDetector(id, interval, automatic, enabled);
+		source->ConfigureDetector(id, interval, automatic, enabled, video);
 		events_ = std::move(current);
 	}
 	else if (action == "detector")

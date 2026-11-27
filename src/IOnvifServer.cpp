@@ -5,6 +5,7 @@
 #include "../utility/AnalyticsRules.h"
 #include "../utility/AnalyticsReader.h"
 #include "../utility/MediaProfilesManager.h"
+#include "../utility/ChannelTopology.h"
 
 #include "../Server.h"
 #include "../utility/MetadataConfiguration.h"
@@ -23,6 +24,7 @@
 #include "../onvif_services/media_service.h"
 #include "../onvif_services/ptz_service.h"
 #include "../onvif_services/recording_search_service.h"
+#include "../onvif_services/recording_control_service.h"
 #include "../onvif_services/replay_control_service.h"
 
 #include <format>
@@ -72,6 +74,11 @@ std::shared_ptr<IOnvifService> OnvifServiceFactory::Create(const std::string& se
 	if (SERVICE_URI::REPLAY == service_uri)
 	{
 		return std::make_shared<ReplayControlService>(service_uri, "replay_control", srv);
+	}
+
+	if (SERVICE_URI::RECORDING == service_uri)
+	{
+		return std::make_shared<RecordingControlService>(service_uri, "recording_control", srv);
 	}
 
 	if (SERVICE_URI::SEARCH == service_uri)
@@ -238,6 +245,57 @@ std::shared_ptr<IOnvifService> IOnvifServer::PTZService()
 	}
 
 	return ptz_service_;
+}
+
+std::shared_ptr<IOnvifService> IOnvifServer::RecordingControlService()
+{
+	if (!recording_control_service_)
+		recording_control_service_ = OnvifServiceFactory().Create(SERVICE_URI::RECORDING, shared_from_this());
+	return recording_control_service_;
+}
+
+std::optional<RecordingArchive::Source> IOnvifServer::RecordingSource(const std::string& channel,
+																																			const std::string& profile) const
+{
+	const auto& manager = std::as_const(*media_profiles_manager_);
+	const auto* topology = manager.Topology();
+	if (!topology)
+		return std::nullopt;
+	try
+	{
+		const auto& selected = manager.GetProfileByToken(profile);
+		if (selected.get<std::string>("channel", "") != channel)
+			return std::nullopt;
+		const auto& channels = topology->Channels();
+		const auto configured = std::ranges::find_if(channels, [&](const auto& item) {
+			return item.second.template get<std::string>("token") == channel;
+		});
+		const auto source = selected.get<std::string>("VideoSource", "");
+		const auto encoder = selected.get<std::string>("VideoEncoder", "");
+		if (configured == channels.end() || source.empty() || encoder.empty())
+			return std::nullopt;
+		RecordingArchive::Source result;
+		result.channel = channel;
+		result.profile = profile;
+		result.videoSource = manager.GetConfigByToken(source, "VideoSource").get<std::string>("SourceToken");
+		result.name = configured->second.get<std::string>("name");
+		result.address = server_configs_->HttpAddress() + "onvif/device_service";
+		result.video = manager.GetConfigByToken(encoder, "VideoEncoder");
+		const auto audio = selected.get<std::string>("AudioEncoder", "");
+		if (!audio.empty() && !selected.get<std::string>("AudioSource", "").empty())
+			result.audio = manager.GetConfigByToken(audio, "AudioEncoder");
+		result.metadata = !selected.get<std::string>("Metadata", "").empty();
+		return result;
+	}
+	catch (const no_such_profile&)
+	{
+		return std::nullopt;
+	}
+}
+
+bool IOnvifServer::RecordingProfileAvailable(const std::string& channel, const std::string& profile) const
+{
+	return RecordingSource(channel, profile).has_value();
 }
 
 std::shared_ptr<IOnvifService> IOnvifServer::RecordingSearchService()

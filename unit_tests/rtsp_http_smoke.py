@@ -3,6 +3,8 @@
 import argparse
 import base64
 import concurrent.futures
+from datetime import datetime, timezone
+import http.client
 import json
 from pathlib import Path
 import re
@@ -99,7 +101,7 @@ class TunnelSocket:
             stream.close()
 
 
-def stream(scheme, port, path, audio=True):
+def stream(scheme, port, path, metadata, replay_start=None):
     client = Rtsp.__new__(Rtsp)
     client.socket = TunnelSocket(scheme, port, path)
     client.buffer, client.sequence = b'', 0
@@ -107,17 +109,20 @@ def stream(scheme, port, path, audio=True):
         uri = f'rtsp://127.0.0.1:{port}{path}'
         client.request('OPTIONS', uri)
         _, sdp = client.request('DESCRIBE', uri, 'Accept: application/sdp\r\n')
-        assert b'm=video' in sdp and (not audio or b'm=audio' in sdp), sdp
+        assert b'm=video' in sdp and b'm=audio' in sdp, sdp
+        assert (b'm=application' in sdp) == metadata, sdp
         tracks = [track.decode().strip() for track in re.findall(rb'^a=control:(.+)\r?$', sdp, re.M)
                   if track.strip() != b'*']
         session = None
+        require = 'Require: onvif-replay\r\n' if replay_start else ''
         for index, track in enumerate(tracks):
-            headers = f'Transport: RTP/AVP/TCP;unicast;interleaved={2*index}-{2*index+1}\r\n'
+            headers = f'Transport: RTP/AVP/TCP;unicast;interleaved={2*index}-{2*index+1}\r\n' + require
             if session:
                 headers += f'Session: {session}\r\n'
             response, _ = client.request('SETUP', track if '://' in track else uri + '/' + track, headers)
             session = re.search(r'Session:\s*([^;\r\n]+)', response, re.I).group(1)
-        client.request('PLAY', uri, f'Session: {session}\r\n')
+        replay_range = f'Range: clock={replay_start}-\r\n' if replay_start else ''
+        client.request('PLAY', uri, f'Session: {session}\r\n' + require + replay_range)
         channels, deadline = set(), time.monotonic() + 20
         expected = set(range(0, 2 * len(tracks), 2))
         while not expected.issubset(channels):
@@ -132,7 +137,8 @@ def stream(scheme, port, path, audio=True):
                 assert size >= 12 and client.buffer[4] >> 6 == 2
                 channels.add(channel)
             client.buffer = client.buffer[size+4:]
-        print(f'PASS {scheme.upper()} tunnel: {len(tracks)} RTP tracks, fragmented POST and read-ahead')
+        mode = 'replay' if replay_start else 'live'
+        print(f'PASS {scheme.upper()} {mode} tunnel: {len(tracks)} RTP tracks, fragmented POST and read-ahead')
     finally:
         client.socket.close()
 
@@ -142,7 +148,7 @@ def setup(protocol):
             f'<tt:Transport><tt:Protocol>{protocol}</tt:Protocol></tt:Transport></t:StreamSetup>')
 
 
-def exercise(scheme, port):
+def exercise(scheme, port, recording, replay_start, metadata):
     paths = []
     for service in ('media', 'media2'):
         body = '<t:Protocol>RtspOverHttp</t:Protocol>' if service == 'media2' else setup('HTTP')
@@ -155,16 +161,46 @@ def exercise(scheme, port):
         assert 'ter:InvalidStreamSetup' in values(fault, 'Value')
         direct = '<t:Protocol>RTSP</t:Protocol>' if service == 'media2' else setup('RTSP')
         assert values(soap(scheme, port, service, 'GetStreamUri', direct + '<t:ProfileToken>ProfileToken0</t:ProfileToken>', context=CONTEXT), 'Uri')[0].startswith('rtsp://127.0.0.1:8554/')
-    stream(scheme, port, paths[0])
-    replay_body = setup('HTTP') + '<t:RecordingToken>Recording_0</t:RecordingToken>'
+    assert paths[0] == paths[1], paths
+    stream(scheme, port, paths[0], metadata)
+    replay_path = f'/onvif/replay/{recording}'
+    replay_body = setup('HTTP') + f'<t:RecordingToken>{recording}</t:RecordingToken>'
     replay = soap(scheme, port, 'replay', 'GetReplayUri', replay_body, context=CONTEXT)
-    assert values(replay, 'Uri') == [f'{scheme}://127.0.0.1:{port}/Recording0']
-    stream(scheme, port, '/Recording0', audio=False)
+    assert values(replay, 'Uri') == [f'{scheme}://127.0.0.1:{port}{replay_path}']
+    stream(scheme, port, replay_path, metadata, replay_start=replay_start)
     fault = soap(scheme, port, 'replay', 'GetReplayUri',
                  setup('HTTP') + '<t:RecordingToken>missing</t:RecordingToken>', context=CONTEXT, expected=400)
     assert 'ter:NoRecording' in values(fault, 'Value')
     # Verify normal routes still work after disconnecting an active tunnel.
     soap(scheme, port, 'device', 'GetServices', context=CONTEXT)
+
+
+def make_recording(scheme, port):
+    headers = {"Content-Type": "application/json", "X-ONVIF-Admin": "login"}
+    connection = (http.client.HTTPSConnection("127.0.0.1", port, context=CONTEXT, timeout=10)
+                  if scheme == "https" else http.client.HTTPConnection("127.0.0.1", port, timeout=10))
+    try:
+        connection.request("POST", "/admin/api/login", json.dumps({"login": "a", "password": "a1"}), headers)
+        response = connection.getresponse()
+        assert response.status == 200
+        headers["Cookie"] = response.getheader("Set-Cookie").split(";", 1)[0]
+        headers["X-ONVIF-Admin"] = "recordings"
+        response.read()
+        replay_start = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S.%fZ')
+        for action in ("start", "stop"):
+            connection.request("POST", "/admin/api/recordings",
+                               json.dumps({"action": action, "channel": "Channel0", "profile": "ProfileToken0"}), headers)
+            response = connection.getresponse()
+            data = response.read()
+            assert response.status == 200, (action, response.status, data)
+            if action == "start":
+                time.sleep(2)
+        connection.request("GET", "/admin/api/recordings", headers=headers)
+        response = connection.getresponse()
+        assert response.status == 200
+        return json.loads(response.read())["jobs"][0]["recording"], replay_start
+    finally:
+        connection.close()
 
 
 def main():
@@ -195,11 +231,6 @@ def main():
             discovery = json.loads((config / 'discovery.config').read_text())
             discovery['interface_ipv4'] = '127.0.0.1'
             (config / 'discovery.config').write_text(json.dumps(discovery))
-            if not metadata:
-                profiles = json.loads((config / 'media_profiles.config').read_text())
-                for profile in profiles['MediaProfiles']:
-                    profile.pop('Metadata', None)
-                (config / 'media_profiles.config').write_text(json.dumps(profiles))
             with open(Path(directory) / 'server.log', 'w+') as log:
                 process = subprocess.Popen([binary, str(config)], stdout=log, stderr=log)
                 try:
@@ -216,8 +247,9 @@ def main():
                         soap('http' if http else 'https', 8080 if http else 8443, 'media',
                              'AddMetadataConfiguration', '<t:ProfileToken>ProfileToken0</t:ProfileToken>'
                              '<t:ConfigurationToken>MetadataToken0</t:ConfigurationToken>', context=CONTEXT)
+                    recording, replay_start = make_recording('http' if http else 'https', 8080 if http else 8443)
                     with concurrent.futures.ThreadPoolExecutor() as executor:
-                        futures = [executor.submit(exercise, scheme, port)
+                        futures = [executor.submit(exercise, scheme, port, recording, replay_start, metadata)
                                    for scheme, port, enabled in (('http', 8080, http), ('https', 8443, https)) if enabled]
                         for future in futures:
                             future.result()

@@ -121,8 +121,13 @@
       errorReturnFocus = event.target;
     }
   }
+  let selectedSource = "";
+  function scopedFamily(id, source) {
+    return (data.scoped_families || []).find((item) => item.id === id && item.source === source) ||
+      data.families.find((item) => item.id === id);
+  }
   function showSettings(item, family = false) {
-    selected = family ? {family: item.id} : {simple: item.id};
+    selected = family ? {family: item.id, source: item.source} : {simple: item.id, source: item.source};
     draft = null; previous = null; editing = false;
     el("detector-selected-title").textContent = label(item.id);
     const form = node("form", undefined, "detector-form");
@@ -149,13 +154,13 @@
       if (!(key in values)) readonly.append(node("dt", `${label(key)} (read-only)`), node("dd", value));
     }
     if (readonly.children.length) form.append(readonly);
-    if (family) form.append(node("p", "These settings apply to all rules of this detector type. The rule engine must also be enabled.", "table-note"));
+    if (family) form.append(node("p", "These settings apply to this detector type on the selected channel. The rule engine must also be enabled.", "table-note"));
     const actions = node("div", undefined, "dialog-actions");
     const save = node("button", "Save changes", "button secondary"); save.type = "submit";
-    actions.append(save, manualButton(item.id, truth(item.enabled) && (!family || truth(data.rules_enabled)), item.manual_available));
+    actions.append(save, manualButton(item.id, truth(item.enabled) && (!family || truth(data.rules_enabled)), item.manual_available, {source: item.source}));
     form.append(actions);
     form.addEventListener("submit", (event) => {
-      event.preventDefault(); change({action: "settings", id: item.id, settings: values});
+      event.preventDefault(); change({action: "settings", id: item.id, source: item.source, settings: values});
     });
     el("detector-settings").replaceChildren(form);
     draw();
@@ -169,12 +174,35 @@
       node("p", "Enables or disables all rule-based detectors. Select a detector type to configure its timer, or a rule to edit its parameters.", "table-note"));
     draw();
   }
+  function simpleDetectors() {
+    if (!data.channel_sources?.length) return data.simple;
+    return [...data.simple.filter((item) => item.id === "DigitalInputsAlarm"),
+      ...data.scoped_simple.filter((item) => item.source === selectedSource)];
+  }
   function catalog() {
     const target = el("detector-catalog");
     const firstRender = !target.children.length;
     const opened = new Set([...target.querySelectorAll("details[open]")].map((item) => item.dataset.key));
-    target.replaceChildren(node("h3", "Built-in detectors"));
-    for (const item of data.simple) {
+    target.replaceChildren();
+    const sources = data.channel_sources?.length ? data.channel_sources.map(({ token }) => token) : [...new Set(data.configurations.map((item) => item.source).filter(Boolean))];
+    if (!sources.includes(selectedSource)) selectedSource = sources[0] || "";
+    if (sources.length) {
+      const title = node("label", "Channel source");
+      const select = node("select"); select.id = "detector-channel";
+      for (const source of sources) {
+        const choice = node("option", source); choice.value = source; select.append(choice);
+      }
+      select.value = selectedSource;
+      select.addEventListener("change", () => {
+        if (!mayLeave()) { select.value = selectedSource; return; }
+        selectedSource = select.value; selected = null; draft = null; editing = false;
+        el("detector-settings").replaceChildren(node("p", "Select a detector or rule."));
+        catalog(); draw();
+      });
+      title.append(select); target.append(title);
+    }
+    target.append(node("h3", "Built-in detectors"));
+    for (const item of simpleDetectors()) {
       const row = node("div", undefined, "detector-row");
       row.append(detectorButton(label(item.id), item.enabled, () => {
         if (!mayLeave()) return;
@@ -183,10 +211,12 @@
       target.append(row);
     }
     target.append(node("h3", "Rule-based analytics"), detectorButton("Rule engine", data.rules_enabled, () => { if (mayLeave()) showParent(); }));
-    for (const cfg of data.configurations) {
+    for (const cfg of data.configurations.filter((item) => !selectedSource || item.source === selectedSource)) {
       const group = node("div", undefined, "detector-rule-group");
       group.append(node("h4", cfg.name), node("p", cfg.token, "muted mono"));
-      for (const family of data.families) {
+      for (const {id} of data.families) {
+        const family = scopedFamily(id, cfg.source);
+        if (!cfg.templates.some((rule) => rule.Type === family.id)) continue;
         const rules = cfg.rules.filter((rule) => rule.Type === family.id);
         const details = node("details");
         details.dataset.key = `${cfg.token}|${family.id}`;
@@ -208,7 +238,7 @@
       }
       target.append(group);
     }
-    target.append(node("p", `Maximum ${data.max_rules} rules across all configurations.`, "table-note"));
+    target.append(node("p", `Maximum ${data.max_rules} rules per analytics configuration.`, "table-note"));
   }
   function openRule(cfg, rule, creating) {
     configuration = cfg;
@@ -352,11 +382,11 @@
     const form = node("form", undefined, "detector-form");
     form.addEventListener("invalid", invalidPopup, true);
     if (!selected.creating) {
-      const family = data.families.find((item) => item.id === draft.Type);
+      const family = scopedFamily(draft.Type, configuration.source);
       form.append(toggle("Enabled", selected.enabled, {action: "toggle", configuration: configuration.token, name: draft.Name}),
-        node("p", `Auto generate events: ${truth(family.settings.AutoGenerateEvents) ? "on" : "off"} · Event generation timeout: ${family.interval_seconds} s (shared by this detector type).`, "table-note"),
+        node("p", `Auto generate events: ${truth(family.settings.AutoGenerateEvents) ? "on" : "off"} · Event generation timeout: ${family.interval_seconds} s (this channel).`, "table-note"),
         button("Edit detector settings", () => { if (mayLeave()) showSettings(family, true); }),
-        manualButton(draft.Type, selected.enabled && truth(family.enabled) && truth(data.rules_enabled), family.manual_available, {configuration: configuration.token, name: draft.Name}));
+        manualButton(draft.Type, selected.enabled && truth(family.enabled) && truth(data.rules_enabled), family.manual_available, {configuration: configuration.token, name: draft.Name, source: configuration.source}));
     }
     const typeLabel = node("label", "Rule type"); const select = node("select");
     for (const item of configuration.templates) { const option = node("option", label(item.Type)); option.value = item.Type; select.append(option); }
@@ -424,8 +454,8 @@
       const response = await window.adminFetch("/admin/api/detectors", {cache: "no-store", signal: AbortSignal.timeout(5000)});
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       data = await response.json(); catalog();
-      if (selected?.simple) showSimple(data.simple.find((item) => item.id === selected.simple));
-      if (selected?.family) showSettings(data.families.find((item) => item.id === selected.family), true);
+      if (selected?.simple) showSimple(simpleDetectors().find((item) => item.id === selected.simple));
+      if (selected?.family) showSettings(scopedFamily(selected.family, selected.source), true);
       if (selected?.parent) showParent();
       if (selected?.configuration && !editing) {
         const cfg = data.configurations.find((item) => item.token === selected.configuration);

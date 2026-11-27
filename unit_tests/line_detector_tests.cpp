@@ -215,6 +215,8 @@ BOOST_AUTO_TEST_CASE(source_and_configuration_isolation)
 	auto src = profiles.get_child("VideoSource").front().second;
 	src.put("token", "other-source-config");
 	src.put("SourceToken", "other-source");
+	src.put("Bounds.x", 20);
+	src.put("Bounds.width", 320);
 	Tree compatible, token;
 	token.put_value("other-config");
 	compatible.push_back({"", token});
@@ -222,13 +224,25 @@ BOOST_AUTO_TEST_CASE(source_and_configuration_isolation)
 	profiles.get_child("VideoSource").push_back({"", src});
 	Detector isolated(profiles, [](const auto&, const auto&) {});
 	BOOST_TEST(isolated.VideoSources().size() == 2u);
+	const auto region = isolated.DefaultRule("other-config", "tt:MotionRegionDetector");
+	const auto& corners = region.get_child("MotionRegion.Polygon");
+	BOOST_TEST(corners.front().second.get<double>("x") == 20);
+	BOOST_TEST(std::next(corners.begin())->second.get<double>("x") == 340);
 	BOOST_TEST(isolated.SampleObject("VideoSource0", "1", -0.5, 0).empty());
 	BOOST_TEST(isolated.SampleObject("other-source", "1", 0.5, 0).empty());
+	const auto first = isolated.Scenes()->Read("VideoSource0", "AnalyticsConfig_0", 0);
+	const auto second = isolated.Scenes()->Read("other-source", "other-config", 0);
+	BOOST_REQUIRE_EQUAL(first.frames.size(), 1u);
+	BOOST_REQUIRE_EQUAL(second.frames.size(), 1u);
+	BOOST_TEST(first.frames.front()->objects.front().x == -0.5);
+	BOOST_TEST(second.frames.front()->objects.front().x == 0.5);
+	BOOST_TEST(isolated.Scenes()->Read("VideoSource0", "other-config", 0).frames.empty());
+	BOOST_TEST(isolated.Scenes()->Read("other-source", "AnalyticsConfig_0", 0).frames.empty());
 	auto crossed = isolated.SampleObject("VideoSource0", "1", 0.5, 0);
 	BOOST_REQUIRE_EQUAL(crossed.size(), 1u);
 	BOOST_TEST(crossed.front().source_item_descriptions[1].second == "AnalyticsConfig_0");
 	BOOST_TEST(isolated.SampleObject("other-source", "1", -0.5, 0).size() == 1u);
-	BOOST_CHECK_THROW(isolated.Execute("CreateRules", request("CreateRules", rule("a") + rule("b") + rule("c"))),
-										utility::RuleFault);
+	BOOST_CHECK_NO_THROW(isolated.Execute("CreateRules", request("CreateRules", rule("a") + rule("b") + rule("c"))));
+	BOOST_CHECK_THROW(isolated.Execute("CreateRules", request("CreateRules", rule("overflow"))), utility::RuleFault);
 }
 BOOST_AUTO_TEST_SUITE_END()

@@ -159,6 +159,49 @@ BOOST_AUTO_TEST_CASE(administration_requires_enabled_administrator_and_revokes_s
 	BOOST_TEST(endpoint.Request("GET", "/admin/api/status")->status_code == "401 Unauthorized");
 }
 
+BOOST_AUTO_TEST_CASE(channel_topology_saves_validate_and_reject_stale_revisions)
+{
+	Endpoint endpoint;
+	constexpr auto route = "/admin/api/configuration";
+	const Headers headers{{"Content-Type", "application/json"}, {"X-ONVIF-Admin", "configuration"}};
+	auto response = endpoint.Request("GET", route);
+	BOOST_REQUIRE_EQUAL(response->status_code, "200 OK");
+	Tree files;
+	boost::property_tree::read_json(response->content, files);
+	const auto& entries = files.get_child("files");
+	const auto old = std::find_if(entries.begin(), entries.end(), [](const auto& entry) {
+		return entry.second.template get<std::string>("name") == "channels.config";
+	});
+	BOOST_REQUIRE(old != entries.end());
+
+	Tree command;
+	command.put("file", "channels.config");
+	command.put("revision", old->second.get<std::string>("revision"));
+	auto submit = [&](const std::string& document) {
+		command.put("document", document);
+		std::ostringstream body;
+		boost::property_tree::write_json(body, command, false);
+		return endpoint.Request("POST", route, body.str(), headers);
+	};
+	BOOST_CHECK_EQUAL(submit(R"({"channels":[]})")->status_code, "422 Unprocessable Entity");
+	Tree saved;
+	boost::property_tree::read_json(endpoint.path + "/channels.config", saved);
+	BOOST_REQUIRE_EQUAL(saved.get_child("channels").size(), 1);
+
+	auto updated = old->second.get<std::string>("document");
+	const auto name = updated.find("Channel 1");
+	BOOST_REQUIRE(name != std::string::npos);
+	updated.replace(name, std::string("Channel 1").size(), "Lobby");
+	response = submit(updated);
+	BOOST_REQUIRE_EQUAL(response->status_code, "200 OK");
+	Tree result;
+	boost::property_tree::read_json(response->content, result);
+	BOOST_CHECK(result.get<bool>("restart_required"));
+	BOOST_CHECK_EQUAL(submit(old->second.get<std::string>("document"))->status_code, "409 Conflict");
+	boost::property_tree::read_json(endpoint.path + "/channels.config", saved);
+	BOOST_CHECK_EQUAL(saved.get_child("channels").front().second.get<std::string>("name"), "Lobby");
+}
+
 BOOST_AUTO_TEST_CASE(browser_sessions_expire_and_share_onvif_accounts)
 {
 	auto now = std::chrono::steady_clock::now();
@@ -493,7 +536,7 @@ BOOST_AUTO_TEST_CASE(configuration_editor_validates_references_preserves_fixed_p
 		return result;
 	};
 	auto view = get();
-	BOOST_TEST(view.get_child("files").size() == 15u);
+	BOOST_TEST(view.get_child("files").size() == 17u);
 	Tree command;
 	command.put("file", "media_profiles.config");
 	command.put("revision", entry(view, "media_profiles.config").get<std::string>("revision"));

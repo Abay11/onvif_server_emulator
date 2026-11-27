@@ -23,8 +23,13 @@ to the new browser URL if you change its port or disable its listener. See
 
 ## Media profiles and configurations
 
+Open an active channel in the catalog to see its profiles and ONVIF
+configurations. Profiles without an assigned channel appear in a separate
+group. To change the saved topology, use **NVR Channels** in the sidebar.
+
 Select a profile to change its name and configuration associations. Each selector
-has a Not attached option for removing an association. Analytics and PTZ choices
+groups choices by channel and has a Not attached option for removing an association.
+Profiles with an owner channel can attach configurations from that channel. Analytics and PTZ choices
 respect the selected video source's compatible analytics configurations and PTZ
 nodes. Metadata choices are unavailable when metadata transport is disabled.
 Server validation checks all references, unique tokens, metadata source requirements,
@@ -43,9 +48,9 @@ Select an ONVIF configuration entity to edit its settings. Nested settings use
 field groups; arrays use JSON inputs. Metadata supports Events, Analytics, Filters
 and AnalyticsModules, including adding optional settings. Empty arrays remain
 arrays when later native operations save the shared configuration. Analytics
-rules are edited in the existing Detectors panel. Both Media1's
-VideoEncoderConfigurations and Media2's VideoEncoder catalogs are exposed under
-their file names; they remain separate configured representations.
+rules are edited in the existing Detectors panel. The catalog shows separate
+video encoder entries for Media and Media2. Renaming an encoder from either
+entry saves the same name in both representations.
 
 Profile/metadata-only changes apply to new RTSP connections using the existing
 metadata control. Active sessions retain their previous snapshots. Changing

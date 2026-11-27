@@ -2,13 +2,17 @@
 #include "Logger.h"
 #include "Server.h"
 #include "rtsp/MetadataStream.h"
+#include "rtsp/VideoProducerPool.h"
+#include "rtsp/ArchiveReplay.h"
+#include <boost/property_tree/ptree.hpp>
+#include <format>
 #include "utility/MetadataConfiguration.h"
 #include <gst/video/video-event.h>
 #include <mutex>
 #include <map>
 #include <vector>
 
-#include "../utility/AudioSourceReader.h"
+#include "utility/AudioSourceReader.h"
 #include "include/MediaFormats.h"
 
 #include <gst/gst.h>
@@ -250,7 +254,7 @@ static std::string metadata_branch(int index)
 		"caps=application/x-onvif-metadata ! rtponvifmetadatapay name=pay" + std::to_string(index) + " pt=107 mtu=1200 ";
 }
 
-Server::Server(ILogger* logger, ServerConfigs& server_configs, const AudioInfo& ainfo,
+Server::Server(ILogger* logger, ServerConfigs& server_configs, const std::optional<AudioInfo>& audio,
 							 std::shared_ptr<event::IEventSource> event_source, std::shared_ptr<scene::ISource> scenes)
 		: logger_(logger), event_source_(std::move(event_source)), server_configs_(&server_configs)
 {
@@ -277,39 +281,32 @@ Server::Server(ILogger* logger, ServerConfigs& server_configs, const AudioInfo& 
 	g_signal_connect_data(server_, "client-connected", G_CALLBACK(client_connected_callback),
 		new JournalHandle(server_configs_->journal), release_journal, GConnectFlags(0));
 
+	if (server_configs_->archive)
+		AttachArchiveReplay(server_, server_configs_->archive);
 	mounts_ = gst_rtsp_server_get_mount_points(server_);
 
 	factoryHighStream_ = gst_rtsp_media_factory_new();
 
 	std::stringstream mediadescr;
 
-	auto asetup = utility::AudioSetupFactory().AudioSetup(ainfo.codec, ainfo.bitrate, ainfo.samplerate);
-	test_audio_pipeline_ = " audiotestsrc is-live=1 ! audioconvert ! audioresample ! audio/x-raw,rate=8000 ! " +
-		asetup->Encoding() + " ! " + asetup->PayloadPluginName() + " name=pay1 pt=" + std::to_string(asetup->PayloadNum());
-
-	if (server_configs_->rtsp_streaming_file_.empty())
+	const bool fromFile = !server_configs_->rtsp_streaming_file_.empty();
+	if (audio)
 	{
-		mediadescr << "("
-							 << " videotestsrc is-live=1 ! timeoverlay ! video/x-raw,width=640,height=320 ! x264enc ! rtph264pay "
-									"name=pay0 pt=97"
-							 << " audiotestsrc is-live=1 ! audioconvert ! audioresample ! audio/x-raw,rate=8000 ! "
-							 << asetup->Encoding() << " ! " << asetup->PayloadPluginName()
-							 << " name=pay1 pt= " << std::to_string(asetup->PayloadNum());
+		auto setup = utility::AudioSetupFactory().AudioSetup(audio->codec, audio->bitrate, audio->samplerate);
+		const auto encode = " ! audioconvert ! audioresample ! audio/x-raw,rate=8000 ! " + setup->Encoding() +
+				" ! " + setup->PayloadPluginName() + " name=pay1 pt=" + std::to_string(setup->PayloadNum());
+		test_audio_pipeline_ = " audiotestsrc is-live=1" + encode;
+		audio_pipeline_ = fromFile ? " demuxer." + encode : test_audio_pipeline_;
 	}
+	if (fromFile)
+		mediadescr << "( multifilesrc location=\"" << server_configs_->rtsp_streaming_file_
+								<< "\" loop=true stop-index=-1 ! decodebin name=demuxer"
+									 " demuxer. ! autovideoconvert ! x264enc ! rtph264pay name=pay0 pt=96";
 	else
-	{
-		mediadescr << "("
-							 << " multifilesrc location=\"" << server_configs_->rtsp_streaming_file_
-							 << "\" loop=true stop-index=-1 ! decodebin name=demuxer"
-							 << " demuxer. ! autovideoconvert ! x264enc ! rtph264pay name=pay0 pt=96"
-							 << " demuxer. ! audioconvert ! audioresample ! audio/x-raw,rate=8000 ! " << asetup->Encoding() << " ! "
-							 << asetup->PayloadPluginName() << " name=pay1 pt= " << std::to_string(asetup->PayloadNum());
-	}
+		mediadescr << "( videotestsrc is-live=1 ! timeoverlay ! video/x-raw,width=640,height=320 ! "
+									"x264enc ! rtph264pay name=pay0 pt=97";
 	high_pipeline_ = mediadescr.str();
-	auto audio_start = high_pipeline_.find(server_configs_->rtsp_streaming_file_.empty() ? " audiotestsrc" : " demuxer. ! audioconvert");
-	audio_pipeline_ = high_pipeline_.substr(audio_start);
-	high_pipeline_.resize(audio_start);
-	mediadescr << " )";
+	mediadescr << audio_pipeline_ << " )";
 
 	gst_rtsp_media_factory_set_launch(factoryHighStream_, mediadescr.str().c_str());
 	gst_rtsp_media_factory_set_shared(factoryHighStream_, TRUE);
@@ -319,6 +316,7 @@ Server::Server(ILogger* logger, ServerConfigs& server_configs, const AudioInfo& 
 			"x264enc ! rtph264pay name=pay0 pt=96 ";
 	low_pipeline_ = low_pipeline;
 	profiles_ = std::make_shared<Profiles>();
+	producers_ = std::make_unique<VideoProducerPool>(*logger_);
 	gst_rtsp_media_factory_set_launch(factoryLowStream_, (low_pipeline + " )").c_str());
 	gst_rtsp_media_factory_set_shared(factoryLowStream_, TRUE);
 
@@ -340,7 +338,10 @@ Server::Server(ILogger* logger, ServerConfigs& server_configs, const AudioInfo& 
 
 	gst_rtsp_mount_points_add_factory(mounts_, "/Live&HighStream", factoryHighStream_);
 	gst_rtsp_mount_points_add_factory(mounts_, "/Live&LowStream", factoryLowStream_);
-	gst_rtsp_mount_points_add_factory(mounts_, "/Recording0", replayFactory_);
+	if (server_configs_->archive)
+		g_object_unref(replayFactory_);
+	else
+		gst_rtsp_mount_points_add_factory(mounts_, "/Recording0", replayFactory_);
 
 	g_object_unref(mounts_);
 };
@@ -348,13 +349,6 @@ Server::Server(ILogger* logger, ServerConfigs& server_configs, const AudioInfo& 
 void Server::ConfigureProfile(const std::string& path, const std::string& encoder,
 															std::shared_ptr<const metadata::Settings> settings, bool audio)
 {
-	if (settings && !metadata_)
-		throw std::logic_error("Metadata transport is disabled");
-	std::lock_guard lock(profiles_->mutex);
-	auto identity = encoder + (audio ? ":audio:" : ":") + (settings ? settings->identity : "");
-	auto& entry = profiles_->entries[path];
-	if (entry.identity == identity)
-		return;
 	bool high = encoder == "VideoEncoderToken0";
 	auto pipeline = encoder.empty() ? "( " : high ? high_pipeline_ : low_pipeline_;
 	if (audio)
@@ -367,9 +361,80 @@ void Server::ConfigureProfile(const std::string& path, const std::string& encode
 	if (settings)
 		pipeline += metadata_branch((encoder.empty() ? 0 : 1) + (audio ? 1 : 0));
 	pipeline += " )";
+	InstallProfile(path, std::move(pipeline), {}, std::move(settings));
+}
+
+void Server::ConfigureChannelProfile(const std::string& path, const boost::property_tree::ptree* video,
+																		 const boost::property_tree::ptree* audio,
+																		 std::shared_ptr<const metadata::Settings> settings)
+{
+	std::string pipeline = "( ";
+	std::string producer;
+	unsigned index = 0;
+	if (video)
+	{
+		std::unique_ptr<gchar, decltype(&g_free)> file(g_strescape(server_configs_->rtsp_streaming_file_.c_str(), nullptr),
+																									 g_free);
+		const auto source = server_configs_->rtsp_streaming_file_.empty() ?
+				std::string("videotestsrc is-live=true") :
+				std::format("multifilesrc location=\"{}\" loop=true stop-index=-1 ! decodebin", file.get());
+		auto profile = video->get<std::string>("Profile");
+		if (profile == "Baseline")
+			profile = "baseline";
+		else if (profile == "Main")
+			profile = "main";
+		else
+			profile = "high";
+		const int rate = video->get<double>("RateControl.FrameRateLimit");
+		const int gop = video->get<int>("GovLength");
+		producer = std::format("{} ! videoconvert ! videoscale ! videorate ! "
+				"video/x-raw,format=I420,width={},height={},framerate={}/1 ! timeoverlay ! "
+				"x264enc name=shared_encoder speed-preset=ultrafast tune=zerolatency bitrate={} key-int-max={} "
+				"qp-min={} ! video/x-h264,profile={} ! h264parse config-interval=-1 ! "
+				"video/x-h264,stream-format=byte-stream,alignment=au",
+				source, video->get<int>("Resolution.Width"), video->get<int>("Resolution.Height"), rate,
+				video->get<int>("RateControl.BitrateLimit"), gop,
+				20 - static_cast<int>(video->get<double>("Quality")), profile);
+		if (server_configs_->rtsp_streaming_file_.empty())
+			pipeline += "appsrc name=shared_video format=time is-live=true block=false max-buffers=8 max-bytes=0";
+		else
+		{
+			pipeline += producer;
+			producer.clear();
+		}
+		pipeline += " ! rtph264pay name=pay0 pt=96 config-interval=-1 ";
+		++index;
+	}
+	if (audio)
+	{
+		const auto rate = audio->get<unsigned>("SampleRate") * 1000;
+		const auto bitrate = audio->get<unsigned>("Bitrate") * 1000;
+		auto setup = utility::AudioSetupFactory().AudioSetup(audio->get<std::string>("Encoding"), bitrate, rate);
+		pipeline += std::format(" audiotestsrc is-live=true ! audioconvert ! audioresample ! audio/x-raw,rate={} ! "
+				"{} ! {} name=pay{} pt={} ", rate, setup->Encoding(), setup->PayloadPluginName(), index++,
+				(setup->PayloadNum() < 96 ? setup->PayloadNum() : 97));
+	}
+	if (settings)
+		pipeline += metadata_branch(index);
+	pipeline += " )";
+	InstallProfile(path, std::move(pipeline), std::move(producer), std::move(settings));
+}
+
+void Server::InstallProfile(const std::string& path, std::string pipeline, std::string producer,
+														std::shared_ptr<const metadata::Settings> settings)
+{
+	if (settings && !metadata_)
+		throw std::logic_error("Metadata transport is disabled");
+	std::lock_guard lock(profiles_->mutex);
+	auto identity = pipeline + "\n" + producer + "\n" + (settings ? settings->identity : "");
+	auto& entry = profiles_->entries[path];
+	if (entry.identity == identity)
+		return;
 	auto factory = gst_rtsp_media_factory_new();
 	gst_rtsp_media_factory_set_launch(factory, pipeline.c_str());
 	gst_rtsp_media_factory_set_shared(factory, TRUE);
+	if (!producer.empty())
+		producers_->Attach(factory, std::move(producer));
 	if (settings)
 		metadata_->Attach(factory, settings);
 	auto pool = gst_rtsp_media_factory_get_address_pool(factoryHighStream_);
@@ -401,6 +466,26 @@ void Server::ConfigureProfile(const std::string& path, const std::string& encode
 	gst_rtsp_mount_points_add_factory(mounts, path.c_str(), factory);
 	g_object_unref(mounts);
 	entry.identity = identity;
+}
+
+void Server::ConfigureRecording(const std::string& token)
+{
+	const auto path = "/onvif/replay/" + token;
+	int matched = 0;
+	if (auto* existing = gst_rtsp_mount_points_match(mounts_, path.c_str(), &matched))
+	{
+		gst_object_unref(existing);
+		if (matched == static_cast<int>(path.size()))
+			return;
+	}
+	const auto entry = server_configs_->archive->Recording(token);
+	if (!entry)
+		throw std::invalid_argument("The recording does not exist");
+	auto* factory = ArchiveFactory(*entry);
+	auto* pool = gst_rtsp_media_factory_get_address_pool(factoryHighStream_);
+	gst_rtsp_media_factory_set_address_pool(factory, pool);
+	g_object_unref(pool);
+	gst_rtsp_mount_points_add_factory(mounts_, path.c_str(), factory);
 }
 
 void Server::RetainProfiles(const std::vector<std::string>& paths)
@@ -510,8 +595,7 @@ void Server::run()
 	}, gst_rtsp_server_get_session_pool(server_), +[](gpointer data) { g_object_unref(data); });
 	g_source_attach(session_cleanup_, context_);
 	logger_->Info("RTSP Server is running. Available URIs:\n" + server_configs_->RtspAddress() +
-			"Live&HighStream\n" + server_configs_->RtspAddress() + "Live&LowStream\n" +
-			server_configs_->RtspAddress() + "Recording0");
+			"Live&HighStream\n" + server_configs_->RtspAddress() + "Live&LowStream");
 	worker_thread_ = std::thread([this]() {
 		g_main_context_push_thread_default(context_);
 		g_main_loop_run(loop_);

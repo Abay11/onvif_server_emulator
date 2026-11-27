@@ -2,6 +2,7 @@
 #include "metadata_handlers.h"
 #include "../utility/MetadataConfiguration.h"
 #include "media2_service.h"
+#include "ptz_service.h"
 #include "media_service.h" // to use some util functions
 #include "analytics_service.h" // to use some util functions
 
@@ -276,146 +277,99 @@ public:
 	}
 };
 
+pt::ptree CompatibleConfigurations(const utility::media::MediaProfilesManager& manager, const pt::ptree& request,
+																		const std::string& operation, const std::string& type)
+{
+	const auto prefix = "Envelope.Body." + operation;
+	const auto token = exns::find_hierarchy(prefix + ".ConfigurationToken", request);
+	const auto profileToken = exns::find_hierarchy(prefix + ".ProfileToken", request);
+	pt::ptree result;
+	if (!token.empty())
+		result.push_back({"", manager.GetConfigByToken(token, type)});
+	else
+	{
+		const auto* profile = profileToken.empty() ? nullptr : &manager.GetProfileByToken(profileToken);
+		const auto& catalog = manager.ReaderWriter()->ConfigsTree().get_child(type);
+		for (const auto& entry : catalog)
+			if (!profile || manager.Compatible(*profile, type, entry.second.get<std::string>("token")))
+				result.push_back(entry);
+	}
+	return result;
+}
+
 struct GetAudioEncoderConfigurationsHandler : public OnvifRequestBase
 {
-private:
-	const std::shared_ptr<pt::ptree>& profiles_configs_;
-
-public:
 	GetAudioEncoderConfigurationsHandler(const std::map<std::string, std::string>& xs,
-																			 const std::shared_ptr<pt::ptree>& configs,
-																			 const std::shared_ptr<pt::ptree>& profiles_configs)
+															 const std::shared_ptr<pt::ptree>& configs,
+															 const utility::media::MediaProfilesManager& manager)
 			: OnvifRequestBase(GetAudioEncoderConfigurations, auth::SECURITY_LEVELS::READ_MEDIA, xs, configs),
-				profiles_configs_(profiles_configs)
+				manager_(manager)
 	{
 	}
 
 	void operator()(std::shared_ptr<HttpServer::Response> response, std::shared_ptr<HttpServer::Request> request) override
 	{
-		pt::ptree ae_configs_node;
-
-		pt::ptree request_xml_tree;
-		pt::xml_parser::read_xml(request->content, request_xml_tree);
-
-		auto fillAEConfig = [](const pt::ptree& in, pt::ptree& out) {
-			out.add("<xmlattr>.token", in.get<std::string>(CONFIG_PROP_TOKEN));
-			out.add("tt:Name", in.get<std::string>("Name"));
-			out.add("tt:UseCount", in.get<int>("UseCount"));
-			out.add("tt:Encoding", in.get<std::string>("Encoding"));
-			out.add("tt:Bitrate", in.get<int>("Bitrate"));
-			out.add("tt:SampleRate", in.get<int>("SampleRate"));
-		};
-
-		if (auto requestedToken =
-						exns::find_hierarchy("Envelope.Body.GetAudioEncoderConfigurations.ConfigurationToken", request_xml_tree);
-				!requestedToken.empty()) // response with a specific AE config
+		pt::ptree requestXml, result;
+		pt::xml_parser::read_xml(request->content, requestXml);
+		for (const auto& [_, config] : CompatibleConfigurations(manager_, requestXml, GetAudioEncoderConfigurations, "AudioEncoder"))
 		{
-			auto aeCfg = utility::AudioEncoderReaderByToken(requestedToken, *profiles_configs_).AudioEncoder();
-			pt::ptree ae_node;
-			fillAEConfig(aeCfg, ae_node);
-			ae_configs_node.add_child("tr2:Configurations", ae_node);
+			pt::ptree xml;
+			const auto token = config.get<std::string>("token");
+			xml.put("<xmlattr>.token", token);
+			xml.put("tt:Name", config.get<std::string>("Name"));
+			xml.put("tt:UseCount", manager_.GetUseCount(token, "AudioEncoder"));
+			xml.put("tt:Encoding", config.get<std::string>("Encoding"));
+			xml.put("tt:Bitrate", config.get<int>("Bitrate"));
+			xml.put("tt:SampleRate", config.get<int>("SampleRate"));
+			result.add_child("tr2:Configurations", xml);
 		}
-		else if (auto requestedProfile =
-								 exns::find_hierarchy("Envelope.Body.GetAudioEncoderConfigurations.ProfileToken", request_xml_tree);
-						 !requestedProfile.empty()) // response with a specific profile's AE config
-		{
-			auto aeCfg = utility::AudioEncoderReaderByProfileToken(requestedProfile, *profiles_configs_).AudioEncoder();
-			pt::ptree ae_node;
-			fillAEConfig(aeCfg, ae_node);
-			ae_configs_node.add_child("tr2:Configurations", ae_node);
-		}
-		else // response with all existing configs
-		{
-			const auto ae_config_list =
-					profiles_configs_->get_child(CONFIGURATION_ENUMERATION[CONFIGURATION_TYPE::AUDIOENCODER]);
-			for (const auto& ae_config : ae_config_list)
-			{
-				pt::ptree ae_node;
-				fillAEConfig(ae_config.second, ae_node);
-				ae_configs_node.add_child("tr2:Configurations", ae_node);
-			}
-		}
-
-		auto env_tree = utility::soap::getEnvelopeTree(ns_);
-		env_tree.put_child("s:Body.tr2:GetAudioEncoderConfigurationsResponse", ae_configs_node);
-		pt::ptree root_tree;
-		root_tree.put_child("s:Envelope", env_tree);
-
-		std::ostringstream os;
-		pt::write_xml(os, root_tree);
-
-		utility::http::fillResponseWithHeaders(*response, os.str());
+		auto envelope = utility::soap::getEnvelopeTree(ns_);
+		envelope.put_child("s:Body.tr2:GetAudioEncoderConfigurationsResponse", result);
+		pt::ptree root;
+		root.put_child("s:Envelope", envelope);
+		std::ostringstream xml;
+		pt::write_xml(xml, root);
+		utility::http::fillResponseWithHeaders(*response, xml.str());
 	}
+
+private:
+	const utility::media::MediaProfilesManager& manager_;
 };
 
 struct GetAudioSourceConfigurationsHandler : public OnvifRequestBase
 {
-private:
-	const std::shared_ptr<pt::ptree>& profiles_configs_;
-
-public:
 	GetAudioSourceConfigurationsHandler(const std::map<std::string, std::string>& xs,
-																			const std::shared_ptr<pt::ptree>& configs,
-																			const std::shared_ptr<pt::ptree>& profiles_configs)
+															 const std::shared_ptr<pt::ptree>& configs,
+															 const utility::media::MediaProfilesManager& manager)
 			: OnvifRequestBase(GetAudioSourceConfigurations, auth::SECURITY_LEVELS::READ_MEDIA, xs, configs),
-				profiles_configs_(profiles_configs)
+				manager_(manager)
 	{
 	}
 
 	void operator()(std::shared_ptr<HttpServer::Response> response, std::shared_ptr<HttpServer::Request> request) override
 	{
-		pt::ptree as_configs_node;
-
-		pt::ptree request_xml_tree;
-		pt::xml_parser::read_xml(request->content, request_xml_tree);
-
-		auto fillASConfig = [](const pt::ptree& in, pt::ptree& out) {
-			out.add("<xmlattr>.token", in.get<std::string>(CONFIG_PROP_TOKEN));
-			out.add("tt:Name", in.get<std::string>("Name"));
-			out.add("tt:UseCount", in.get<int>("UseCount"));
-			out.add("tt:SourceToken", in.get<std::string>("SourceToken"));
-		};
-
-		if (auto requestedToken =
-						exns::find_hierarchy("Envelope.Body.GetAudioSourceConfigurations.ConfigurationToken", request_xml_tree);
-				!requestedToken.empty()) // response with a specific AS config
+		pt::ptree requestXml, result;
+		pt::xml_parser::read_xml(request->content, requestXml);
+		for (const auto& [_, config] : CompatibleConfigurations(manager_, requestXml, GetAudioSourceConfigurations, "AudioSource"))
 		{
-			auto asCfg = utility::AudioSourceConfigsReaderByToken(requestedToken, *profiles_configs_).AudioSource();
-			pt::ptree as_node;
-			fillASConfig(asCfg, as_node);
-			as_configs_node.add_child("tr2:Configurations", as_node);
+			pt::ptree xml;
+			xml.add("<xmlattr>.token", config.get<std::string>("token"));
+			xml.add("tt:Name", config.get<std::string>("Name"));
+			xml.add("tt:UseCount", manager_.GetUseCount(config.get<std::string>("token"), "AudioSource"));
+			xml.add("tt:SourceToken", config.get<std::string>("SourceToken"));
+			result.add_child("tr2:Configurations", xml);
 		}
-		else if (auto requestedProfile =
-								 exns::find_hierarchy("Envelope.Body.GetAudioSourceConfigurations.ProfileToken", request_xml_tree);
-						 !requestedProfile.empty()) // response with a specific profile's AE config
-		{
-			auto asCfg = utility::AudioSourceConfigsReaderByProfileToken(requestedProfile, *profiles_configs_).AudioSource();
-			pt::ptree as_node;
-			fillASConfig(asCfg, as_node);
-			as_configs_node.add_child("tr2:Configurations", as_node);
-		}
-		else // response with all existing configs
-		{
-			const auto as_config_list =
-					profiles_configs_->get_child(CONFIGURATION_ENUMERATION[CONFIGURATION_TYPE::AUDIOSOURCE]);
-			for (const auto& [name, tree] : as_config_list)
-			{
-				pt::ptree as_node;
-				fillASConfig(tree, as_node);
-				as_configs_node.add_child("tr2:Configurations", as_node);
-			}
-		}
-
-		auto env_tree = utility::soap::getEnvelopeTree(ns_);
-		env_tree.put_child("s:Body.tr2:GetAudioSourceConfigurationsResponse", as_configs_node);
-		pt::ptree root_tree;
-		root_tree.put_child("s:Envelope", env_tree);
-
-		std::ostringstream os;
-		pt::write_xml(os, root_tree);
-
-		utility::http::fillResponseWithHeaders(*response, os.str());
+		auto envelope = utility::soap::getEnvelopeTree(ns_);
+		envelope.put_child("s:Body.tr2:GetAudioSourceConfigurationsResponse", result);
+		pt::ptree root;
+		root.put_child("s:Envelope", envelope);
+		std::ostringstream xml;
+		pt::write_xml(xml, root);
+		utility::http::fillResponseWithHeaders(*response, xml.str());
 	}
+
+private:
+	const utility::media::MediaProfilesManager& manager_;
 };
 
 struct GetAudioEncoderConfigurationOptionsHandler : public OnvifRequestBase
@@ -476,14 +430,12 @@ public:
 struct GetProfilesHandler : public OnvifRequestBase
 {
 private:
-	const osrv::ServerConfigs& server_cfg_;
 	utility::media::MediaProfilesManager* profiles_mgr_;
 
 public:
 	GetProfilesHandler(const std::map<std::string, std::string>& xs, const std::shared_ptr<pt::ptree>& configs,
-										 utility::media::MediaProfilesManager* profiles_mgr, const osrv::ServerConfigs& server_cfg)
-			: OnvifRequestBase(GetProfiles, auth::SECURITY_LEVELS::READ_MEDIA, xs, configs), profiles_mgr_(profiles_mgr),
-				server_cfg_(server_cfg)
+										 utility::media::MediaProfilesManager* profiles_mgr)
+			: OnvifRequestBase(GetProfiles, auth::SECURITY_LEVELS::READ_MEDIA, xs, configs), profiles_mgr_(profiles_mgr)
 	{
 	}
 
@@ -510,59 +462,20 @@ public:
 		pt::ptree response_node;
 		if (profile_token.empty())
 		{
-			if (server_cfg_.multichannel_enabled_)
+			for (const auto& [name, tree] : profiles_configs_list)
 			{
-				std::string vsToken = profiles_configs_list.front().second.get<std::string>("VideoSourceConfiguration");
-				for (size_t i = 0; i < server_cfg_.channels_count_; ++i)
-				{
-					auto it = profiles_configs_list.begin();
-					while (std::find_if(it, profiles_configs_list.end(), [vsToken](const pt::ptree::value_type& tree) {
-									 return tree.second.get<std::string>("VideoSourceConfiguration") == vsToken;
-								 }) != profiles_configs_list.end())
-					{
-						pt::ptree profile_node;
-						media2::util::profile_to_soap(it->second, profiles_mgr_->ReaderWriter()->ConfigsTree(), profile_node,
-																					*profiles_mgr_);
-
-						std::string profileToken = std::to_string(i) + "_" + it->second.get<std::string>(CONFIG_PROP_TOKEN);
-						profile_node.put("<xmlattr>.token", profileToken);
-
-						std::string vsToken = "VideoSource" + std::to_string(i);
-						profile_node.put("tr2:Configurations.tr2:VideoSource.tt:SourceToken", vsToken);
-
-						response_node.add_child("tr2:Profiles", profile_node);
-						++it;
-					}
-				}
-			}
-			else
-			{
-				// response all media profiles' configs
-				for (const auto& [name, tree] : profiles_configs_list)
-				{
-					pt::ptree profile_node;
-					media2::util::profile_to_soap(
-							profiles_mgr_->GetProfileByToken(tree.get<std::string>("token"), configTypesStr),
-							profiles_mgr_->ReaderWriter()->ConfigsTree(), profile_node, *profiles_mgr_);
-					response_node.add_child("tr2:Profiles", profile_node);
-				}
+				pt::ptree profile_node;
+				media2::util::profile_to_soap(
+						profiles_mgr_->GetProfileByToken(tree.get<std::string>("token"), configTypesStr),
+						profiles_mgr_->ReaderWriter()->ConfigsTree(), profile_node, *profiles_mgr_);
+				response_node.add_child("tr2:Profiles", profile_node);
 			}
 		}
 		else
 		{
-			// response only one profile's configs
-
-			std::string cleanedName = media::util::MultichannelProfilesNamesConverter(profile_token).CleanedName();
-
-			const auto& profile_config = profiles_mgr_->GetProfileByToken(cleanedName);
-
 			pt::ptree profile_node;
-			media2::util::profile_to_soap(profile_config, profiles_mgr_->ReaderWriter()->ConfigsTree(), profile_node,
-																		*profiles_mgr_);
-
-			if (server_cfg_.multichannel_enabled_)
-				profile_node.put("<xmlattr>.token", profile_token);
-
+			media2::util::profile_to_soap(profiles_mgr_->GetProfileByToken(profile_token, configTypesStr),
+																		profiles_mgr_->ReaderWriter()->ConfigsTree(), profile_node, *profiles_mgr_);
 			response_node.add_child("tr2:Profiles", profile_node);
 		}
 
@@ -580,61 +493,35 @@ public:
 
 struct GetVideoEncoderConfigurationsHandler : public OnvifRequestBase
 {
-private:
-	const std::shared_ptr<pt::ptree>& profiles_configs_;
-
-public:
 	GetVideoEncoderConfigurationsHandler(const std::map<std::string, std::string>& xs,
-																			 const std::shared_ptr<pt::ptree>& configs,
-																			 const std::shared_ptr<pt::ptree>& profiles_configs)
+															 const std::shared_ptr<pt::ptree>& configs,
+															 const utility::media::MediaProfilesManager& manager)
 			: OnvifRequestBase(GetVideoEncoderConfigurations, auth::SECURITY_LEVELS::READ_MEDIA, xs, configs),
-				profiles_configs_(profiles_configs)
+				manager_(manager)
 	{
 	}
 
 	void operator()(std::shared_ptr<HttpServer::Response> response, std::shared_ptr<HttpServer::Request> request) override
 	{
-		std::string configuration_token;
-		std::string profile_token; // todo: use it
+		pt::ptree requestXml, result;
+		pt::xml_parser::read_xml(request->content, requestXml);
+		for (const auto& [_, config] : CompatibleConfigurations(manager_, requestXml, GetVideoEncoderConfigurations, "VideoEncoder"))
 		{
-			auto request_str = request->content.string();
-			std::istringstream is(request_str);
-			pt::ptree xml_tree;
-			pt::xml_parser::read_xml(is, xml_tree);
-			configuration_token =
-					exns::find_hierarchy("Envelope.Body.GetVideoEncoderConfigurations.ConfigurationToken", xml_tree);
-			profile_token = exns::find_hierarchy("Envelope.Body.GetVideoEncoderConfigurations.ProfileToken", xml_tree);
+			pt::ptree xml;
+			osrv::media2::util::fill_video_encoder(config, xml);
+			result.add_child("tr2:Configurations", xml);
 		}
-
-		pt::ptree ve_configs_node;
-		if (!configuration_token.empty())
-		{
-			auto config = utility::VideoEncoderReaderByToken(configuration_token, *profiles_configs_).VideoEncoder();
-			pt::ptree videoencoder_configuration;
-			osrv::media2::util::fill_video_encoder(config, videoencoder_configuration);
-			ve_configs_node.add_child("tr2:Configurations", videoencoder_configuration);
-		}
-		else
-		{
-			const auto ve_config_list =
-					profiles_configs_->get_child(CONFIGURATION_ENUMERATION[CONFIGURATION_TYPE::VIDEOENCODER]);
-			for (const auto& [key, config] : ve_config_list)
-			{
-				pt::ptree videoencoder_configuration;
-				osrv::media2::util::fill_video_encoder(config, videoencoder_configuration);
-				ve_configs_node.add_child("tr2:Configurations", videoencoder_configuration);
-			}
-		}
-		auto env_tree = utility::soap::getEnvelopeTree(ns_);
-		env_tree.put_child("s:Body.tr2:GetVideoEncoderConfigurationsResponse", ve_configs_node);
-		pt::ptree root_tree;
-		root_tree.put_child("s:Envelope", env_tree);
-
-		std::ostringstream os;
-		pt::write_xml(os, root_tree);
-
-		utility::http::fillResponseWithHeaders(*response, os.str());
+		auto envelope = utility::soap::getEnvelopeTree(ns_);
+		envelope.put_child("s:Body.tr2:GetVideoEncoderConfigurationsResponse", result);
+		pt::ptree root;
+		root.put_child("s:Envelope", envelope);
+		std::ostringstream xml;
+		pt::write_xml(xml, root);
+		utility::http::fillResponseWithHeaders(*response, xml.str());
 	}
+
+private:
+	const utility::media::MediaProfilesManager& manager_;
 };
 
 struct GetVideoEncoderConfigurationOptionsHandler : public OnvifRequestBase
@@ -748,70 +635,35 @@ public:
 
 struct GetVideoSourceConfigurationsHandler : public OnvifRequestBase
 {
-private:
-	const std::shared_ptr<pt::ptree>& profiles_configs_;
-	const osrv::ServerConfigs& server_cfg_;
-
-public:
 	GetVideoSourceConfigurationsHandler(const std::map<std::string, std::string>& xs,
-																			const std::shared_ptr<pt::ptree>& configs,
-																			const std::shared_ptr<pt::ptree>& profiles_configs,
-																			const osrv::ServerConfigs& server_cfg)
+															 const std::shared_ptr<pt::ptree>& configs,
+															 const utility::media::MediaProfilesManager& manager)
 			: OnvifRequestBase(GetVideoSourceConfigurations, auth::SECURITY_LEVELS::READ_MEDIA, xs, configs),
-				profiles_configs_(profiles_configs), server_cfg_(server_cfg)
+				manager_(manager)
 	{
 	}
 
 	void operator()(std::shared_ptr<HttpServer::Response> response, std::shared_ptr<HttpServer::Request> request) override
 	{
-		std::string configuration_token;
-		std::string profile_token; // todo: use it
+		pt::ptree requestXml, result;
+		pt::xml_parser::read_xml(request->content, requestXml);
+		for (const auto& [_, config] : CompatibleConfigurations(manager_, requestXml, GetVideoSourceConfigurations, "VideoSource"))
 		{
-			auto request_str = request->content.string();
-			std::istringstream is(request_str);
-			pt::ptree xml_tree;
-			pt::xml_parser::read_xml(is, xml_tree);
-			configuration_token =
-					exns::find_hierarchy("Envelope.Body.GetVideoSourceConfigurations.ConfigurationToken", xml_tree);
-			profile_token = exns::find_hierarchy("Envelope.Body.GetVideoSourceConfigurations.ProfileToken", xml_tree);
+			pt::ptree xml;
+			osrv::media::util::fill_soap_videosource_configuration(config, xml);
+			result.add_child("tr2:Configurations", xml);
 		}
-
-		pt::ptree vs_configs_node;
-		if (!configuration_token.empty())
-		{
-			auto vs_config = utility::VideoSourceConfigsReaderByToken(configuration_token, *profiles_configs_).VideoSource();
-
-			pt::ptree videosource_configuration;
-			osrv::media::util::fill_soap_videosource_configuration(vs_config, videosource_configuration);
-			vs_configs_node.put_child("tr2:Configurations", videosource_configuration);
-		}
-		else
-		{
-			auto vs_config_list = profiles_configs_->get_child(CONFIGURATION_ENUMERATION[CONFIGURATION_TYPE::VIDEOSOURCE]);
-			for (const auto& [key, vs_config] : vs_config_list)
-			{
-				pt::ptree videosource_configuration;
-				osrv::media::util::fill_soap_videosource_configuration(vs_config, videosource_configuration);
-				vs_configs_node.put_child("tr2:Configurations", videosource_configuration);
-
-				// multichannel simulaiton with the first channel configs
-				for (size_t i = 0; server_cfg_.multichannel_enabled_ && i < server_cfg_.channels_count_ - 1; ++i)
-				{
-					vs_configs_node.put_child("tr2:Configurations", videosource_configuration);
-				}
-			}
-		}
-
-		auto env_tree = utility::soap::getEnvelopeTree(ns_);
-		env_tree.put_child("s:Body.tr2:GetVideoSourceConfigurationsResponse", vs_configs_node);
-		pt::ptree root_tree;
-		root_tree.put_child("s:Envelope", env_tree);
-
-		std::ostringstream os;
-		pt::write_xml(os, root_tree);
-
-		utility::http::fillResponseWithHeaders(*response, os.str());
+		auto envelope = utility::soap::getEnvelopeTree(ns_);
+		envelope.put_child("s:Body.tr2:GetVideoSourceConfigurationsResponse", result);
+		pt::ptree root;
+		root.put_child("s:Envelope", envelope);
+		std::ostringstream xml;
+		pt::write_xml(xml, root);
+		utility::http::fillResponseWithHeaders(*response, xml.str());
 	}
+
+private:
+	const utility::media::MediaProfilesManager& manager_;
 };
 
 struct RemoveConfigurationHandler : public OnvifRequestBase
@@ -941,10 +793,12 @@ public:
 
 struct GetServiceCapabilitiesHandler : public OnvifRequestBase
 {
-private:
-public:
-	GetServiceCapabilitiesHandler(const std::map<std::string, std::string>& xs, const std::shared_ptr<pt::ptree>& configs)
-			: OnvifRequestBase(GetServiceCapabilities, auth::SECURITY_LEVELS::PRE_AUTH, xs, configs)
+	const utility::media::MediaProfilesManager& manager;
+	const ServerConfigs& server;
+
+	GetServiceCapabilitiesHandler(const std::map<std::string, std::string>& xs, const std::shared_ptr<pt::ptree>& configs,
+													 const utility::media::MediaProfilesManager& manager, const ServerConfigs& server)
+			: OnvifRequestBase(GetServiceCapabilities, auth::SECURITY_LEVELS::PRE_AUTH, xs, configs), manager(manager), server(server)
 	{
 	}
 
@@ -960,10 +814,27 @@ public:
 		capabilities_node.add("<xmlattr>.Mask", capabilities_config.get<bool>("Mask"));
 		capabilities_node.add("<xmlattr>.SourceMask", capabilities_config.get<bool>("SourceMask"));
 
-		capabilities_node.add("tr2:ProfileCapabilities.<xmlattr>.MaximumNumberOfProfiles",
-													capabilities_config.get<int>("ProfileCapabilities.MaximumNumberOfProfiles"));
-		capabilities_node.add("tr2:ProfileCapabilities.<xmlattr>.ConfigurationsSupported",
-													capabilities_config.get<std::string>("ProfileCapabilities.ConfigurationsSupported"));
+		std::string supported;
+		if (manager.Topology())
+		{
+			const auto& catalogs = manager.ReaderWriter()->ConfigsTree();
+			for (const auto& type : CONFIGURATION_ENUMERATION)
+			{
+				const auto entries = catalogs.get_child_optional(type);
+				if (!entries || entries->empty() || (type == "Metadata" && !server.rtsp_metadata_enabled_))
+					continue;
+				if (!supported.empty())
+					supported += ' ';
+				supported += type;
+			}
+		}
+		else
+		{
+			capabilities_node.add("tr2:ProfileCapabilities.<xmlattr>.MaximumNumberOfProfiles",
+														capabilities_config.get<int>("ProfileCapabilities.MaximumNumberOfProfiles"));
+			supported = capabilities_config.get<std::string>("ProfileCapabilities.ConfigurationsSupported");
+		}
+		capabilities_node.put("tr2:ProfileCapabilities.<xmlattr>.ConfigurationsSupported", supported);
 
 		capabilities_node.add("tr2:StreamingCapabilities.<xmlattr>.RTSPStreaming",
 													capabilities_config.get<bool>("StreamingCapabilities.RTSPStreaming"));
@@ -1062,11 +933,6 @@ public:
 		auto base = StreamAddress(server_cfg_, operation, true, HttpServer::IsSecure(request));
 
 		std::string requested_token = exns::find_hierarchy("Envelope.Body.GetStreamUri.ProfileToken", request_xml);
-
-		if (server_cfg_.multichannel_enabled_)
-		{
-			requested_token = media::util::MultichannelProfilesNamesConverter(requested_token).CleanedName();
-		}
 
 		auto profiles_config_list = profiles_configs_->get_child("MediaProfiles");
 
@@ -1205,6 +1071,21 @@ void profile_to_soap(const ptree& profile_config, const ptree& configs_file, ptr
 		result.put_child("tr2:Configurations.tr2:VideoSource", videosource_configuration);
 	}
 
+	// Audio source
+	if (auto as_token = profile_config.get<std::string>(CONFIGURATION_ENUMERATION[CONFIGURATION_TYPE::AUDIOSOURCE],
+																											DEFAULT_EMPTY_STRING);
+			!as_token.empty())
+	{
+		pt::ptree as_node;
+		auto as_config = utility::AudioSourceConfigsReaderByToken(as_token, configs_file).AudioSource();
+		as_node.add("<xmlattr>.token", as_token);
+		as_node.add("tt:Name", as_config.get<std::string>("Name"));
+		as_node.add("tt:UseCount", as_config.get<int>("UseCount"));
+		as_node.add("tt:SourceToken", as_config.get<std::string>("SourceToken"));
+
+		result.put_child("tr2:Configurations.tr2:AudioSource", as_node);
+	}
+
 	// videoencoder
 	if (const std::string ve_token = profile_config.get<std::string>(
 					CONFIGURATION_ENUMERATION[CONFIGURATION_TYPE::VIDEOENCODER], DEFAULT_EMPTY_STRING);
@@ -1223,50 +1104,6 @@ void profile_to_soap(const ptree& profile_config, const ptree& configs_file, ptr
 		result.put_child("tr2:Configurations.tr2:VideoEncoder", videoencoder_configuration);
 	}
 
-	// Videoanalytics
-	if (const std::string va_token = profile_config.get<std::string>(
-					CONFIGURATION_ENUMERATION[CONFIGURATION_TYPE::ANALYTICS], DEFAULT_EMPTY_STRING);
-			!va_token.empty())
-	{
-		pt::ptree analytics_node;
-		const auto& config = profilesMgr.GetConfigByToken(va_token, osrv::CONFIGURATION_ENUMERATION[osrv::ANALYTICS]);
-		analytics::fillConfiguration(config, analytics_node, profilesMgr);
-		result.put_child("tr2:Configurations.tr2:Analytics", analytics_node);
-	}
-
-	// PTZ
-	if (const std::string ptz_token =
-					profile_config.get<std::string>(CONFIGURATION_ENUMERATION[CONFIGURATION_TYPE::PTZ], DEFAULT_EMPTY_STRING);
-			!ptz_token.empty())
-	{
-		// TODO: make reading from a profile
-		pt::ptree ptz_node;
-		ptz_node.add("<xmlattr>.token", "PtzConfigToken0");
-		ptz_node.add("tt:Name", "PtzConfig0");
-		ptz_node.add("tt:UseCount", 3);
-		ptz_node.add("tt:NodeToken", "PTZNODE_1");
-		ptz_node.add("tt:DefaultContinuousPanTiltVelocitySpace",
-								 "http://www.onvif.org/ver10/tptz/PanTiltSpaces/VelocityGenericSpace");
-		ptz_node.add("tt:DefaultContinuousZoomVelocitySpace",
-								 "http://www.onvif.org/ver10/tptz/ZoomSpaces/VelocityGenericSpace");
-		result.put_child("tr2:Configurations.tr2:PTZ", ptz_node);
-	}
-
-	// Audio source
-	if (auto as_token = profile_config.get<std::string>(CONFIGURATION_ENUMERATION[CONFIGURATION_TYPE::AUDIOSOURCE],
-																											DEFAULT_EMPTY_STRING);
-			!as_token.empty())
-	{
-		pt::ptree as_node;
-		auto as_config = utility::AudioSourceConfigsReaderByToken(as_token, configs_file).AudioSource();
-		as_node.add("<xmlattr>.token", as_token);
-		as_node.add("tt:Name", as_config.get<std::string>("Name"));
-		as_node.add("tt:UseCount", as_config.get<int>("UseCount"));
-		as_node.add("tt:SourceToken", as_config.get<std::string>("SourceToken"));
-
-		result.put_child("tr2:Configurations.tr2:AudioSource", as_node);
-	}
-
 	// Audio encoder
 	if (auto ae_token = profile_config.get<std::string>(CONFIGURATION_ENUMERATION[CONFIGURATION_TYPE::AUDIOENCODER],
 																											DEFAULT_EMPTY_STRING);
@@ -1283,14 +1120,29 @@ void profile_to_soap(const ptree& profile_config, const ptree& configs_file, ptr
 
 		result.put_child("tr2:Configurations.tr2:AudioEncoder", ae_node);
 	}
-	if (auto token = profile_config.get<std::string>("Metadata", ""); !token.empty())
-		result.put_child("tr2:Configurations.tr2:Metadata", metadata::ConfigurationXml(profilesMgr.GetConfigByToken(token, "Metadata"), configs_file));
-	if (auto configurations = result.get_child_optional("tr2:Configurations"))
+	// Videoanalytics
+	if (const std::string va_token = profile_config.get<std::string>(
+					CONFIGURATION_ENUMERATION[CONFIGURATION_TYPE::ANALYTICS], DEFAULT_EMPTY_STRING);
+			!va_token.empty())
 	{
-		const std::vector<std::string> order{"tr2:VideoSource", "tr2:AudioSource", "tr2:VideoEncoder", "tr2:AudioEncoder", "tr2:Analytics", "tr2:PTZ", "tr2:Metadata", "tr2:AudioOutput", "tr2:AudioDecoder", "tr2:Receiver"};
-		configurations->sort([&](const auto& a, const auto& b) { return std::ranges::find(order, a.first) < std::ranges::find(order, b.first); });
+		pt::ptree analytics_node;
+		const auto& config = profilesMgr.GetConfigByToken(va_token, osrv::CONFIGURATION_ENUMERATION[osrv::ANALYTICS]);
+		analytics::fillConfiguration(config, analytics_node, profilesMgr);
+		result.put_child("tr2:Configurations.tr2:Analytics", analytics_node);
 	}
 
+	// PTZ
+	if (const std::string ptz_token =
+					profile_config.get<std::string>(CONFIGURATION_ENUMERATION[CONFIGURATION_TYPE::PTZ], DEFAULT_EMPTY_STRING);
+			!ptz_token.empty())
+	{
+		pt::ptree ptz_node;
+		osrv::ptz::fillPtzConfig(profilesMgr.GetConfigByToken(ptz_token, "PTZ"), ptz_node, profilesMgr);
+		result.put_child("tr2:Configurations.tr2:PTZ", ptz_node);
+	}
+
+	if (auto token = profile_config.get<std::string>("Metadata", ""); !token.empty())
+		result.put_child("tr2:Configurations.tr2:Metadata", metadata::ConfigurationXml(profilesMgr.GetConfigByToken(token, "Metadata"), configs_file));
 }
 
 void fill_video_encoder(const pt::ptree& config_node, pt::ptree& videoencoder_node)
@@ -1387,12 +1239,13 @@ Media2Service::Media2Service(const std::string& service_uri, const std::string& 
 	requestHandlers_.push_back(std::make_shared<media2::GetAudioEncoderConfigurationOptionsHandler>(
 			xml_namespaces_, configs_ptree_, srv->ProfilesConfig()));
 	requestHandlers_.push_back(std::make_shared<media2::GetAudioEncoderConfigurationsHandler>(
-			xml_namespaces_, configs_ptree_, srv->ProfilesConfig()));
+			xml_namespaces_, configs_ptree_, *srv->MediaProfilesManager()));
 	requestHandlers_.push_back(std::make_shared<media2::GetAudioSourceConfigurationsHandler>(
-			xml_namespaces_, configs_ptree_, srv->ProfilesConfig()));
+			xml_namespaces_, configs_ptree_, *srv->MediaProfilesManager()));
 	requestHandlers_.push_back(std::make_shared<media2::GetProfilesHandler>(
-			xml_namespaces_, configs_ptree_, srv->MediaProfilesManager(), *srv->GetServerConfigs()));
-	requestHandlers_.push_back(std::make_shared<media2::GetServiceCapabilitiesHandler>(xml_namespaces_, configs_ptree_));
+			xml_namespaces_, configs_ptree_, srv->MediaProfilesManager()));
+	requestHandlers_.push_back(std::make_shared<media2::GetServiceCapabilitiesHandler>(xml_namespaces_, configs_ptree_,
+			*srv->MediaProfilesManager(), *srv->GetServerConfigs()));
 	requestHandlers_.push_back(std::make_shared<media2::GetStreamUriHandler>(
 			xml_namespaces_, configs_ptree_, srv->ProfilesConfig(), *srv));
 	requestHandlers_.push_back(std::make_shared<media2::GetSnapshotUriHandler>(
@@ -1400,11 +1253,11 @@ Media2Service::Media2Service(const std::string& service_uri, const std::string& 
 	requestHandlers_.push_back(std::make_shared<media2::GetVideoEncoderConfigurationOptionsHandler>(
 			xml_namespaces_, configs_ptree_, srv->ProfilesConfig()));
 	requestHandlers_.push_back(std::make_shared<media2::GetVideoEncoderConfigurationsHandler>(
-			xml_namespaces_, configs_ptree_, srv->ProfilesConfig()));
+			xml_namespaces_, configs_ptree_, *srv->MediaProfilesManager()));
 	requestHandlers_.push_back(std::make_shared<media2::GetVideoSourceConfigurationOptionsHandler>(
 			xml_namespaces_, configs_ptree_, srv->ProfilesConfig()));
 	requestHandlers_.push_back(std::make_shared<media2::GetVideoSourceConfigurationsHandler>(
-			xml_namespaces_, configs_ptree_, srv->ProfilesConfig(), *srv->GetServerConfigs()));
+			xml_namespaces_, configs_ptree_, *srv->MediaProfilesManager()));
 	requestHandlers_.push_back(std::make_shared<media2::RemoveConfigurationHandler>(xml_namespaces_, configs_ptree_,
 																																									srv->MediaProfilesManager()));
 	requestHandlers_.push_back(

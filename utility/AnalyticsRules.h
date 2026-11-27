@@ -43,13 +43,13 @@ public:
 	Tree DefaultRule(const std::string& token, const std::string& type) const;
 	void BindControls(std::shared_ptr<osrv::DetectorControls> controls);
 	std::deque<Message> Synchronize() const;
-	std::deque<Message> Sample(double x, double y, double strength);
+	std::deque<Message> Sample(double x, double y, double strength, const std::string& videoSource = {});
 	std::deque<Message> SampleObject(const std::string& videoSource, const std::string& objectId, double x, double y,
 																	 const std::string& classification = {});
-	std::deque<Message> TickCounting();
+	std::deque<Message> TickCounting(const std::string& videoSource = {});
 	std::deque<Message> SynchronizeCounts() const;
 	std::deque<Message> SynchronizeFields() const;
-	std::deque<Message> TickFields();
+	std::deque<Message> TickFields(const std::string& videoSource = {});
 	std::deque<Message> SamplePlate(const std::string& videoSource, const lpr::Sample& sample);
 	osrv::scene::Frame SupportedScene(const std::string& module = osrv::scene::LprModule) const;
 	std::deque<Message> SampleFace(const std::string& videoSource, const face::Sample& sample);
@@ -60,6 +60,8 @@ public:
 		return scenes_;
 	}
 	static Tree RuleXml(const Tree& rule);
+	static bool SupportsRule(const Tree& config, std::string_view type);
+	static bool SupportsModule(const Tree& config, std::string_view name, bool installed = false);
 	static constexpr const char* Topic = "tns1:RuleEngine/MotionRegionDetector/Motion";
 
 private:

@@ -80,6 +80,14 @@ class ConfigSchemaTests(unittest.TestCase):
                 self.check(name, {**config, "typo": True}, False)
                 self.check(name, [], False)
 
+    def test_channel_count(self):
+        channel = self.configs["channels.config"]["channels"][0]
+        for count in (0, 1, 32, 33):
+            with self.subTest(count=count):
+                self.check("channels.config", {"channels": [
+                    {**channel, "token": f"Channel{index}"} for index in range(count)
+                ]}, 1 <= count <= 32)
+
     def test_common_invalid_settings(self):
         cases = [
             ("addresses", "http_port", "65536"), ("addresses", "rtsp_port", -1),
@@ -87,7 +95,7 @@ class ConfigSchemaTests(unittest.TestCase):
             ("addresses", "ipv4", "256.1.2.3"), ("advertised", "ipv4", "0.0.0.0"),
             ("advertised", "ipv4", "239.255.255.250"), ("rtp", "port_min", 50001),
             ("rtp", "port_max", 50200), ("networkDelaySimulation", "milliseconds", 65536),
-            ("multichannelSimulation", "channelCount", 256), ("fileStreaming", "enabled", "yes"),
+            ("fileStreaming", "enabled", "yes"),
             ("users", None, []), ("loggingLevel", None, "DEBIG"),
             ("rtsp_metadata", "enabled", "yes"),
         ]

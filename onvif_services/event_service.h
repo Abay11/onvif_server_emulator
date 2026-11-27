@@ -12,6 +12,7 @@
 #include <vector>
 
 class ILogger;
+namespace utility::media { class ChannelTopology; }
 
 namespace osrv
 {
@@ -43,7 +44,8 @@ struct EventGeneratorRegistration
 
 void init_service(HttpServer& /*srv*/, const osrv::ServerConfigs& /*configs*/, const std::string& /*configs_path*/,
 									ILogger& /*logger*/, const std::shared_ptr<EventSource>& source,
-									const std::vector<EventGeneratorRegistration>& generators = {});
+									const std::vector<EventGeneratorRegistration>& generators,
+									const utility::media::ChannelTopology& topology);
 void stop_service();
 } // namespace event
 } // namespace osrv

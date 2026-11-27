@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "NVR channel topology",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["channels"],
+  "properties": {
+    "unassignedProfiles": {
+      "$ref": "media-profiles.schema.json#/properties/MediaProfiles"
+    },
+    "channels": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 32,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["token", "name", "videoSource", "media"],
+        "properties": {
+          "token": { "$ref": "#/$defs/identity" },
+          "name": { "type": "string", "minLength": 1 },
+          "videoSource": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["token", "width", "height", "frameRate"],
+            "properties": {
+              "token": { "$ref": "#/$defs/identity" },
+              "width": { "$ref": "types.schema.json#/$defs/positiveInteger" },
+              "height": { "$ref": "types.schema.json#/$defs/positiveInteger" },
+              "frameRate": { "$ref": "types.schema.json#/$defs/positiveInteger" }
+            }
+          },
+          "media": {
+            "allOf": [
+              { "$ref": "media-profiles.schema.json" },
+              {
+                "properties": {
+                  "MediaProfiles": { "minItems": 1 },
+                  "VideoSource": { "minItems": 1 },
+                  "VideoEncoder": { "minItems": 1 }
+                }
+              }
+            ]
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "identity": { "type": "string", "pattern": "^[A-Za-z0-9_-]{1,64}$" }
+  }
+}

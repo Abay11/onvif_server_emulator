@@ -52,7 +52,7 @@ def exercise(screenshot=None, read_only=False):
                 group.find_element(By.TAG_NAME, "summary").click()
             return group
 
-        catalog_button("MainProfile · fixed").click()
+        catalog_button("CH01 - Main stream · fixed").click()
         assert not editor_button("Delete profile").is_enabled()
         if read_only:
             before = entry("media_profiles.config")["document"]
@@ -80,7 +80,7 @@ def exercise(screenshot=None, read_only=False):
         ready.until(lambda driver: "Saved. Select an item" in driver.find_element(By.ID, "configuration-editor").text)
 
         open_group("Metadata")
-        catalog_button("Event metadata").click()
+        catalog_button("CH01 - Event metadata").click()
         field("Events").click()
         save()
         assert json.loads(entry("media_profiles.config")["document"])["Metadata"][0]["Events"] in (False, "false")
@@ -92,7 +92,7 @@ def exercise(screenshot=None, read_only=False):
         assert entry("media_profiles.config")["document"] == before
         assert field("Name").get_property("value") == ""
         browser.find_element(By.CSS_SELECTOR, "#config-error-dialog button").click()
-        name.send_keys("Event metadata")
+        name.send_keys("CH01 - Event metadata")
         save()
 
         browser.get("http://127.0.0.1:8080/admin/#users")
@@ -137,11 +137,76 @@ def exercise(screenshot=None, read_only=False):
         assert "only after restarting" in browser.find_element(By.ID, "configuration-saved-dialog").text
         assert "only after restarting" in browser.find_element(By.ID, "configuration-message").text
         assert json.loads(entry("common.config")["document"])["loggingLevel"] == "INFO"
-        assert not [item for item in browser.get_log("browser") if item["level"] == "SEVERE" and "/favicon.ico" not in item["message"]
-                    and "422 (Unprocessable Entity)" not in item["message"]]
+        errors = [item for item in browser.get_log("browser") if item["level"] == "SEVERE"
+                  and "/favicon.ico" not in item["message"] and "422 (Unprocessable Entity)" not in item["message"]]
+        assert not errors, errors
         print("PASS Chromium: fixed profile protection, profile creation/deletion, configuration attachment, "
               "metadata editing, schema error dialog, retained draft, account create/enable/disable/delete, "
               "authentication scheme selection, write-only passwords and restart notification")
+
+        browser.find_element(By.CSS_SELECTOR, "#configuration-saved-dialog button").click()
+
+        def sidebar(section):
+            return browser.find_element(By.CSS_SELECTOR, f'.nav-link[href="#{section}"]')
+
+        assert sidebar("recordings").text.endswith("Recording Storage")
+        assert sidebar("recordings").find_element(By.CSS_SELECTOR, '[aria-hidden="true"]').text
+        sidebar("recordings").click()
+        ready.until(lambda driver: "Channel 1" in driver.find_element(By.ID, "recordings-jobs").text)
+        assert sidebar("channels").text.endswith("NVR Channels")
+        sidebar("channels").click()
+        channel_editor = browser.find_element(By.ID, "channels-editor")
+        count = channel_editor.find_element(By.CSS_SELECTOR, 'input[type="number"]')
+        count.clear(); count.send_keys("2")
+        next(button for button in channel_editor.find_elements(By.TAG_NAME, "button") if button.text == "Apply channel count").click()
+        added = channel_editor.find_elements(By.CSS_SELECTOR, ".channel-editor-list > details")[1]
+        added.find_element(By.TAG_NAME, "summary").click()
+        assert "CH02 - Main stream" in added.text
+        next(button for button in added.find_elements(By.TAG_NAME, "button") if button.text == "Add stream").click()
+        channel_editor.find_element(By.CSS_SELECTOR, 'button[type="submit"]').click()
+        ready.until(lambda driver: "Configuration saved" in driver.find_element(By.ID, "channels-message").text)
+        channels = json.loads(entry("channels.config")["document"])["channels"]
+        first, second = channels
+        assert first["media"]["VideoSource"][0]["token"] == "VideoSrcConfigToken0"
+        assert second["media"]["VideoSource"][0]["token"].startswith("VideoSourceConfig_CH02_")
+        assert second["media"]["VideoSource"][0]["SourceToken"] == second["videoSource"]["token"]
+        for catalog in ("VideoEncoder", "VideoEncoderConfigurations"):
+            assert [item["Name"] for item in second["media"][catalog]] == [
+                "CH02 - Video encoder 1", "CH02 - Video encoder 2", "CH02 - Video encoder 3"]
+        assert len(browser.find_elements(By.CSS_SELECTOR, "#configuration-catalog > .channel-catalog")) == 1
+
+        browser.find_element(By.CSS_SELECTOR, "#configuration-saved-dialog button").click()
+        sidebar("system").click()
+        ready.until(lambda driver: driver.find_element(By.ID, "restart").is_enabled())
+        browser.find_element(By.ID, "restart").click()
+        browser.find_element(By.ID, "confirm-restart").click()
+        ready.until(lambda driver: driver.current_url.endswith("/admin/login"))
+        browser_login(browser)
+        sidebar("configuration").click()
+        channel_groups = "#configuration-catalog > .channel-catalog"
+        ready.until(lambda driver: len(driver.find_elements(By.CSS_SELECTOR, channel_groups)) == 2)
+        first_group, second_group = browser.find_elements(By.CSS_SELECTOR, channel_groups)
+        assert "CH01 - Main stream" in first_group.text
+        second_group.find_element(By.TAG_NAME, "summary").click()
+        assert "CH02 - Main stream" in second_group.text
+        assert "CH01 - Main stream" not in second_group.text
+        ready.until(lambda driver: [row.text for row in driver.find_elements(By.CSS_SELECTOR, "#profiles-body .profile-channel")]
+                    == ["Channel 1", "Channel 2"])
+        catalog_button("CH02 - Main stream · fixed").click()
+        sources = browser.find_element(By.CSS_SELECTOR, '[data-configuration-type="VideoSource"]')
+        assert not sources.find_element(By.CSS_SELECTOR, 'option[value="VideoSrcConfigToken0"]').is_enabled()
+        encoder_group = next(group for group in second_group.find_elements(By.TAG_NAME, "details")
+                             if group.find_element(By.TAG_NAME, "summary").text == "Video encoder (Media2)")
+        encoder_group.find_element(By.TAG_NAME, "summary").click()
+        catalog_button("CH02 - Video encoder 1").click()
+        name = field("Name"); name.clear(); name.send_keys("CH02 - Browser encoder")
+        save()
+        saved_media = json.loads(entry("channels.config")["document"])["channels"][1]["media"]
+        for catalog in ("VideoEncoder", "VideoEncoderConfigurations"):
+            assert saved_media[catalog][0]["Name"] == "CH02 - Browser encoder"
+            assert saved_media[catalog][0]["token"] == second["media"][catalog][0]["token"]
+        print("PASS Chromium: separate NVR and storage sections, readable new identities, active channel grouping "
+              "after restart, scoped profile choices, and paired encoder rename")
     except BaseException:
         if screenshot:
             browser.save_screenshot(str(screenshot))

@@ -30,6 +30,7 @@
 #include "HttpServer.h"
 
 #include <boost/asio/io_context.hpp>
+#include <boost/asio/signal_set.hpp>
 #include <boost/property_tree/json_parser.hpp>
 
 #include <string>
@@ -101,7 +102,6 @@ void Server::init(std::function<void()> reboot)
 		https_server_->config.address = server_configs_->ipv4_address_;
 		https_server_->config.port = std::stoi(server_configs_->https_port_);
 	}
-	server_configs_->reboot = std::move(reboot);
 	server_configs_->journal->Add("info", "system", "application", "Application initialization started");
 
 	http_server_->config.address = server_configs_->ipv4_address_;
@@ -118,7 +118,25 @@ void Server::init(std::function<void()> reboot)
 	server_configs_->digest_session_->set_users_list(server_configs_->system_users_);
 
 	// Both SOAP services share the manager's authoritative tree. Streaming receives copies.
+	MediaProfilesManager()->ActivateTopology(configs_dir + "channels.config");
 	profiles_config_ = MediaProfilesManager()->SharedConfigs();
+	auto archive = std::make_shared<RecordingArchive>(configs_dir + "recording_archive.json");
+	server_configs_->archive = archive;
+	auto available = [this](const auto& channel, const auto& profile) { return RecordingProfileAvailable(channel, profile); };
+	archive->Resume(available);
+	if (reboot)
+		server_configs_->reboot = [archive, reboot = std::move(reboot), available] {
+			archive->Suspend();
+			try
+			{
+				reboot();
+			}
+			catch (...)
+			{
+				archive->Resume(available);
+				throw;
+			}
+		};
 	MediaProfilesManager()->MetadataAvailable(server_configs_->rtsp_metadata_enabled_);
 	if (!server_configs_->rtsp_metadata_enabled_)
 		for (const auto& [_, profile] : profiles_config_->get_child("MediaProfiles"))
@@ -138,6 +156,7 @@ void Server::init(std::function<void()> reboot)
 	MediaService()->Run();
 	Media2Service()->Run();
 	PTZService()->Run();
+	RecordingControlService()->Run();
 	RecordingSearchService()->Run();
 	ReplayControlService()->Run();
 
@@ -199,27 +218,25 @@ void Server::init(std::function<void()> reboot)
 				{{"IsInside", "xsd:boolean"}}}}};
 	event_source_ = std::make_shared<event::EventSource>(*logger_, server_configs_->journal, server_configs_->detectors);
 	server_configs_->event_source = event_source_;
-	event::init_service(*http_server_, *server_configs_, configs_dir, *logger_, event_source_, event_generators);
+	event::init_service(*http_server_, *server_configs_, configs_dir, *logger_, event_source_, event_generators, *MediaProfilesManager()->Topology());
 
-	// TODO: impl. logic for multichannel cannel
-	auto audio_node = profiles_config_->get_child(CONFIGURATION_ENUMERATION[CONFIGURATION_TYPE::AUDIOENCODER]).front();
-	audio_node.second.get_value<std::string>("Encoding");
-	audio_node.second.get_value<std::string>("Encoding");
-
-	rtsp::AudioInfo ainfo{
-			audio_node.second.get<std::string>("Encoding"),
-			audio_node.second.get<unsigned int>("Bitrate") * 1000,
-			audio_node.second.get<unsigned int>("SampleRate") * 1000,
-	};
-
-	rtspServer_ = new rtsp::Server(&*logger_, *server_configs_, std::move(ainfo), event_source_, Rules()->Scenes());
+	std::optional<rtsp::AudioInfo> audio;
+	const auto& encoders = profiles_config_->get_child("AudioEncoder");
+	if (!encoders.empty())
+	{
+		const auto& encoder = encoders.front().second;
+		audio.emplace(encoder.get<std::string>("Encoding"), encoder.get<unsigned>("Bitrate") * 1000,
+									encoder.get<unsigned>("SampleRate") * 1000);
+	}
+	rtspServer_ = new rtsp::Server(&*logger_, *server_configs_, audio, event_source_, Rules()->Scenes());
+	server_configs_->prepare_replay = [this](const auto& token) { rtspServer_->ConfigureRecording(token); };
 	// Keep profile URIs valid after disabling metadata, without requiring its payloader.
-	Metadata()->Bind(
-			[this](const auto& path, const auto& encoder, bool audio, auto settings) {
-				rtspServer_->ConfigureProfile(path, encoder, std::move(settings), audio);
-			},
+	Metadata()->Bind({},
 			[this](const auto& path) { rtspServer_->SynchronizeProfile(path); },
-			[this](const auto& paths) { rtspServer_->RetainProfiles(paths); });
+			[this](const auto& paths) { rtspServer_->RetainProfiles(paths); },
+			[this](const auto& path, const auto* video, const auto* audio, auto settings) {
+				rtspServer_->ConfigureChannelProfile(path, video, audio, std::move(settings));
+			});
 	Metadata()->Refresh();
 
 	if (auto delay = server_configs_->network_delay_simulation_; delay > 0)
@@ -267,7 +284,13 @@ void Server::run()
 		rtspServer_->run();
 		logger_->Info("HTTP/HTTPS and RTSP listeners ready");
 		server_configs_->journal->Add("info", "system", "application", "Application started; web and RTSP listeners ready");
+		boost::asio::signal_set shutdown(*io, SIGINT, SIGTERM);
+		shutdown.async_wait([io](const boost::system::error_code& error, int) {
+			if (!error)
+				io->stop();
+		});
 		io->run();
+		server_configs_->archive->Suspend();
 	}
 	catch (...)
 	{
@@ -375,8 +398,6 @@ std::shared_ptr<ServerConfigs> read_server_configs(const std::string& config_pat
 
 	read_configs->network_delay_simulation_ = configs_tree.get<unsigned short>("networkDelaySimulation.milliseconds");
 
-	read_configs->multichannel_enabled_ = configs_tree.get<bool>("multichannelSimulation.enabled");
-	read_configs->channels_count_ = configs_tree.get<unsigned char>("multichannelSimulation.channelCount");
 
 	if (configs_tree.get<bool>("fileStreaming.enabled"))
 	{

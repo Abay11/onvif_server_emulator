@@ -155,7 +155,9 @@ void EventSource::AddGenerator(std::shared_ptr<IEventGenerator> generator)
 	Invoke([this, generator = std::move(generator)]() {
 		if (!generator || running_)
 			throw std::logic_error("Register non-null generators before EventSource::Run");
-		connections_.emplace_back(generator->Connect([this](NotificationMessage message) {
+		connections_.emplace_back(generator->Connect([this, videoSource = generator->VideoSource()](NotificationMessage message) {
+			if (message.VideoSource().empty())
+				message.video_source = videoSource;
 			boost::asio::dispatch(io_context_,
 														[this, message = std::move(message)]() mutable { Publish(std::move(message)); });
 		}));
@@ -163,35 +165,44 @@ void EventSource::AddGenerator(std::shared_ptr<IEventGenerator> generator)
 	});
 }
 
-bool EventSource::HasDetector(const std::string& id)
+bool EventSource::HasDetector(const std::string& id, const std::string& videoSource)
 {
 	return Invoke([&]() {
 		return controls_ && std::any_of(generators_.begin(), generators_.end(), [&](const auto& generator) {
-						 return controls_->IdForTopic(generator->Topic()) == id;
+						 return controls_->IdForTopic(generator->Topic()) == id &&
+								(videoSource.empty() || generator->VideoSource() == videoSource);
 					 });
 	});
 }
-void EventSource::ConfigureDetector(const std::string& id, int interval, bool automatic, bool enabled)
+void EventSource::ConfigureDetector(const std::string& id, int interval, bool automatic, bool enabled,
+															 const std::string& videoSource)
 {
 	Invoke([&]() {
-		if (!HasDetector(id))
+		if (!HasDetector(id, videoSource))
 			throw std::invalid_argument("Detector unavailable");
 		if (interval < 1)
 			throw std::invalid_argument("Invalid event interval");
-		controls_->Set(id, enabled);
-		controls_->SetAutomatic(id, automatic);
+		if (videoSource.empty())
+		{
+			controls_->Set(id, enabled);
+			controls_->SetAutomatic(id, automatic);
+		}
+		else
+			controls_->ConfigureSource(id, videoSource, enabled, automatic);
 		for (const auto& generator : generators_)
-			if (controls_->IdForTopic(generator->Topic()) == id)
+			if (controls_->IdForTopic(generator->Topic()) == id &&
+					(videoSource.empty() || generator->VideoSource() == videoSource))
 				// Line sampling also feeds counting, field rules and scene metadata.
-				generator->Configure(interval, automatic || id == "tt:LineDetector");
+				generator->Configure(interval, (enabled && automatic) || id == "tt:LineDetector");
 	});
 }
-void EventSource::GenerateOnce(const std::string& id, const std::string& configuration, const std::string& rule)
+void EventSource::GenerateOnce(const std::string& id, const std::string& configuration, const std::string& rule,
+														 const std::string& videoSource)
 {
 	Invoke([&]() {
-		if (!running_ || !HasDetector(id))
+		if (!running_ || !HasDetector(id, videoSource))
 			throw std::runtime_error("Detector unavailable");
-		if (!controls_->Enabled(id) || (id.starts_with("tt:") && !controls_->Enabled("rules")) ||
+		if (!controls_->Enabled(id, videoSource) || (id.starts_with("tt:") && !controls_->Enabled("rules")) ||
 				(!configuration.empty() && !controls_->RuleEnabled(configuration, rule)))
 			throw std::runtime_error("Detector disabled");
 		manual_ = true;
@@ -201,7 +212,8 @@ void EventSource::GenerateOnce(const std::string& id, const std::string& configu
 		try
 		{
 			for (const auto& generator : generators_)
-				if (controls_->IdForTopic(generator->Topic()) == id)
+				if (controls_->IdForTopic(generator->Topic()) == id &&
+						(videoSource.empty() || generator->VideoSource() == videoSource))
 					generator->GenerateOnce();
 		}
 		catch (...)
@@ -264,8 +276,12 @@ void EventSource::Synchronize(const std::shared_ptr<EventSubscription>& subscrip
 		for (const auto& generator : generators_)
 			for (auto& message : generator->GenerateSynchronizationEvent())
 			{
+				if (message.VideoSource().empty())
+					message.video_source = generator->VideoSource();
 				// Transient notifications do not have an initialization state.
-				if (message.property_operation != "Initialized" || (controls_ && !controls_->Allows(message)))
+				if (message.property_operation != "Initialized" ||
+						(!generator->VideoSource().empty() && message.VideoSource() != generator->VideoSource()) ||
+						(controls_ && !controls_->Allows(message)))
 					continue;
 				auto bytes = notification_size(message);
 				complete =
@@ -285,7 +301,7 @@ void EventSource::Publish(NotificationMessage message)
 	if (controls_)
 	{
 		const auto id = controls_->IdForTopic(message.topic);
-		if (!manual_ && !controls_->Automatic(id))
+		if (!manual_ && !controls_->Automatic(id, message.VideoSource()))
 			return;
 		if (manual_)
 		{

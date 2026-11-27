@@ -3,6 +3,7 @@
 #include <memory>
 #include <mutex>
 #include <string>
+#include <vector>
 namespace utility
 {
 class AnalyticsRules;
@@ -24,5 +25,6 @@ private:
 	std::shared_ptr<utility::AnalyticsRules> rules_;
 	std::shared_ptr<ServerConfigs> configs_;
 	boost::property_tree::ptree events_;
+	std::vector<std::string> channel_sources_;
 };
 } // namespace osrv

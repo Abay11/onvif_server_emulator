@@ -68,7 +68,9 @@ void fillConfiguration(const pt::ptree& jsonConfigNode, pt::ptree& xmlConfigOut,
 	utility::AnalyticsModulesReaderByConfigToken reader{cfgToken, profiles};
 	pt::ptree analyticsEngine;
 	analytics::fillModules(reader.Modules(), analyticsEngine, "tt");
-	for (const auto& module : scene::Modules()) analyticsEngine.add_child("tt:AnalyticsModule", scene::ModuleXml(module.name));
+	for (const auto& module : scene::Modules())
+		if (utility::AnalyticsRules::SupportsModule(jsonConfigNode, module.name, true))
+			analyticsEngine.add_child("tt:AnalyticsModule", scene::ModuleXml(module.name));
 	xmlConfigOut.add_child("tt:AnalyticsEngineConfiguration", analyticsEngine);
 	pt::ptree rules;
 	if (auto configured = jsonConfigNode.get_child_optional("rules"))
@@ -144,13 +146,19 @@ struct SceneDescriptionHandler : public OnvifRequestBase
 		{
 			utility::AnalyticsModulesReaderByConfigToken reader(configuration, manager.ReaderWriter()->ConfigsTree());
 			analytics::fillModules(reader.Modules(), result, "tan");
+			const auto& selected = manager.GetConfigByToken(configuration, "Analytics");
 			for (const auto& module : scene::Modules())
-				result.add_child("tan:AnalyticsModule", scene::ModuleXml(module.name));
+				if (utility::AnalyticsRules::SupportsModule(selected, module.name, true))
+					result.add_child("tan:AnalyticsModule", scene::ModuleXml(module.name));
 		}
 		else if (operation == "GetSupportedAnalyticsModules")
 		{
+			const auto& selected = manager.GetConfigByToken(configuration, "Analytics");
+			result.put_child("tan:SupportedAnalyticsModules", {});
 			for (const auto& module : scene::Modules())
 			{
+				if (!utility::AnalyticsRules::SupportsModule(selected, module.name))
+					continue;
 				pt::ptree description;
 				description.put("<xmlattr>.Name", module.type);
 				description.put("<xmlattr>.fixed", true);

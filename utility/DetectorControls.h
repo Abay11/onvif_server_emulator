@@ -3,6 +3,7 @@
 #include <mutex>
 #include <set>
 #include <string>
+#include <string_view>
 #include <utility>
 
 namespace osrv::event
@@ -18,11 +19,12 @@ public:
 	DetectorControls();
 	void Register(const std::string& id, const std::string& topic, bool enabled);
 	void Set(const std::string& id, bool enabled);
-	bool Enabled(const std::string& id) const;
+	bool Enabled(const std::string& id, std::string_view source = {}) const;
 	std::string IdForTopic(const std::string& topic) const;
 	static std::string Section(const std::string& id);
 	void SetAutomatic(const std::string& id, bool automatic);
-	bool Automatic(const std::string& id) const;
+	bool Automatic(const std::string& id, std::string_view source = {}) const;
+	void ConfigureSource(const std::string& id, const std::string& source, bool enabled, bool automatic);
 	void SetRule(const std::string& configuration, const std::string& name, bool enabled);
 	bool RuleEnabled(const std::string& configuration, const std::string& name) const;
 	void ForgetRule(const std::string& configuration, const std::string& name);
@@ -33,6 +35,7 @@ private:
 	std::map<std::string, bool> enabled_{{"rules", true}};
 	std::map<std::string, std::string> topics_;
 	std::map<std::string, bool> automatic_;
+	std::map<std::pair<std::string, std::string>, std::pair<bool, bool>> scoped_;
 	std::set<std::pair<std::string, std::string>> disabled_rules_;
 };
 } // namespace osrv

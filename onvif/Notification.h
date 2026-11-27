@@ -8,6 +8,7 @@
 #include <map>
 #include <memory>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -25,6 +26,16 @@ struct NotificationMessage
 	std::vector<boost::property_tree::ptree> data_element_items;
 	// Internal routing context; never serialized into ONVIF notifications.
 	std::string analytics_configuration;
+	std::string video_source;
+	std::string_view VideoSource() const
+	{
+		if (!video_source.empty())
+			return video_source;
+		for (const auto& [name, value] : source_item_descriptions)
+			if (name == "VideoSource")
+				return value;
+		return {};
+	}
 };
 
 using NotificationPtr = std::shared_ptr<const NotificationMessage>;
